@@ -73,6 +73,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// Rules such as ~/.ssh/ are compared with real paths, so build them from the
+	// real home directory even if $HOME is a symlink or an alias.
+	home = guard.RealPath(home)
 	cfgDir := filepath.Join(home, ".config", "fsb")
 
 	if *doInit {

@@ -44,6 +44,8 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-extensions',
+    // Any *.test name resolves to loopback, so a page can be reached under a hostile hostname (DNS rebinding).
+    '--host-resolver-rules=MAP *.test 127.0.0.1',
     ...(process.env.CI ? ['--no-sandbox'] : []),
     'about:blank',
   ];
@@ -92,18 +94,21 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
   await S('Runtime.enable');
   await S('Log.enable');
   await S('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  // A headless page can lose focus across navigations, and real key presses then go nowhere.
+  await S('Emulation.setFocusEmulationEnabled', { enabled: true });
 
   let grantedOrigin = '';
   const eventsAfter = (mark, method) => events.slice(mark).find((m) => m.method === method);
 
   const driver = {
     name: 'chrome',
-    caps: { nativeDrag: true, clipboardRead: true, consoleLog: true },
+    caps: { nativeDrag: true, clipboardRead: true, consoleLog: true, hostMapping: true },
 
     async goto(url) {
       const origin = url.startsWith('http') ? new URL(url).origin : '';
       if (origin && origin !== grantedOrigin) {
-        await send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+        // Only fsb's own origin needs clipboard access; Chrome refuses the grant for insecure hostnames.
+        await send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] }).catch(() => {});
         grantedOrigin = origin;
       }
       const mark = events.length;

@@ -112,15 +112,20 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 
 // sameOrigin rejects requests that a cross-site page could have triggered.
 func sameOrigin(r *http.Request, hosts map[string]bool) bool {
+	// A browser serialises Origin as exactly scheme://host[:port]. Anything
+	// else (userinfo, path, query, fragment, an opaque form) is not something a
+	// browser sends, so it is refused rather than interpreted.
 	if o := r.Header.Get("Origin"); o != "" {
 		u, err := url.Parse(o)
-		if err != nil || u.Scheme != "http" || u.Path != "" || !hosts[strings.ToLower(u.Host)] {
+		if err != nil || u.Scheme != "http" || !hosts[strings.ToLower(u.Host)] ||
+			u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
 			return false // includes the opaque "null" origin
 		}
 	}
+	// Referer may carry a path and query, but never credentials.
 	if ref := r.Header.Get("Referer"); ref != "" {
 		u, err := url.Parse(ref)
-		if err != nil || u.Scheme != "http" || !hosts[strings.ToLower(u.Host)] {
+		if err != nil || u.Scheme != "http" || !hosts[strings.ToLower(u.Host)] || u.User != nil || u.Opaque != "" {
 			return false
 		}
 	}

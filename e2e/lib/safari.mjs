@@ -8,21 +8,23 @@ import { createServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { sleep } from './util.mjs';
 
-// W3C "normalised key" code points.
+// W3C "normalised key" code points (private-use characters, written as numbers
+// so they stay visible in the source).
+const wdKey = (codePoint) => String.fromCharCode(codePoint);
 const KEYS = {
-  ' ': '',
-  ArrowDown: '',
-  ArrowUp: '',
-  ArrowLeft: '',
-  ArrowRight: '',
-  Enter: '',
-  Escape: '',
-  Backspace: '',
+  ' ': wdKey(0xe00d),
+  ArrowDown: wdKey(0xe015),
+  ArrowUp: wdKey(0xe013),
+  ArrowLeft: wdKey(0xe012),
+  ArrowRight: wdKey(0xe014),
+  Enter: wdKey(0xe007),
+  Escape: wdKey(0xe00c),
+  Backspace: wdKey(0xe003),
   c: 'c',
   s: 's',
 };
-const ALT = '';
-const SHIFT = '';
+const ALT = wdKey(0xe00a);
+const SHIFT = wdKey(0xe008);
 
 const freePort = () =>
   new Promise((resolve, reject) => {
@@ -91,7 +93,7 @@ export async function launchSafari({ width = 1280, height = 900 } = {}) {
     // Safari cannot start a native drag from WebDriver pointer actions (checked
     // at run time), cannot read the clipboard without a prompt, and has no
     // console log API.
-    caps: { nativeDrag: 'try', clipboardRead: false, consoleLog: false },
+    caps: { nativeDrag: 'try', clipboardRead: false, consoleLog: false, hostMapping: false },
 
     async goto(url) {
       await S('POST', '/url', { url });

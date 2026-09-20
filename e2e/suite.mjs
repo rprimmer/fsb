@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { startAttacker } from './lib/attacker.mjs';
 import { makeFixture } from './lib/fixture.mjs';
 import { buildFsb, startServer } from './lib/server.mjs';
 import { basename, hashFor, sleep, waitFor } from './lib/util.mjs';
@@ -17,7 +18,7 @@ const artifacts = fileURLToPath(new URL('./artifacts/', import.meta.url));
 export function defineSuite({ label, launch }) {
   describe(label, { timeout: 300_000 }, () => {
     const big = !!process.env.FSB_E2E_BIG;
-    let fx, server, d, base, buildDir;
+    let fx, server, d, base, buildDir, attacker;
 
     // ---- helpers -------------------------------------------------------------
     const rows = () => d.eval(`return [...document.querySelectorAll('.vrow .name')].map(n => n.textContent)`);
@@ -102,6 +103,7 @@ export function defineSuite({ label, launch }) {
       fx = makeFixture({ big });
       server = await startServer(buildFsb(buildDir), fx.home);
       base = server.base;
+      attacker = await startAttacker();
       d = await launch();
       // The launch URL is single-use: this exchanges it for the session cookie.
       await d.goto(server.url);
@@ -113,6 +115,7 @@ export function defineSuite({ label, launch }) {
       await d?.screenshot(join(artifacts, `${d.name}-final.png`)).catch(() => {});
       await d?.close().catch(() => {});
       await server?.stop().catch(() => {});
+      await attacker?.close().catch(() => {});
       if (fx) rmSync(fx.root, { recursive: true, force: true });
       if (buildDir) rmSync(buildDir, { recursive: true, force: true });
     });
@@ -438,15 +441,77 @@ export function defineSuite({ label, launch }) {
       } else t.diagnostic('clipboard contents not read back with this driver');
     });
 
+
+    // ---- attacks from other websites --------------------------------------------
+    // The visitor's browser holds a valid fsb session cookie. A malicious page on
+    // another site must not be able to use it. The "attacker" is a real second
+    // origin (see lib/attacker.mjs), so these exercise real browser behaviour:
+    // SameSite cookies, Sec-Fetch-Site, CORS and frame protections.
+    const loadsImage = (url) =>
+      `return await new Promise((resolve) => { const i = new Image(); i.onload = () => resolve('loaded'); i.onerror = () => resolve('error'); i.src = ${JSON.stringify(url)}; setTimeout(() => resolve('timeout'), 6000); })`;
+
+    test('another site cannot load fsb images with the visitor session', async () => {
+      const url = `${base}/api/preview?path=${encodeURIComponent(fx.home + '/pics/gradient.png')}`;
+      await open(fx.home); // control: the same request from fsb's own origin works
+      assert.equal(await d.eval(loadsImage(url)), 'loaded', 'control: fsb serves the image to its own page');
+      await d.goto(attacker.url);
+      assert.equal(await d.eval(loadsImage(url)), 'error', 'a page on another site must not get the image');
+    });
+
+    test('another site cannot read fsb responses with fetch', async () => {
+      await open(fx.home); // make sure the session cookie is in place
+      await d.goto(attacker.url);
+      const r = await d.eval(`try { const res = await fetch(${JSON.stringify(base + '/api/status')}, { credentials: 'include' }); return { ok: true, status: res.status, body: await res.text() }; } catch (e) { return { ok: false, error: e.name }; }`);
+      assert.equal(r.ok, false, `a cross-origin read must be refused, got ${JSON.stringify(r)}`);
+    });
+
+    test('a navigation started by another site is not authorized by the session', async () => {
+      await open(fx.home);
+      await d.goto(attacker.url);
+      await d.eval(`setTimeout(() => { location.href = ${JSON.stringify(base + '/api/list?path=' + encodeURIComponent(fx.home))}; }, 0); return true;`);
+      const body = await waitFor(async () => {
+        const here = await d.eval(`return location.origin`);
+        return here === base ? d.eval(`return document.body.innerText`) : null;
+      }, { message: 'the cross-site navigation to land' });
+      assert.match(body, /forbidden/i);
+      assert.doesNotMatch(body, /"entries"|"path"|pics/);
+      // Control: the visitor typing the same address is served (a browser-initiated navigation).
+      await d.goto(`${base}/api/status`);
+      assert.match(await d.eval(`return document.body.innerText`), /readOnly/);
+    });
+
+    test('a hostile hostname pointing at fsb is refused (DNS rebinding)', async (t) => {
+      if (!d.caps.hostMapping) return t.skip('this driver cannot map extra hostnames to loopback');
+      const port = new URL(base).port;
+      for (const host of ['evil.test', '127.0.0.1.evil.test', 'localhost.evil.test']) {
+        await d.goto(`http://${host}:${port}/api/status`);
+        const body = await d.eval(`return document.body.innerText`);
+        assert.match(body, /forbidden/i, `${host}: ${body.slice(0, 80)}`);
+        assert.doesNotMatch(body, /readOnly|roots/);
+      }
+    });
+
+    test('the session cookie cannot be read by page scripts, and fsb cannot be framed', async () => {
+      await open(fx.home);
+      assert.ok(!(await d.eval(`return document.cookie`)).includes('fsb_session'), 'the session cookie must be HttpOnly');
+      const h = await d.eval(`const r = await fetch('/'); return { xfo: r.headers.get('x-frame-options'), csp: r.headers.get('content-security-policy'), cache: r.headers.get('cache-control'), ref: r.headers.get('referrer-policy') };`);
+      assert.equal(h.xfo, 'DENY');
+      assert.match(h.csp, /frame-ancestors 'none'/);
+      assert.match(h.csp, /default-src 'self'/);
+      assert.equal(h.cache, 'no-store');
+      assert.equal(h.ref, 'no-referrer');
+    });
+
     // ---- health --------------------------------------------------------------
     test('produces no script errors or CSP violations', async (t) => {
       const problems = d.problems();
       if (problems === null) return t.skip('this driver has no console access');
       const bad = problems.filter((p) => /Content Security Policy|exception|Refused to/i.test(p));
       assert.deepEqual(bad, []);
-      // The only expected resource errors are the intentional 404s/415s from denied, missing and disguised paths.
+      // The only expected resource errors are the intentional 404s/415s from denied, missing and disguised
+      // paths, and requests from the simulated attacker page that fsb's own headers block.
       for (const p of problems.filter((x) => /Failed to load resource/.test(x))) {
-        assert.match(p, /status of (404|415)/, `unexpected resource error: ${p}`);
+        assert.match(p, /status of (404|415|403)|ERR_BLOCKED_BY_RESPONSE\.NotSameOrigin|ERR_FAILED http:\/\/127\.0\.0\.1:\d+\/api\/status/, `unexpected resource error: ${p}`);
       }
     });
 

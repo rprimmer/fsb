@@ -179,13 +179,19 @@ func compile(text string, o ParseOptions) (rule, error) {
 	if err != nil {
 		return rl, err
 	}
+	// Trailing whitespace in a name is not significant to a rule: macOS allows
+	// "id.pem " and ".env\t" as file names, and they must not slip past a rule
+	// for "*.pem" or ".env". Flags: i = case-insensitive (APFS); s = "." also
+	// matches a newline, which macOS also allows in a name, so that "**" cannot
+	// be defeated by one.
+	const tail = `\s*$`
 	var expr string
 	if anchored {
-		expr = "^" + regexp.QuoteMeta(norm.NFC.String(prefix)) + glob + "$"
+		expr = "^" + regexp.QuoteMeta(norm.NFC.String(prefix)) + glob + tail
 	} else {
-		expr = "(?:^|/)" + glob + "$"
+		expr = "(?:^|/)" + glob + tail
 	}
-	re, err := regexp.Compile("(?i)" + expr)
+	re, err := regexp.Compile("(?is)" + expr)
 	if err != nil {
 		return rl, fmt.Errorf("invalid pattern: %w", err)
 	}

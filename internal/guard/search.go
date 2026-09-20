@@ -38,9 +38,10 @@ var DefaultSearchLimits = SearchLimits{MaxResults: 1000, MaxVisited: 500_000}
 // stopped the search early. fn is called from the calling goroutine.
 func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits, fn func(SearchMatch) error) (visited int, truncated bool, err error) {
 	q := fold(strings.TrimSpace(query))
-	root = filepath.Clean(root)
-	// Fail (as a listing would) if the root itself is not accessible.
-	f, fi, err := g.Open(root)
+	// Fail (as a listing would) if the root itself is not accessible. From here
+	// on the search works on the root's real location, so a symlink to a
+	// directory cannot change which entries are judged denied or hidden.
+	f, fi, realRoot, err := g.open(canonPath(filepath.Clean(root)))
 	if err != nil {
 		return 0, false, err
 	}
@@ -48,6 +49,7 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 	if !fi.IsDir() {
 		return 0, false, ErrNotDir
 	}
+	root = realRoot
 	if q == "" {
 		return 0, false, nil
 	}

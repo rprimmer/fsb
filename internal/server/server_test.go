@@ -27,7 +27,7 @@ type env struct {
 	ts     *httptest.Server
 }
 
-func write(t *testing.T, path, content string) {
+func write(t testing.TB, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func write(t *testing.T, path, content string) {
 	}
 }
 
-func newEnv(t *testing.T, debug bool, coreMissing []string) *env {
+func newEnv(t testing.TB, debug bool, coreMissing []string) *env {
 	t.Helper()
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

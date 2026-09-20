@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func put(t *testing.T, path string, content []byte) {
+func put(t testing.TB, path string, content []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)

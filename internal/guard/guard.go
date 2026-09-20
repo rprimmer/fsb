@@ -88,7 +88,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 		if !fi.IsDir() {
 			return nil, fmt.Errorf("root %q is not a directory", r)
 		}
-		g.roots = append(g.roots, real)
+		g.roots = append(g.roots, canonPath(real))
 	}
 	return g, nil
 }
@@ -113,6 +113,7 @@ func (g *Guard) inRoots(real string) bool {
 
 // violation checks a resolved real path against the roots and deny rules.
 func (g *Guard) violation(real string, isDir bool) *DeniedError {
+	real = canonPath(real)
 	if !g.inRoots(real) {
 		return &DeniedError{Path: real, Rule: "outside configured roots"}
 	}
@@ -122,14 +123,33 @@ func (g *Guard) violation(real string, isDir bool) *DeniedError {
 	return nil
 }
 
+// CanonPath reduces a path to its ordinary form on platforms with path aliases
+// (on macOS, /System/Volumes/Data/Users/me becomes /Users/me). Callers that
+// build deny rules from a directory, such as the home directory, use it so
+// that the rules and the request paths are compared in the same form.
+func CanonPath(p string) string { return canonPath(p) }
+
+// RealPath resolves symlinks and path aliases in p, for a directory that rules
+// are built from (the home directory): the guard compares rules with real
+// paths, so a rule for ~/.ssh must be expressed with the real home directory
+// even when $HOME is reached through a symlink. If p cannot be resolved it is
+// returned in canonical form.
+func RealPath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		p = r
+	}
+	return canonPath(p)
+}
+
 // canonical validates and cleans a client-supplied path. URL decoding is the
 // HTTP layer's job and happens exactly once; a literal "%2e%2e" here is just a
-// file name.
+// file name. Aliases of the same location are reduced to one form (see
+// canonPath) so a deny rule cannot be dodged by naming the path differently.
 func canonical(p string) (string, error) {
 	if p == "" || strings.ContainsRune(p, 0) || !filepath.IsAbs(p) {
 		return "", ErrNotFound
 	}
-	return filepath.Clean(p), nil
+	return canonPath(filepath.Clean(p)), nil
 }
 
 func mapErr(err error) error {
@@ -151,38 +171,55 @@ func mapErr(err error) error {
 // without following FIFOs/devices, (3) resolve the real path and confirm it is
 // the very file we opened, (4) roots and deny rules on the real path.
 func (g *Guard) Open(p string) (*os.File, fs.FileInfo, error) {
+	f, fi, _, err := g.open(p)
+	return f, fi, err
+}
+
+// open is Open plus the canonical real path of what was opened. Callers that go
+// on to examine the children of a directory (listing, search) must judge them
+// by that real path and not by however the directory was reached: a symlink to
+// a directory does not change what is inside it.
+func (g *Guard) open(p string) (*os.File, fs.FileInfo, string, error) {
 	clean, err := canonical(p)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	// Type is unknown before opening, so assume a directory: this can only
 	// over-deny a plain file that shares a name with a dir-only rule.
 	if r := g.deny.Match(clean, true); r.Matched {
-		return nil, nil, &DeniedError{Path: clean, Rule: r.Rule}
+		return nil, nil, "", &DeniedError{Path: clean, Rule: r.Rule}
 	}
 
 	fd, err := syscall.Open(clean, syscall.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
 	if err != nil {
-		return nil, nil, mapErr(err)
+		merr := mapErr(err)
+		if errors.Is(merr, ErrPermission) {
+			// An unreadable file inside a denied place must look exactly like a
+			// missing one, however the path reached it, or its existence leaks.
+			if v := g.deniedByAncestor(clean); v != nil {
+				return nil, nil, "", v
+			}
+		}
+		return nil, nil, "", merr
 	}
 	// Reject FIFOs, sockets and devices before wrapping the descriptor.
 	var st syscall.Stat_t
 	if err := syscall.Fstat(fd, &st); err != nil {
 		syscall.Close(fd)
-		return nil, nil, mapErr(err)
+		return nil, nil, "", mapErr(err)
 	}
 	if t := st.Mode & syscall.S_IFMT; t != syscall.S_IFREG && t != syscall.S_IFDIR {
 		syscall.Close(fd)
-		return nil, nil, ErrNotRegular
+		return nil, nil, "", ErrNotRegular
 	}
 	if err := syscall.SetNonblock(fd, false); err != nil {
 		syscall.Close(fd)
-		return nil, nil, mapErr(err)
+		return nil, nil, "", mapErr(err)
 	}
 	f := os.NewFile(uintptr(fd), clean)
-	fail := func(err error) (*os.File, fs.FileInfo, error) {
+	fail := func(err error) (*os.File, fs.FileInfo, string, error) {
 		f.Close()
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	fi, err := f.Stat()
@@ -205,7 +242,23 @@ func (g *Guard) Open(p string) (*os.File, fs.FileInfo, error) {
 	if r := g.deny.Match(clean, fi.IsDir()); r.Matched {
 		return fail(&DeniedError{Path: clean, Rule: r.Rule})
 	}
-	return f, fi, nil
+	return f, fi, canonPath(real), nil
+}
+
+// deniedByAncestor decides, for a path that could not be opened because of a
+// permission error, whether it lies inside a denied place. It resolves the
+// longest prefix that can be resolved: an unsearchable directory stops the
+// resolution of what is inside it, but not of the directory itself.
+func (g *Guard) deniedByAncestor(clean string) *DeniedError {
+	p, rest := clean, ""
+	for p != "/" && p != "." && p != "" {
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return g.violation(filepath.Join(real, rest), true)
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = filepath.Dir(p)
+	}
+	return nil
 }
 
 // List returns the visible entries of a directory. Denied entries and entries
@@ -237,7 +290,7 @@ func (g *Guard) ListFunc(p string, batch int, fn func([]Entry) error) error {
 	if batch < 1 {
 		batch = 1
 	}
-	f, fi, err := g.Open(p)
+	f, fi, dir, err := g.open(p)
 	if err != nil {
 		return err
 	}
@@ -245,7 +298,8 @@ func (g *Guard) ListFunc(p string, batch int, fn func([]Entry) error) error {
 	if !fi.IsDir() {
 		return ErrNotDir
 	}
-	dir := filepath.Clean(p)
+	// dir is the real location: children are judged by where they really are,
+	// not by the symlink (or alias) the directory was reached through.
 	for {
 		des, err := f.ReadDir(batch)
 		out := make([]Entry, 0, len(des))

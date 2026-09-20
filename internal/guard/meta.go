@@ -49,7 +49,7 @@ func (g *Guard) Meta(p string, values bool) (Meta, error) {
 	}
 	defer f.Close()
 
-	clean := filepath.Clean(p)
+	clean := canonPath(filepath.Clean(p))
 	m := Meta{
 		Name:     filepath.Base(clean),
 		Path:     clean,

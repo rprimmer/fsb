@@ -331,3 +331,33 @@ func FuzzParseAndMatch(f *testing.F) {
 		s.Match(path, true) // must not panic
 	})
 }
+
+// Findings 2 and 3 from an independent security review.
+func TestDenyRulesSurviveAwkwardFileNames(t *testing.T) {
+	s := mustParse(t, "~/docs/private/**\n"+strings.Join(CoreDeny, "\n"), false)
+	for _, p := range []string{
+		"/Users/u/docs/private/a\nb/c.txt", // newline in a directory name: "." must match it under **
+		"/Users/u/docs/private/x\ny",       // ... and in a file name
+		"/Users/u/docs/private/\r\n/z",     // ... and CRLF
+		"/Users/u/code/id.pem ",            // trailing space: still a .pem
+		"/Users/u/code/id.pem\t",           // trailing tab
+		"/Users/u/code/.env ",              //
+		"/Users/u/code/.env.local  ",       //
+		"/Users/u/code/deploy.key ",        //
+		"/Users/u/code/x.PEM ",             // and case
+	} {
+		if !s.Match(p, false).Matched {
+			t.Errorf("%q must be denied", p)
+		}
+	}
+	for _, p := range []string{
+		"/Users/u/code/pem ",
+		"/Users/u/code/id.pemx",
+		"/Users/u/code/envrc ",
+		"/Users/u/code/my pem file.txt",
+	} {
+		if s.Match(p, false).Matched {
+			t.Errorf("%q must not be denied", p)
+		}
+	}
+}
