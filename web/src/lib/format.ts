@@ -48,18 +48,57 @@ export function joinPath(dir: string, name: string): string {
   return dir === '/' ? `/${name}` : `${dir}/${name}`;
 }
 
-/** Location hash for a path: "#/Users/me/My%20Docs". Never sent to the server. */
-export function pathToHash(path: string): string {
-  return '#' + path.split('/').map(encodeURIComponent).join('/');
+/**
+ * Location hash for a path: "#/Users/me/My%20Docs", optionally followed by
+ * "?select=name" to open the folder with an entry selected. Never sent to the
+ * server. A literal "?" inside a path is always encoded (%3F), so the first
+ * "?" in the hash unambiguously starts the options.
+ */
+export function pathToHash(path: string, select?: string): string {
+  const base = '#' + path.split('/').map(encodeURIComponent).join('/');
+  return select ? `${base}?select=${encodeURIComponent(select)}` : base;
+}
+
+export function parseHash(hash: string): { path: string; select: string } {
+  const none = { path: '', select: '' };
+  if (!hash.startsWith('#/')) return none;
+  const q = hash.indexOf('?');
+  const pathPart = q < 0 ? hash : hash.slice(0, q);
+  let path: string;
+  try {
+    path = pathPart.slice(1).split('/').map(decodeURIComponent).join('/');
+  } catch {
+    return none;
+  }
+  // Parsed strictly (URLSearchParams would turn a bad escape into U+FFFD). A
+  // malformed selection is ignored; the folder itself is still valid.
+  let select = '';
+  if (q >= 0) {
+    for (const part of hash.slice(q + 1).split('&')) {
+      const eq = part.indexOf('=');
+      if (eq > 0 && part.slice(0, eq) === 'select') {
+        try {
+          select = decodeURIComponent(part.slice(eq + 1));
+        } catch {
+          select = '';
+        }
+      }
+    }
+  }
+  return { path, select };
 }
 
 export function hashToPath(hash: string): string {
-  if (!hash.startsWith('#/')) return '';
-  try {
-    return hash.slice(1).split('/').map(decodeURIComponent).join('/');
-  } catch {
-    return '';
-  }
+  return parseHash(hash).path;
+}
+
+export function dirname(path: string): string {
+  const i = path.lastIndexOf('/');
+  return i <= 0 ? '/' : path.slice(0, i);
+}
+
+export function basename(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
 }
 
 export interface Crumb {

@@ -8,9 +8,16 @@ import (
 	"strings"
 )
 
-// CoreDeny lists locations that hold credentials or secrets. They are active
-// by default and compiled in, so they apply even if no deny file exists. The
-// list is versioned with the release; additions are called out in release notes.
+// CoreDeny lists locations and files that hold credentials or secrets. They are
+// active by default and compiled in, so they apply even if no deny file exists.
+// The list is versioned with the release; additions are called out in release
+// notes.
+//
+// The last four are patterns that match at any depth. They are deliberately
+// broad: ".env"/".env.*" also match a directory named .env (such as a Python
+// virtualenv) and committed templates like .env.example, and "*.key" is also
+// the extension of Keynote presentations. Anyone who needs those can edit their
+// deny file; fsb then warns that a core rule is off (see LoadDeny).
 var CoreDeny = []string{
 	"~/.ssh/",
 	"~/.aws/",
@@ -23,14 +30,14 @@ var CoreDeny = []string{
 	"~/Library/Application Support/Firefox/",
 	"~/Library/Safari/",
 	"~/Library/Cookies/",
-}
-
-// OptionalDeny lists situational rules shipped commented out.
-var OptionalDeny = []string{
 	".env",
 	".env.*",
 	"*.pem",
 	"*.key",
+}
+
+// OptionalDeny lists situational rules shipped commented out.
+var OptionalDeny = []string{
 	"~/.docker/config.json",
 	"~/.npmrc",
 	"~/Library/Mail/",
@@ -50,7 +57,8 @@ func DenyTemplate() string {
 	b.WriteString("# fsb deny rules: paths matching these are never served (HTTP 404).\n")
 	b.WriteString("# Global config only; gitignore syntax; negation (!) is not allowed.\n")
 	b.WriteString("# Deny always wins over ignore.\n\n")
-	b.WriteString("# --- Core (active by default: known credential/secret locations) ---\n")
+	b.WriteString("# --- Core (active by default: known credential/secret locations and files) ---\n")
+	b.WriteString("# Removing a core rule makes fsb warn at startup and in the UI.\n")
 	for _, r := range CoreDeny {
 		b.WriteString(r + "\n")
 	}

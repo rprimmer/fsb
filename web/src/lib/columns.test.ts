@@ -8,15 +8,18 @@ import {
   clampWidth,
   defaultLayout,
   gridTemplate,
+  isHidden,
   isSortable,
   moveBy,
   moveColumn,
   parseLayout,
+  toggleColumn,
   totalWidth,
+  visibleOrder,
   type ColId,
 } from './columns.ts';
 
-const order: ColId[] = ['name', 'size', 'modTime', 'kind', 'mode'];
+const order: ColId[] = ['name', 'size', 'modTime', 'kind', 'mode', 'xattr'];
 
 test('clampWidth', () => {
   assert.equal(clampWidth(10), MIN_WIDTH);
@@ -26,10 +29,17 @@ test('clampWidth', () => {
   assert.equal(clampWidth(Infinity), MIN_WIDTH);
 });
 
+test('the attributes column is last and hidden by default', () => {
+  const l = defaultLayout();
+  assert.deepEqual(l.order, order);
+  assert.deepEqual(l.hidden, ['xattr']);
+  assert.deepEqual(visibleOrder(l), ['name', 'size', 'modTime', 'kind', 'mode']);
+});
+
 test('moveColumn uses array-move semantics', () => {
-  assert.deepEqual(moveColumn(order, 'name', 'kind'), ['size', 'modTime', 'kind', 'name', 'mode']);
-  assert.deepEqual(moveColumn(order, 'mode', 'name'), ['mode', 'name', 'size', 'modTime', 'kind']);
-  assert.deepEqual(moveColumn(order, 'size', 'modTime'), ['name', 'modTime', 'size', 'kind', 'mode']);
+  assert.deepEqual(moveColumn(order, 'name', 'kind'), ['size', 'modTime', 'kind', 'name', 'mode', 'xattr']);
+  assert.deepEqual(moveColumn(order, 'mode', 'name'), ['mode', 'name', 'size', 'modTime', 'kind', 'xattr']);
+  assert.deepEqual(moveColumn(order, 'size', 'modTime'), ['name', 'modTime', 'size', 'kind', 'mode', 'xattr']);
 });
 
 test('moveColumn ignores no-ops and unknown ids, and never mutates its input', () => {
@@ -41,20 +51,41 @@ test('moveColumn ignores no-ops and unknown ids, and never mutates its input', (
   assert.deepEqual(order, copy);
 });
 
-test('moveBy steps and stops at the ends', () => {
-  assert.deepEqual(moveBy(order, 'size', -1), ['size', 'name', 'modTime', 'kind', 'mode']);
-  assert.deepEqual(moveBy(order, 'size', 1), ['name', 'modTime', 'size', 'kind', 'mode']);
-  assert.equal(moveBy(order, 'name', -1), order);
-  assert.equal(moveBy(order, 'mode', 1), order);
-  assert.deepEqual(moveBy(order, 'name', 99), ['size', 'modTime', 'kind', 'mode', 'name']);
-});
-
 test('every reorder keeps each column exactly once', () => {
   for (const a of COLUMN_IDS) {
     for (const b of COLUMN_IDS) {
       assert.deepEqual([...moveColumn(order, a, b)].sort(), [...order].sort(), `${a}->${b}`);
     }
   }
+});
+
+test('moveBy steps over visible columns and stops at the ends', () => {
+  const l = defaultLayout(); // xattr hidden
+  assert.deepEqual(moveBy(l, 'size', -1), ['size', 'name', 'modTime', 'kind', 'mode', 'xattr']);
+  assert.deepEqual(moveBy(l, 'size', 1), ['name', 'modTime', 'size', 'kind', 'mode', 'xattr']);
+  assert.equal(moveBy(l, 'name', -1), l.order);
+  assert.equal(moveBy(l, 'mode', 1), l.order, 'mode is the last visible column: the hidden one after it is not a target');
+  assert.equal(moveBy(l, 'xattr', -1), l.order, 'a hidden column has no visible position to move from');
+});
+
+test('moveBy skips hidden columns so a keypress always changes what is shown', () => {
+  const l = { ...defaultLayout(), hidden: ['modTime', 'xattr'] as ColId[] };
+  // visible: name size kind mode; moving kind left must jump past hidden modTime to before size
+  assert.deepEqual(moveBy(l, 'kind', -1), ['name', 'kind', 'size', 'modTime', 'mode', 'xattr']);
+  const moved = { ...l, order: moveBy(l, 'kind', -1) };
+  assert.deepEqual(visibleOrder(moved), ['name', 'kind', 'size', 'mode']);
+});
+
+test('toggleColumn hides and shows, but never the name', () => {
+  let l = defaultLayout();
+  l = toggleColumn(l, 'xattr');
+  assert.equal(isHidden(l, 'xattr'), false);
+  assert.deepEqual(visibleOrder(l).at(-1), 'xattr');
+  l = toggleColumn(l, 'kind');
+  assert.equal(isHidden(l, 'kind'), true);
+  assert.equal(toggleColumn(l, 'name'), l);
+  assert.equal(isHidden(l, 'name'), false);
+  assert.ok(visibleOrder({ ...l, hidden: [...COLUMN_IDS] }).includes('name'), 'name survives even a hand-edited hidden list');
 });
 
 test('parseLayout falls back to defaults for junk', () => {
@@ -66,22 +97,34 @@ test('parseLayout falls back to defaults for junk', () => {
 
 test('parseLayout round-trips a valid layout', () => {
   const l = defaultLayout();
-  l.order = ['kind', 'name', 'size', 'mode', 'modTime'];
+  l.order = ['kind', 'name', 'size', 'mode', 'xattr', 'modTime'];
   l.widths.name = 500;
+  l.hidden = ['mode'];
   assert.deepEqual(parseLayout(JSON.stringify(l)), l);
 });
 
-test('parseLayout rejects bad column lists but keeps good widths', () => {
-  const bad = [
-    ['name', 'size'], // too short
-    ['name', 'name', 'size', 'kind', 'mode'], // duplicate
-    ['name', 'size', 'modTime', 'kind', 'evil'], // unknown id
-    'name,size,modTime,kind,mode', // wrong type
+test('parseLayout upgrades an old five-column save without losing the user order', () => {
+  const old = { order: ['kind', 'name', 'size', 'modTime', 'mode'], widths: { name: 420, size: 80, modTime: 150, kind: 100, mode: 90 } };
+  const l = parseLayout(JSON.stringify(old));
+  assert.deepEqual(l.order, ['kind', 'name', 'size', 'modTime', 'mode', 'xattr']);
+  assert.equal(l.widths.name, 420);
+  assert.equal(l.widths.xattr, DEFAULT_WIDTHS.xattr);
+  assert.deepEqual(l.hidden, ['xattr'], 'the new column starts hidden');
+});
+
+test('parseLayout repairs bad column lists instead of discarding the whole layout', () => {
+  const cases: [unknown, ColId[]][] = [
+    [['name', 'size'], ['name', 'size', 'modTime', 'kind', 'mode', 'xattr']], // too short: missing appended
+    [['name', 'name', 'size', 'kind', 'mode'], ['name', 'size', 'kind', 'mode', 'modTime', 'xattr']], // duplicate dropped
+    [['mode', 'evil', 'name', 7, null], ['mode', 'name', 'size', 'modTime', 'kind', 'xattr']], // unknown/typed junk dropped
+    ['name,size', order], // wrong type: default order
+    [[], order],
   ];
-  for (const o of bad) {
+  for (const [o, want] of cases) {
     const l = parseLayout(JSON.stringify({ order: o, widths: { name: 400 } }));
-    assert.deepEqual(l.order, order, JSON.stringify(o));
+    assert.deepEqual(l.order, want, JSON.stringify(o));
     assert.equal(l.widths.name, 400);
+    assert.equal([...new Set(l.order)].length, COLUMN_IDS.length, 'each column appears exactly once');
   }
 });
 
@@ -91,10 +134,16 @@ test('parseLayout clamps and sanitizes widths', () => {
   );
   assert.equal(l.widths.name, MIN_WIDTH);
   assert.equal(l.widths.size, MAX_WIDTH);
-  assert.equal(l.widths.modTime, DEFAULT_WIDTHS.modTime); // non-number ignored
+  assert.equal(l.widths.modTime, DEFAULT_WIDTHS.modTime);
   assert.equal(l.widths.kind, DEFAULT_WIDTHS.kind);
   assert.equal(l.widths.mode, 200);
   assert.equal('extra' in l.widths, false);
+});
+
+test('parseLayout sanitizes the hidden list and never hides the name', () => {
+  assert.deepEqual(parseLayout(JSON.stringify({ hidden: ['name', 'kind', 'evil', 5] })).hidden, ['kind']);
+  assert.deepEqual(parseLayout(JSON.stringify({ hidden: [] })).hidden, [], 'an explicit empty list means show everything');
+  assert.deepEqual(parseLayout(JSON.stringify({ hidden: 'kind' })).hidden, ['xattr'], 'a non-array falls back to the default');
 });
 
 test('parseLayout is not fooled by prototype keys', () => {
@@ -103,17 +152,19 @@ test('parseLayout is not fooled by prototype keys', () => {
   assert.equal(({} as Record<string, unknown>).order, undefined);
 });
 
-test('gridTemplate follows the current order and ends with a flexible filler', () => {
+test('gridTemplate covers only the visible columns, in order, plus a filler', () => {
   const l = defaultLayout();
   assert.equal(gridTemplate(l), '360px 90px 170px 130px 110px minmax(0, 1fr)');
-  l.order = ['mode', 'name', 'size', 'modTime', 'kind'];
+  l.order = ['mode', 'name', 'size', 'modTime', 'kind', 'xattr'];
   assert.equal(gridTemplate(l), '110px 360px 90px 170px 130px minmax(0, 1fr)');
+  assert.equal(gridTemplate(toggleColumn(l, 'xattr')), '110px 360px 90px 170px 130px 240px minmax(0, 1fr)');
 });
 
-test('totalWidth adds gaps and padding to the column widths', () => {
+test('totalWidth counts only visible columns', () => {
   assert.equal(totalWidth(defaultLayout()), 360 + 90 + 170 + 130 + 110 + 12 * 5 + 32);
+  assert.equal(totalWidth(toggleColumn(defaultLayout(), 'xattr')), 360 + 90 + 170 + 130 + 110 + 240 + 12 * 6 + 32);
 });
 
-test('only Permissions is unsortable', () => {
-  assert.deepEqual(COLUMN_IDS.filter((id) => !isSortable(id)), ['mode']);
+test('only Permissions and Attributes are unsortable', () => {
+  assert.deepEqual(COLUMN_IDS.filter((id) => !isSortable(id)), ['mode', 'xattr']);
 });

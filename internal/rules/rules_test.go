@@ -214,9 +214,53 @@ func TestCoreDenyCoversKnownSecrets(t *testing.T) {
 		"/Users/u/.netrc",
 		"/Users/u/Library/Keychains/login.keychain-db",
 		"/Users/u/Library/Application Support/Google/Chrome/Default/Login Data",
+		"/Users/u/code/app/.env",
+		"/Users/u/certs/private.pem",
+		"/Users/u/certs/private.key",
 	} {
 		if !s.Match(p, false).Matched {
 			t.Errorf("core deny should cover %s", p)
+		}
+	}
+}
+
+func TestCoreDenySecretFilePatterns(t *testing.T) {
+	s, err := Parse(strings.NewReader(strings.Join(CoreDeny, "\n")), ParseOptions{Home: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied := []string{
+		"/Users/u/proj/.env",
+		"/Users/u/.env",
+		"/Users/u/proj/sub/.env.local",
+		"/Users/u/proj/.env.production",
+		"/Users/u/proj/.env.example", // broad on purpose; see CoreDeny
+		"/Users/u/certs/server.pem",
+		"/Users/u/certs/SERVER.PEM",
+		"/Users/u/a/b/c/id.key",
+		"/Users/u/Documents/Talk.key", // Keynote: a known cost of "*.key"
+		"/Users/u/.env/bin/python",    // a virtualenv directory named .env
+	}
+	for _, p := range denied {
+		if !s.Match(p, false).Matched {
+			t.Errorf("%s should be denied by the core rules", p)
+		}
+	}
+	allowed := []string{
+		"/Users/u/proj/.envrc",
+		"/Users/u/proj/environment.txt",
+		"/Users/u/proj/dotenv.js",
+		"/Users/u/proj/key.txt",
+		"/Users/u/proj/keychain.md",
+		"/Users/u/proj/monkey",
+		"/Users/u/proj/pem",
+		"/Users/u/proj/server.pem.txt",
+		"/Users/u/proj/id.keys",
+		"/Users/u/proj/.key-notes",
+	}
+	for _, p := range allowed {
+		if s.Match(p, false).Matched {
+			t.Errorf("%s must not be swept up by the secret-file patterns", p)
 		}
 	}
 }

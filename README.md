@@ -2,7 +2,27 @@
 
 A read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
 
-> **Status: M1 (crawl).** Browse, sort, filter and download from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). Previews, search and keyboard navigation come next. See [PRD/PRD.md](PRD/PRD.md).
+> **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See [PRD/PRD.md](PRD/PRD.md).
+
+### Keyboard
+
+| Key | Action |
+|---|---|
+| `↑` `↓` `PgUp` `PgDn` `Home` `End` | Select |
+| `Enter` or `→` | Open a folder (a search hit opens its folder with the file selected) |
+| `←` or `Backspace` | Up one folder (re-selecting the one you left) |
+| `Space` | Show or hide the preview pane |
+| `/` | Filter this folder |
+| `s` | Search subfolders by name (Enter runs it; `Esc` clears) |
+| `c` | Copy the selected path (or the folder's, if nothing is selected) |
+
+### Preview, hover peek, search, attributes
+
+- **Preview pane:** raster images (PNG, JPEG, GIF, WebP), syntax-highlighted code and Markdown source, pretty-printed JSON, CSV/TSV as a table, and plain text, plus details and extended attributes. Images are served sandboxed and identified by their bytes, never their names; SVG and HTML are never rendered.
+- **Hover peek:** hover a readable file for a moment to see its first lines. Turn it off with the "Hover previews" checkbox. It never reads a file that is stored only in the cloud (see the PRD, SR-9).
+- **Search:** filename search under the current folder, shallowest matches first. It never enters or reports denied or hidden folders and does not follow symlinked folders.
+- **Extended attributes:** shown in the preview pane, and as an optional last column (Columns menu), fetched only for the rows on screen.
+- **Not yet:** PDF preview, rendered (as opposed to highlighted) Markdown, and archive listings.
 
 Columns can be resized (drag the edge; double-click to fit) and reordered (drag a header, or Alt+Left/Right); the layout is remembered in your browser, and "Reset columns" restores the defaults.
 
@@ -37,7 +57,9 @@ go build -o fsb ./cmd/fsb
 
 Deny always wins. A denied path answers the same 404 as a missing one (add `--debug` to see which rule matched). Deny rules load only from the global file.
 
-**Core deny rules are on by default**, even with no deny file: `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`, `~/.kube`, Keychains, and Chrome/Firefox/Safari data. Situational rules (`.env`, `*.pem`, ...) are in the generated deny file, commented out. If you remove a core rule from the file, fsb warns at startup.
+**Core deny rules are on by default**, even with no deny file: `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`, `~/.kube`, Keychains, Chrome/Firefox/Safari data, and secret files anywhere: `.env`, `.env.*`, `*.pem` and `*.key`. Situational rules (`~/.docker/config.json`, `~/.npmrc`, Mail and Messages) are in the generated deny file, commented out. If you remove a core rule from the file, fsb warns at startup.
+
+The secret-file patterns are deliberately broad, so they have costs: **`*.key` also matches Keynote presentations**, `.env` also matches a directory named `.env` (such as a Python virtualenv), and `.env.*` also matches templates like `.env.example`. If that gets in your way, remove the pattern from `~/.config/fsb/deny` (run `fsb --init` first to create it) and accept the startup warning.
 
 ### Known limitations
 

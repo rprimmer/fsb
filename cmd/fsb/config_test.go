@@ -46,7 +46,10 @@ func TestInitWritesActiveCoreRulesAndNeverOverwrites(t *testing.T) {
 	if !set.Match("/Users/u/.ssh/id_rsa", false).Matched {
 		t.Error("core rules must be active in the generated file")
 	}
-	if set.Match("/Users/u/proj/.env", false).Matched {
+	if !set.Match("/Users/u/proj/.env", false).Matched || !set.Match("/Users/u/keys/server.pem", false).Matched {
+		t.Error("the secret-file patterns are core rules and must be active in the generated file")
+	}
+	if set.Match("/Users/u/.npmrc", false).Matched {
 		t.Error("optional rules must be commented out in the generated file")
 	}
 

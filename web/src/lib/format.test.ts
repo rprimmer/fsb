@@ -2,12 +2,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  basename,
   crumbsFor,
+  dirname,
   formatSize,
   hashToPath,
   joinPath,
   kindOf,
   modeString,
+  parseHash,
   pathToHash,
 } from './format.ts';
 
@@ -50,6 +53,35 @@ test('hash round trip, including awkward characters', () => {
     assert.equal(hashToPath(pathToHash(p)), p, p);
   }
   assert.equal(pathToHash('/a/b #c'), '#/a/b%20%23c');
+});
+
+test('a hash can carry a selection, and awkward names survive', () => {
+  for (const [path, select] of [
+    ['/Users/me/docs', 'a file.txt'],
+    ['/a', '100% real?.md'],
+    ['/a/b?c', 'x&y=z#w'],
+    ['/café', 'résumé + notes.txt'],
+    ['/', 'etc'],
+  ] as const) {
+    assert.deepEqual(parseHash(pathToHash(path, select)), { path, select }, `${path} ${select}`);
+  }
+  assert.deepEqual(parseHash(pathToHash('/a/b')), { path: '/a/b', select: '' });
+  assert.equal(pathToHash('/a', ''), '#/a', 'an empty selection adds nothing');
+  assert.equal(pathToHash('/a', 'b c'), '#/a?select=b%20c');
+  // A "?" in the path is encoded, so it can never be mistaken for the options.
+  assert.equal(pathToHash('/a?b'), '#/a%3Fb');
+  assert.equal(hashToPath('#/a/b?select=x'), '/a/b');
+  assert.deepEqual(parseHash('#/a?select=%E0%A4%A'), { path: '/a', select: '' }, 'a malformed selection is ignored, the folder is kept');
+  assert.deepEqual(parseHash('#/bad%E0%A4%A?select=x'), { path: '', select: '' }, 'a malformed path is rejected');
+  assert.deepEqual(parseHash('#/a?other=1&select=b'), { path: '/a', select: 'b' });
+});
+
+test('dirname and basename', () => {
+  assert.equal(dirname('/a/b/c'), '/a/b');
+  assert.equal(dirname('/a'), '/');
+  assert.equal(dirname('/'), '/');
+  assert.equal(basename('/a/b/c.txt'), 'c.txt');
+  assert.equal(basename('/a'), 'a');
 });
 
 test('hashToPath rejects non-paths and malformed escapes', () => {

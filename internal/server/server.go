@@ -9,6 +9,8 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/rprimmer/fsb/internal/guard"
 	"github.com/rprimmer/fsb/internal/httpguard"
@@ -54,6 +56,10 @@ func (s *Server) Handler(port int) http.Handler {
 	mux.HandleFunc("GET /api/status", s.status)
 	mux.HandleFunc("GET /api/list", s.list)
 	mux.HandleFunc("GET /api/file", s.file)
+	mux.HandleFunc("GET /api/head", s.head)
+	mux.HandleFunc("GET /api/meta", s.meta)
+	mux.HandleFunc("GET /api/preview", s.preview)
+	mux.HandleFunc("GET /api/search", s.search)
 	mux.Handle("GET /", web.Handler()) // embedded frontend; unknown paths 404
 
 	var h http.Handler = mux
@@ -136,6 +142,118 @@ func (s *Server) file(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
 }
 
+// Limits for /api/head.
+const (
+	defaultHeadBytes = 2048
+	maxHeadBytes     = 64 * 1024
+)
+
+// head returns a classified, bounded look at the start of a file: text is
+// returned only when it is valid UTF-8, and binary or cloud-only files report
+// their kind and size but never their bytes.
+func (s *Server) head(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	n := defaultHeadBytes
+	if v := r.URL.Query().Get("bytes"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed < 1 || parsed > maxHeadBytes {
+			http.Error(w, "bad bytes parameter", http.StatusBadRequest)
+			return
+		}
+		n = parsed
+	}
+	h, err := s.cfg.Guard.Head(p, n)
+	if err != nil {
+		s.fail(w, p, err)
+		return
+	}
+	writeJSON(w, h)
+}
+
+// meta returns details and extended attributes. values=0 lists attribute
+// names only (used by the optional listing column).
+func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	m, err := s.cfg.Guard.Meta(p, r.URL.Query().Get("values") != "0")
+	if err != nil {
+		s.fail(w, p, err)
+		return
+	}
+	writeJSON(w, m)
+}
+
+// preview serves a raster image inline, and nothing else inline. The type is
+// decided from the file's leading bytes by the guard, never from its name, and
+// the response is sandboxed so even a polyglot file cannot run anything.
+func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	f, fi, contentType, err := s.cfg.Guard.OpenImage(p)
+	if err != nil {
+		s.fail(w, p, err)
+		return
+	}
+	defer f.Close()
+	h := w.Header()
+	h.Set("Content-Type", contentType)
+	h.Set("Content-Disposition", "inline")
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+}
+
+// search streams filename matches as NDJSON: a {"path","query"} line, then
+// {"matches":[...]} lines as results arrive, then {"done":true,...}.
+func (s *Server) search(w http.ResponseWriter, r *http.Request) {
+	root := r.URL.Query().Get("path")
+	query := r.URL.Query().Get("q")
+	rc := http.NewResponseController(w)
+	enc := json.NewEncoder(w)
+	started := false
+	start := func() {
+		if started {
+			return
+		}
+		started = true
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		enc.Encode(map[string]any{"path": root, "query": query})
+	}
+
+	var pending []guard.SearchMatch
+	lastFlush := time.Now()
+	flush := func() error {
+		if len(pending) == 0 {
+			return nil
+		}
+		start()
+		err := enc.Encode(map[string]any{"matches": pending})
+		pending = pending[:0]
+		lastFlush = time.Now()
+		rc.Flush()
+		return err
+	}
+
+	visited, truncated, err := s.cfg.Guard.Search(r.Context(), root, query, guard.DefaultSearchLimits, func(m guard.SearchMatch) error {
+		pending = append(pending, m)
+		if len(pending) >= 25 || time.Since(lastFlush) > 150*time.Millisecond {
+			return flush()
+		}
+		return nil
+	})
+	switch {
+	case err == nil:
+		flush()
+		start()
+		enc.Encode(map[string]any{"done": true, "visited": visited, "truncated": truncated})
+	case r.Context().Err() != nil:
+		// The client went away; nothing to send.
+	case !started && len(pending) == 0:
+		s.fail(w, root, err)
+	default:
+		s.logf("search %q interrupted: %v", root, err)
+		flush()
+		enc.Encode(map[string]any{"error": "search interrupted"})
+	}
+}
+
 // fail maps guard errors to responses. Denied, nonexistent, out-of-root and
 // unopenable paths all answer an identical 404 unless Debug is set.
 func (s *Server) fail(w http.ResponseWriter, path string, err error) {
@@ -148,8 +266,12 @@ func (s *Server) fail(w http.ResponseWriter, path string, err error) {
 			return
 		}
 		notFound(w)
-	case errors.Is(err, guard.ErrNotFound), errors.Is(err, guard.ErrNotRegular), errors.Is(err, guard.ErrNotDir):
+	case errors.Is(err, guard.ErrNotFound), errors.Is(err, guard.ErrNotRegular), errors.Is(err, guard.ErrNotDir), errors.Is(err, guard.ErrIsDir):
 		notFound(w)
+	case errors.Is(err, guard.ErrDataless):
+		http.Error(w, "file is stored in the cloud and not downloaded; fsb will not trigger a download", http.StatusConflict)
+	case errors.Is(err, guard.ErrUnsupported):
+		http.Error(w, "unsupported file type", http.StatusUnsupportedMediaType)
 	case errors.Is(err, guard.ErrPermission):
 		http.Error(w, "permission denied", http.StatusForbidden)
 	default:

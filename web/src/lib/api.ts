@@ -9,10 +9,43 @@ export interface Entry {
   mode: number;
 }
 
+/** A listing row, or a search hit (which also carries its full path and its path relative to the search root). */
+export interface Row extends Entry {
+  path?: string;
+  rel?: string;
+}
+
 export interface Status {
   readOnly: boolean;
   coreDenyMissing: string[];
   roots: string[];
+}
+
+export interface XAttr {
+  name: string;
+  size?: number;
+  value?: string;
+  encoding?: 'utf8' | 'hex';
+  large?: boolean;
+}
+
+export interface Meta extends Entry {
+  path: string;
+  symlinkTarget?: string;
+  dataless?: boolean;
+  xattrs: XAttr[];
+}
+
+export interface Head {
+  kind: 'text' | 'binary' | 'empty' | 'dataless';
+  size: number;
+  text?: string;
+  truncated?: boolean;
+}
+
+export interface SearchDone {
+  visited: number;
+  truncated: boolean;
 }
 
 export class ApiError extends Error {
@@ -29,10 +62,61 @@ async function failure(resp: Response): Promise<ApiError> {
   return new ApiError(resp.status, text || resp.statusText);
 }
 
-export async function getStatus(): Promise<Status> {
-  const resp = await fetch('/api/status');
+async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const resp = await fetch(url, { signal });
   if (!resp.ok) throw await failure(resp);
   return resp.json();
+}
+
+const q = (path: string) => encodeURIComponent(path);
+
+export function getStatus(): Promise<Status> {
+  return getJSON('/api/status');
+}
+
+/** A bounded, classified look at the start of a file. Binary and cloud-only files never return content. */
+export function getHead(path: string, bytes: number, signal?: AbortSignal): Promise<Head> {
+  return getJSON(`/api/head?path=${q(path)}&bytes=${bytes}`, signal);
+}
+
+/** Details and extended attributes. With values=false only attribute names are returned. */
+export function getMeta(path: string, values: boolean, signal?: AbortSignal): Promise<Meta> {
+  return getJSON(`/api/meta?path=${q(path)}${values ? '' : '&values=0'}`, signal);
+}
+
+/** URL of an inline (sandboxed) image preview. The server refuses anything but PNG, JPEG, GIF and WebP. */
+export function previewURL(path: string): string {
+  return `/api/preview?path=${q(path)}`;
+}
+
+export function fileURL(path: string): string {
+  return `/api/file?path=${q(path)}`;
+}
+
+/** Reads an NDJSON response line by line, calling handle for each parsed object. */
+async function streamNDJSON(resp: Response, handle: (msg: Record<string, unknown>) => void): Promise<void> {
+  if (!resp.body) throw new Error('streaming is not supported by this browser');
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = '';
+  const line = (s: string) => {
+    if (!s) return;
+    const msg = JSON.parse(s) as Record<string, unknown>;
+    if (typeof msg.error === 'string') throw new Error(msg.error);
+    handle(msg);
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffered += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffered.indexOf('\n')) >= 0) {
+      line(buffered.slice(0, nl));
+      buffered = buffered.slice(nl + 1);
+    }
+  }
+  buffered += decoder.decode();
+  line(buffered.trim());
 }
 
 /**
@@ -44,33 +128,29 @@ export async function streamList(
   onEntries: (entries: Entry[]) => void,
   signal: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch(`/api/list?path=${encodeURIComponent(path)}`, { signal });
+  const resp = await fetch(`/api/list?path=${q(path)}`, { signal });
   if (!resp.ok) throw await failure(resp);
-  if (!resp.body) throw new Error('streaming is not supported by this browser');
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffered = '';
-  const handle = (line: string) => {
-    if (!line) return;
-    const msg = JSON.parse(line) as { entries?: Entry[]; error?: string };
-    if (msg.error) throw new Error(msg.error);
-    if (msg.entries) onEntries(msg.entries);
-  };
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffered += decoder.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buffered.indexOf('\n')) >= 0) {
-      handle(buffered.slice(0, nl));
-      buffered = buffered.slice(nl + 1);
-    }
-  }
-  buffered += decoder.decode();
-  handle(buffered.trim());
+  await streamNDJSON(resp, (m) => {
+    if (Array.isArray(m.entries)) onEntries(m.entries as Entry[]);
+  });
 }
 
-export function fileURL(path: string): string {
-  return `/api/file?path=${encodeURIComponent(path)}`;
+/**
+ * Streams filename matches under root, shallowest first. Resolves with what
+ * the server visited and whether a limit cut the search short.
+ */
+export async function streamSearch(
+  root: string,
+  query: string,
+  onMatches: (rows: Row[]) => void,
+  signal: AbortSignal,
+): Promise<SearchDone> {
+  const resp = await fetch(`/api/search?path=${q(root)}&q=${encodeURIComponent(query)}`, { signal });
+  if (!resp.ok) throw await failure(resp);
+  let done: SearchDone = { visited: 0, truncated: false };
+  await streamNDJSON(resp, (m) => {
+    if (Array.isArray(m.matches)) onMatches(m.matches as Row[]);
+    if (m.done === true) done = { visited: Number(m.visited) || 0, truncated: m.truncated === true };
+  });
+  return done;
 }

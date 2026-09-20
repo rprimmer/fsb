@@ -1,55 +1,102 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
+  import Peek from './lib/Peek.svelte';
+  import Preview from './lib/Preview.svelte';
   import VirtualList from './lib/VirtualList.svelte';
-  import { ApiError, fileURL, getStatus, streamList, type Entry, type Status } from './lib/api';
   import {
+    ApiError,
+    fileURL,
+    getHead,
+    getMeta,
+    getStatus,
+    streamList,
+    streamSearch,
+    type Head,
+    type Row,
+    type Status,
+  } from './lib/api';
+  import {
+    COLUMN_IDS,
     COLUMNS,
     MAX_WIDTH,
     MIN_WIDTH,
     clampWidth,
     defaultLayout,
     gridTemplate,
+    isHidden,
     isSortable,
     moveBy,
     moveColumn,
     parseLayout,
+    toggleColumn,
     totalWidth,
+    visibleOrder,
     type ColId,
     type Layout,
     type SortKey,
   } from './lib/columns';
   import {
+    basename,
     crumbsFor,
+    dirname,
     formatDate,
     formatSize,
-    hashToPath,
     joinPath,
     kindOf,
     modeString,
+    parseHash,
     pathToHash,
   } from './lib/format';
+  import { firstLines, plural } from './lib/preview';
 
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   const LAYOUT_KEY = 'fsb.columns.v1';
+  const PREFS_KEY = 'fsb.prefs.v1';
 
   let status = $state<Status | null>(null);
   let path = $state('');
-  let entries = $state.raw<Entry[]>([]);
+  let entries = $state.raw<Row[]>([]);
   let loading = $state(false);
   let error = $state('');
   let filter = $state('');
   let showHidden = $state(false);
   let sortKey = $state<SortKey>('name');
   let sortAsc = $state(true);
+  let userSorted = $state(false);
   let filterInput: HTMLInputElement | undefined;
-  let list: { reset(): void } | undefined;
+  let searchEl: HTMLInputElement | undefined;
+  let list: { reset(): void; scrollToIndex(i: number): void } | undefined;
 
-  // Column layout: a per-viewer preference, kept in localStorage (which can be
-  // unavailable or empty, so every access is guarded).
+  // ---- preferences kept in this browser (localStorage may be unavailable) ---
+  function loadPrefs(): { preview: boolean; hover: boolean } {
+    const prefs = { preview: window.innerWidth >= 900, hover: true };
+    try {
+      const raw = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
+      if (raw && typeof raw.preview === 'boolean') prefs.preview = raw.preview;
+      if (raw && typeof raw.hover === 'boolean') prefs.hover = raw.hover;
+    } catch {
+      /* use defaults */
+    }
+    return prefs;
+  }
+  const initial = loadPrefs();
+  let showPreview = $state(initial.preview);
+  let hoverPeek = $state(initial.hover);
+
+  function savePrefs() {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek }));
+    } catch {
+      /* the choice just will not persist */
+    }
+  }
+
+  // ---- column layout ---------------------------------------------------------
   let layout = $state<Layout>(loadLayout());
   let resizing: { id: ColId; startX: number; startW: number } | null = null;
   let draggingCol = $state<ColId | null>(null);
   let dropTarget = $state<ColId | null>(null);
+  const shownColumns = $derived(visibleOrder(layout));
 
   function loadLayout(): Layout {
     try {
@@ -80,7 +127,11 @@
     }
   }
 
-  // --- resizing: drag the edge, or focus it and use the keyboard -------------
+  function toggleCol(id: ColId) {
+    layout = toggleColumn(layout, id);
+    saveLayout();
+  }
+
   function startResize(ev: PointerEvent, id: ColId) {
     ev.preventDefault(); // also stops the header's native drag from starting
     (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
@@ -131,7 +182,6 @@
     saveLayout();
   }
 
-  // --- reordering: drag a header onto another, or Alt+Arrow on a header ------
   function dragStart(ev: DragEvent, id: ColId) {
     draggingCol = id;
     ev.dataTransfer?.setData('text/plain', id); // Firefox needs data to start a drag
@@ -161,26 +211,41 @@
   function headerKey(ev: KeyboardEvent, id: ColId) {
     if (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
       ev.preventDefault();
-      layout = { ...layout, order: moveBy(layout.order, id, ev.key === 'ArrowLeft' ? -1 : 1) };
+      layout = { ...layout, order: moveBy(layout, id, ev.key === 'ArrowLeft' ? -1 : 1) };
       saveLayout();
     }
   }
 
-  // --- data ------------------------------------------------------------------
+  // ---- rows, sorting, selection ----------------------------------------------
+  let searchActive = $state(false);
+  let searching = $state(false);
+  let searchInput = $state('');
+  let searchRows = $state.raw<Row[]>([]);
+  let searchNote = $state('');
+  let searchCtrl: AbortController | undefined;
+  let selectedKey = $state('');
+  let pendingSelect = '';
+
+  const rowPath = (e: Row) => e.path ?? joinPath(path, e.name);
+  const source = $derived(searchActive ? searchRows : entries);
   const crumbs = $derived(status && path ? crumbsFor(path, status.roots) : []);
 
   const visible = $derived.by(() => {
     const q = filter.trim().toLowerCase();
-    const rows = entries.filter(
-      (e) => (showHidden || !e.name.startsWith('.')) && (!q || e.name.toLowerCase().includes(q)),
+    const rows = source.filter(
+      (e) =>
+        (showHidden || !e.name.startsWith('.')) &&
+        (!q || (e.rel ?? e.name).toLowerCase().includes(q)),
     );
+    // Search results arrive shallowest-first; keep that order until the user sorts.
+    if (searchActive && !userSorted) return rows;
     const dir = sortAsc ? 1 : -1;
     rows.sort((a, b) => {
       if (a.isDir !== b.isDir) return a.isDir ? -1 : 1; // folders first
       let c = 0;
       switch (sortKey) {
         case 'name':
-          c = collator.compare(a.name, b.name);
+          c = collator.compare(a.rel ?? a.name, b.rel ?? b.name);
           break;
         case 'size':
           c = a.size - b.size;
@@ -197,6 +262,9 @@
     return rows;
   });
 
+  const selectedIdx = $derived(selectedKey ? visible.findIndex((r) => rowPath(r) === selectedKey) : -1);
+  const selectedRow = $derived(selectedIdx >= 0 ? visible[selectedIdx] : null);
+
   function describe(e: unknown): string {
     if (e instanceof ApiError) {
       if (e.status === 404) return 'Not found. The folder does not exist or is not available.';
@@ -210,6 +278,7 @@
   }
 
   function sortBy(key: SortKey) {
+    userSorted = true;
     if (sortKey === key) sortAsc = !sortAsc;
     else {
       sortKey = key;
@@ -218,31 +287,360 @@
   }
 
   function ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
-    return sortKey !== key ? 'none' : sortAsc ? 'ascending' : 'descending';
+    return sortKey !== key || (searchActive && !userSorted) ? 'none' : sortAsc ? 'ascending' : 'descending';
   }
 
-  function onKey(ev: KeyboardEvent) {
-    const typing = document.activeElement instanceof HTMLInputElement;
-    if (ev.key === '/' && !typing) {
-      ev.preventDefault();
-      filterInput?.focus();
-    } else if (ev.key === 'Escape' && typing) {
-      filter = '';
-      filterInput?.blur();
+  function select(e: Row) {
+    selectedKey = rowPath(e);
+  }
+
+  function revealSelected() {
+    tick().then(() => {
+      if (selectedIdx >= 0) list?.scrollToIndex(selectedIdx);
+    });
+  }
+
+  function selectByName(name: string) {
+    clearSearch();
+    if (name.startsWith('.')) showHidden = true;
+    selectedKey = joinPath(path, name);
+    revealSelected();
+  }
+
+  function move(delta: number) {
+    if (visible.length === 0) return;
+    const i =
+      selectedIdx < 0
+        ? delta > 0
+          ? 0
+          : visible.length - 1
+        : Math.min(visible.length - 1, Math.max(0, selectedIdx + delta));
+    selectedKey = rowPath(visible[i]);
+    lastNavAt = Date.now();
+    list?.scrollToIndex(i);
+  }
+
+  function open(e: Row) {
+    if (e.isDir && !e.broken) location.hash = pathToHash(rowPath(e));
+    else if (searchActive) location.hash = pathToHash(dirname(rowPath(e)), e.name);
+    else {
+      showPreview = true;
+      savePrefs();
     }
   }
 
+  function goUp() {
+    if (searchActive) {
+      clearSearch();
+      return;
+    }
+    if (crumbs.length > 1) location.hash = pathToHash(crumbs[crumbs.length - 2].path, basename(path));
+  }
+
+  // ---- copy path -------------------------------------------------------------
+  let toast = $state('');
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function copyText(text: string) {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.className = 'sr-copy';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        ok = document.execCommand('copy');
+      } catch {
+        ok = false;
+      }
+      ta.remove();
+    }
+    toast = ok ? 'Copied path to the clipboard' : 'Could not copy';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast = ''), 1800);
+  }
+
+  // ---- search ----------------------------------------------------------------
+  function clearSearch() {
+    searchCtrl?.abort();
+    searchCtrl = undefined;
+    searchActive = false;
+    searching = false;
+    searchRows = [];
+    searchNote = '';
+    searchInput = '';
+    userSorted = false;
+  }
+
+  function runSearch() {
+    const query = searchInput.trim();
+    if (!query) {
+      clearSearch();
+      return;
+    }
+    searchCtrl?.abort();
+    const ctrl = new AbortController();
+    searchCtrl = ctrl;
+    searchActive = true;
+    searching = true;
+    searchRows = [];
+    searchNote = '';
+    selectedKey = '';
+    userSorted = false;
+    error = '';
+    list?.reset();
+
+    let buf: Row[] = [];
+    let acc: Row[] = [];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      timer = undefined;
+      if (buf.length) {
+        acc = acc.concat(buf);
+        buf = [];
+        searchRows = acc;
+      }
+    };
+    streamSearch(
+      path,
+      query,
+      (rows) => {
+        buf.push(...rows);
+        if (acc.length === 0) flush();
+        else timer ??= setTimeout(flush, 120);
+      },
+      ctrl.signal,
+    )
+      .then((done) => {
+        clearTimeout(timer);
+        flush();
+        searching = false;
+        if (done.truncated) searchNote = 'Stopped early: too many results or too many items to scan. Narrow the search.';
+      })
+      .catch((e) => {
+        if (ctrl.signal.aborted) return;
+        clearTimeout(timer);
+        flush();
+        searching = false;
+        error = describe(e);
+      });
+  }
+
+  // ---- hover peek ------------------------------------------------------------
+  let peek = $state<{ x: number; y: number; text: string; cut: boolean; note: string } | null>(null);
+  let peekTimer: ReturnType<typeof setTimeout> | undefined;
+  let peekCtrl: AbortController | undefined;
+  let lastNavAt = 0;
+  let lastScrollAt = 0;
+  const peekCache = new Map<string, Head>();
+  const PEEK_DELAY = 400;
+
+  function clearPeek() {
+    clearTimeout(peekTimer);
+    peekCtrl?.abort();
+    peekCtrl = undefined;
+    peek = null;
+  }
+
+  function peekEnter(ev: MouseEvent, e: Row) {
+    clearPeek();
+    if (!hoverPeek || e.isDir || e.broken || e.size === 0) return;
+    // Not while the keyboard or a scroll is moving rows under a resting mouse.
+    if (Date.now() - lastNavAt < 800 || Date.now() - lastScrollAt < 400) return;
+    const p = rowPath(e);
+    const key = `${p}|${e.modTime}|${e.size}`;
+    const { clientX: x, clientY: y } = ev;
+    peekTimer = setTimeout(async () => {
+      let h = peekCache.get(key);
+      if (!h) {
+        const ctrl = new AbortController();
+        peekCtrl = ctrl;
+        try {
+          h = await getHead(p, 2048, ctrl.signal);
+        } catch {
+          return; // denied, vanished, unreadable: no bubble
+        }
+        if (ctrl.signal.aborted) return;
+        if (peekCache.size > 200) peekCache.clear();
+        peekCache.set(key, h);
+      }
+      if (h.kind === 'text' && h.text) {
+        const f = firstLines(h.text, 20, 1200);
+        peek = { x, y, text: f.text, cut: f.cut || !!h.truncated, note: '' };
+      } else if (h.kind === 'dataless') {
+        peek = { x, y, text: '', cut: false, note: 'Stored in the cloud and not downloaded.' };
+      }
+    }, PEEK_DELAY);
+  }
+
+  // ---- extended-attributes column: fetched lazily for the rows on screen -----
+  let range = $state({ start: 0, end: 0 });
+  let xattrVersion = $state(0);
+  const xattrCache = new Map<string, string>();
+  const xkey = (e: Row) => `${rowPath(e)}|${e.modTime}`;
+
+  function xattrText(e: Row): string {
+    void xattrVersion; // re-render when more names arrive
+    if (e.broken) return '';
+    const v = xattrCache.get(xkey(e));
+    return v === undefined ? '…' : v;
+  }
+
+  $effect(() => {
+    if (isHidden(layout, 'xattr')) return;
+    const wanted = visible.slice(range.start, range.end).filter((e) => !e.broken && !xattrCache.has(xkey(e)));
+    if (wanted.length === 0) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      let next = 0;
+      const worker = async () => {
+        while (next < wanted.length && !ctrl.signal.aborted) {
+          const e = wanted[next++];
+          try {
+            const m = await getMeta(rowPath(e), false, ctrl.signal);
+            xattrCache.set(xkey(e), m.xattrs.map((x) => x.name).join(', '));
+          } catch {
+            if (ctrl.signal.aborted) return;
+            xattrCache.set(xkey(e), '');
+          }
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      if (!ctrl.signal.aborted) xattrVersion++;
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  });
+
+  // ---- keyboard --------------------------------------------------------------
+  function onKey(ev: KeyboardEvent) {
+    lastNavAt = Date.now();
+    clearPeek();
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const t = ev.target as HTMLElement | null;
+    const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+    if (typing) {
+      if (ev.key === 'Escape') {
+        if (t === filterInput) filter = '';
+        if (t === searchEl) clearSearch();
+        (t as HTMLElement).blur();
+      } else if (ev.key === 'Enter' && t === searchEl) {
+        runSearch();
+      } else if (ev.key === 'ArrowDown' && (t === filterInput || t === searchEl)) {
+        ev.preventDefault();
+        (t as HTMLElement).blur();
+        move(1);
+      }
+      return;
+    }
+    const onControl = t instanceof HTMLAnchorElement || t instanceof HTMLButtonElement || t?.tagName === 'SUMMARY';
+    const page = 10;
+    // Some keyboards and remote-control layers report Space only via `code`.
+    const key = ev.code === 'Space' ? ' ' : ev.key;
+    switch (key) {
+      case '/':
+        ev.preventDefault();
+        filterInput?.focus();
+        break;
+      case 's':
+        ev.preventDefault();
+        searchEl?.focus();
+        break;
+      case 'ArrowDown':
+        ev.preventDefault();
+        move(1);
+        break;
+      case 'ArrowUp':
+        ev.preventDefault();
+        move(-1);
+        break;
+      case 'PageDown':
+        ev.preventDefault();
+        move(page);
+        break;
+      case 'PageUp':
+        ev.preventDefault();
+        move(-page);
+        break;
+      case 'Home':
+        ev.preventDefault();
+        if (visible.length) {
+          selectedKey = rowPath(visible[0]);
+          list?.scrollToIndex(0);
+        }
+        break;
+      case 'End':
+        ev.preventDefault();
+        if (visible.length) {
+          selectedKey = rowPath(visible[visible.length - 1]);
+          list?.scrollToIndex(visible.length - 1);
+        }
+        break;
+      case 'ArrowRight':
+        if (selectedRow?.isDir) {
+          ev.preventDefault();
+          open(selectedRow);
+        }
+        break;
+      case 'ArrowLeft':
+      case 'Backspace':
+        ev.preventDefault();
+        goUp();
+        break;
+      case 'Enter':
+        if (!onControl && selectedRow) {
+          ev.preventDefault();
+          open(selectedRow);
+        }
+        break;
+      case ' ':
+        if (!onControl) {
+          ev.preventDefault();
+          showPreview = !showPreview;
+          savePrefs();
+        }
+        break;
+      case 'c':
+        copyText(selectedRow ? rowPath(selectedRow) : path);
+        break;
+      case 'Escape':
+        if (searchActive) clearSearch();
+        else selectedKey = '';
+        break;
+    }
+  }
+
+  // ---- data loading ----------------------------------------------------------
   onMount(() => {
     const onHash = () => {
-      const p = hashToPath(location.hash);
-      if (p) path = p;
+      const { path: p, select: sel } = parseHash(location.hash);
+      if (!p) return;
+      if (p === path) {
+        if (sel) selectByName(sel);
+        return;
+      }
+      pendingSelect = sel;
+      path = p;
+    };
+    const onScroll = () => {
+      lastScrollAt = Date.now();
+      clearPeek();
     };
     window.addEventListener('hashchange', onHash);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('wheel', onScroll, { passive: true });
     getStatus()
       .then((s) => {
         status = s;
-        if (!hashToPath(location.hash) && s.roots.length) {
+        if (!parseHash(location.hash).path && s.roots.length) {
           history.replaceState(null, '', pathToHash(s.roots[0]));
         }
         onHash();
@@ -251,6 +649,8 @@
     return () => {
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('wheel', onScroll);
     };
   });
 
@@ -263,12 +663,18 @@
     error = '';
     loading = true;
     filter = '';
-    untrack(() => list?.reset());
+    untrack(() => {
+      list?.reset();
+      clearSearch();
+      clearPeek();
+      xattrCache.clear();
+      selectedKey = '';
+    });
 
     // Throttle state updates so a 100k-entry directory does not re-sort on
     // every chunk.
-    let buf: Entry[] = [];
-    let acc: Entry[] = [];
+    let buf: Row[] = [];
+    let acc: Row[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
       timer = undefined;
@@ -276,6 +682,13 @@
         acc = acc.concat(buf);
         buf = [];
         entries = acc;
+      }
+    };
+    const applyPending = () => {
+      if (pendingSelect) {
+        const name = pendingSelect;
+        pendingSelect = '';
+        selectByName(name);
       }
     };
 
@@ -292,6 +705,7 @@
         clearTimeout(timer);
         flush();
         loading = false;
+        applyPending();
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
@@ -312,15 +726,17 @@
   });
 </script>
 
-{#snippet cell(id: ColId, e: Entry)}
+{#snippet cell(id: ColId, e: Row)}
   {#if id === 'name'}
     <div role="gridcell" class="c-name" data-col="name">
       {#if e.broken}
-        <span class="name broken" title="Broken symlink">{e.name}</span>
+        <span class="name broken" title="Broken symlink">{e.rel ?? e.name}</span>
       {:else if e.isDir}
-        <a class="name dir" href={pathToHash(joinPath(path, e.name))}>{e.name}/</a>
+        <a class="name dir" href={pathToHash(rowPath(e))}>{e.rel ?? e.name}/</a>
+      {:else if searchActive}
+        <a class="name" href={pathToHash(dirname(rowPath(e)), e.name)} title="Show in its folder">{e.rel ?? e.name}</a>
       {:else}
-        <a class="name" href={fileURL(joinPath(path, e.name))} download={e.name}>{e.name}</a>
+        <a class="name" href={fileURL(rowPath(e))} download={e.name}>{e.name}</a>
       {/if}
       {#if e.isSymlink}<span class="link" title="Symbolic link">→</span>{/if}
     </div>
@@ -330,8 +746,10 @@
     <div role="gridcell" class="c-date" data-col="modTime">{formatDate(e.modTime)}</div>
   {:else if id === 'kind'}
     <div role="gridcell" class="c-kind" data-col="kind">{kindOf(e)}</div>
-  {:else}
+  {:else if id === 'mode'}
     <div role="gridcell" class="c-mode mono" data-col="mode">{modeString(e)}</div>
+  {:else}
+    <div role="gridcell" class="c-xattr mono" data-col="xattr" title={xattrText(e)}>{xattrText(e)}</div>
   {/if}
 {/snippet}
 
@@ -352,6 +770,9 @@
         <a class="crumb" href={pathToHash(c.path)}>{c.label}</a>
       {/if}
     {/each}
+    {#if path}
+      <button class="textbtn small" onclick={() => copyText(path)} title="Copy this folder's path">Copy path</button>
+    {/if}
   </nav>
   <span class="badge" title="fsb never writes to your filesystem">read-only</span>
 </header>
@@ -366,93 +787,168 @@
     autocomplete="off"
     spellcheck="false"
   />
-  <label class="toggle"><input type="checkbox" bind:checked={showHidden} /> Show hidden files</label>
+  <input
+    bind:this={searchEl}
+    bind:value={searchInput}
+    type="search"
+    placeholder="Search subfolders by name, then Enter   ( s )"
+    aria-label="Search subfolders by name"
+    autocomplete="off"
+    spellcheck="false"
+  />
+  <label class="toggle"><input type="checkbox" bind:checked={showHidden} /> Hidden files</label>
+  <label class="toggle" title="Show the first lines of a file when you hover over it">
+    <input type="checkbox" bind:checked={hoverPeek} onchange={() => { savePrefs(); clearPeek(); }} /> Hover previews
+  </label>
   <button
     class="textbtn"
-    onclick={resetLayout}
-    title="Drag a header to reorder, drag its edge to resize (double-click to fit). Keyboard: Alt+Left/Right moves a column; on an edge, Left/Right resizes and Enter fits."
+    aria-pressed={showPreview}
+    onclick={() => { showPreview = !showPreview; savePrefs(); }}
+    title="Show or hide the preview pane (Space)"
   >
-    Reset columns
+    {showPreview ? 'Hide preview' : 'Show preview'}
   </button>
-</div>
-
-<div class="table">
-  <div
-    class="grid"
-    role="grid"
-    aria-label="Files"
-    aria-rowcount={visible.length}
-    style:--cols={gridTemplate(layout)}
-    style:--total="{totalWidth(layout)}px"
-  >
-    <div class="row head" role="row">
-      {#each layout.order as id (id)}
-        <div
-          role="columnheader"
-          class="hcell {COLUMNS[id].cls}"
-          data-col={id}
-          aria-sort={isSortable(id) ? ariaSort(id) : undefined}
-        >
-          <div
-            class="hdr"
-            class:drop={dropTarget === id && draggingCol !== id}
-            class:dragging={draggingCol === id}
-            role="presentation"
-            draggable="true"
-            ondragstart={(ev) => dragStart(ev, id)}
-            ondragover={(ev) => dragOver(ev, id)}
-            ondrop={(ev) => drop(ev, id)}
-            ondragend={endDrag}
-          >
-            <button
-              onclick={() => isSortable(id) && sortBy(id)}
-              onkeydown={(ev) => headerKey(ev, id)}
-              title={isSortable(id) ? 'Click to sort. Drag or Alt+Left/Right to move.' : 'Drag or Alt+Left/Right to move.'}
-            >
-              {COLUMNS[id].label}{isSortable(id) && sortKey === id ? (sortAsc ? ' ▲' : ' ▼') : ''}
-            </button>
-          </div>
-          <!-- A focusable separator with aria-valuenow is the ARIA "window splitter" widget; the lint rules treat it as static. -->
-          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-          <div
-            class="resize"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize {COLUMNS[id].label} column"
-            aria-valuenow={layout.widths[id]}
-            aria-valuemin={MIN_WIDTH}
-            aria-valuemax={MAX_WIDTH}
-            tabindex="0"
-            onpointerdown={(ev) => startResize(ev, id)}
-            onpointermove={moveResize}
-            onpointerup={endResize}
-            onpointercancel={endResize}
-            onkeydown={(ev) => resizeKey(ev, id)}
-            ondblclick={() => fitColumn(id)}
-          ></div>
-        </div>
+  <details class="colmenu">
+    <summary>Columns</summary>
+    <div class="menu">
+      {#each COLUMN_IDS as id (id)}
+        <label>
+          <input type="checkbox" checked={!isHidden(layout, id)} disabled={id === 'name'} onchange={() => toggleCol(id)} />
+          {COLUMNS[id].label}
+        </label>
       {/each}
+      <button class="textbtn" onclick={resetLayout}>Reset columns</button>
     </div>
-
-    {#if error}
-      <p class="msg error" role="alert">{error}</p>
-    {:else if !loading && visible.length === 0}
-      <p class="msg">{entries.length === 0 ? 'This folder is empty.' : 'No items match.'}</p>
-    {/if}
-
-    <VirtualList bind:this={list} items={visible} label="Directory entries">
-      {#snippet row(e: Entry)}
-        <div class="row" role="row">
-          {#each layout.order as id (id)}
-            {@render cell(id, e)}
-          {/each}
-        </div>
-      {/snippet}
-    </VirtualList>
-  </div>
+  </details>
 </div>
+
+<div class="main">
+  <div class="table">
+    <div
+      class="grid"
+      role="grid"
+      tabindex="0"
+      aria-label="Files"
+      aria-rowcount={visible.length}
+      aria-activedescendant={selectedIdx >= 0 ? `row-${selectedIdx}` : undefined}
+      style:--cols={gridTemplate(layout)}
+      style:--total="{totalWidth(layout)}px"
+    >
+      <div class="row head" role="row">
+        {#each shownColumns as id (id)}
+          <div
+            role="columnheader"
+            class="hcell {COLUMNS[id].cls}"
+            data-col={id}
+            aria-sort={isSortable(id) ? ariaSort(id) : undefined}
+          >
+            <div
+              class="hdr"
+              class:drop={dropTarget === id && draggingCol !== id}
+              class:dragging={draggingCol === id}
+              role="presentation"
+              draggable="true"
+              ondragstart={(ev) => dragStart(ev, id)}
+              ondragover={(ev) => dragOver(ev, id)}
+              ondrop={(ev) => drop(ev, id)}
+              ondragend={endDrag}
+            >
+              <button
+                onclick={() => isSortable(id) && sortBy(id)}
+                onkeydown={(ev) => headerKey(ev, id)}
+                title={isSortable(id) ? 'Click to sort. Drag or Alt+Left/Right to move.' : 'Drag or Alt+Left/Right to move.'}
+              >
+                {COLUMNS[id].label}{isSortable(id) && sortKey === id && (!searchActive || userSorted) ? (sortAsc ? ' ▲' : ' ▼') : ''}
+              </button>
+            </div>
+            <!-- A focusable separator with aria-valuenow is the ARIA "window splitter" widget; the lint rules treat it as static. -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+            <div
+              class="resize"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize {COLUMNS[id].label} column"
+              aria-valuenow={layout.widths[id]}
+              aria-valuemin={MIN_WIDTH}
+              aria-valuemax={MAX_WIDTH}
+              tabindex="0"
+              onpointerdown={(ev) => startResize(ev, id)}
+              onpointermove={moveResize}
+              onpointerup={endResize}
+              onpointercancel={endResize}
+              onkeydown={(ev) => resizeKey(ev, id)}
+              ondblclick={() => fitColumn(id)}
+            ></div>
+          </div>
+        {/each}
+      </div>
+
+      {#if error}
+        <p class="msg error" role="alert">{error}</p>
+      {:else if !loading && !searching && visible.length === 0}
+        <p class="msg">
+          {searchActive ? 'No matches.' : source.length === 0 ? 'This folder is empty.' : 'No items match.'}
+        </p>
+      {/if}
+
+      <VirtualList
+        bind:this={list}
+        items={visible}
+        label="Directory entries"
+        onrange={(start, end) => {
+          if (start !== range.start || end !== range.end) range = { start, end };
+        }}
+      >
+        {#snippet row(e: Row, idx: number)}
+          <!-- Keyboard use is handled globally (arrow keys, Enter, Space); the click only selects. -->
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div
+            class="row"
+            class:selected={rowPath(e) === selectedKey}
+            role="row"
+            tabindex="-1"
+            id="row-{idx}"
+            aria-selected={rowPath(e) === selectedKey}
+            onclick={() => select(e)}
+            onmouseenter={(ev) => peekEnter(ev, e)}
+            onmouseleave={clearPeek}
+          >
+            {#each shownColumns as id (id)}
+              {@render cell(id, e)}
+            {/each}
+          </div>
+        {/snippet}
+      </VirtualList>
+    </div>
+  </div>
+
+  {#if showPreview}
+    <Preview
+      entry={selectedRow}
+      fullPath={selectedRow ? rowPath(selectedRow) : ''}
+      onclose={() => { showPreview = false; savePrefs(); }}
+      oncopy={copyText}
+    />
+  {/if}
+</div>
+
+{#if peek}
+  <Peek x={peek.x} y={peek.y} text={peek.text} cut={peek.cut} note={peek.note} />
+{/if}
+
+{#if toast}
+  <div class="toast" role="status">{toast}</div>
+{/if}
 
 <footer class="status" aria-live="polite">
-  {#if loading}Loading… {entries.length.toLocaleString()} items so far
-  {:else}{visible.length.toLocaleString()} of {entries.length.toLocaleString()} items{/if}
+  {#if searchActive}
+    {searching ? 'Searching…' : 'Search done:'}
+    {plural(source.length, 'match', 'matches')} under this folder{searchNote ? ` — ${searchNote}` : ''}
+    <button class="textbtn small" onclick={clearSearch}>Clear search</button>
+  {:else if loading}
+    Loading… {entries.length.toLocaleString()} items so far
+  {:else}
+    {visible.length.toLocaleString()} of {entries.length.toLocaleString()} items
+  {/if}
+  <span class="keys">↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · s search · c copy path</span>
 </footer>
