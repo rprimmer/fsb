@@ -79,6 +79,12 @@ npx svelte-check --tsconfig ./tsconfig.json
 npm run build                            # rewrites web/dist; commit the result
 ```
 
+Browser tests (real keyboard and mouse in Chrome, and Safari on macOS; see [e2e/README.md](e2e/README.md)):
+
+```sh
+node --test --test-reporter=spec e2e/chrome.test.mjs
+```
+
 Go:
 
 ```sh

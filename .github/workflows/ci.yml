@@ -46,6 +46,30 @@ jobs:
       - name: committed dist/ is up to date
         run: git diff --exit-code -- dist
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Chrome browser tests (including the 100,000-file test)
+        env:
+          CI: 'true'
+          FSB_E2E_BIG: '1'
+          FSB_E2E_SKIP_SAFARI: '1'
+        run: node --test --test-reporter=spec e2e/chrome.test.mjs
+      - name: Keep screenshots of failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e/artifacts/
+          if-no-files-found: ignore
+
   vuln:
     runs-on: ubuntu-latest
     steps:
