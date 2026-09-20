@@ -2,7 +2,9 @@
 
 A read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
 
-> **Status: M0 (skeleton).** The security core (path guard, rule matcher, localhost protections) and a JSON API exist; the browser UI arrives in M1. See [PRD/PRD.md](PRD/PRD.md).
+> **Status: M1 (crawl).** Browse, sort, filter and download from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). Previews, search and keyboard navigation come next. See [PRD/PRD.md](PRD/PRD.md).
+
+The UI lists directories with 100,000+ entries: the API streams the listing in chunks, so the first rows appear immediately, and only the visible rows are rendered. Paths live in the URL fragment (`#/Users/me/docs`), so a folder is bookmarkable while fsb is running.
 
 ## Quick start
 
@@ -42,6 +44,18 @@ Deny always wins. A denied path answers the same 404 as a missing one (add `--de
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 
 ## Development
+
+The compiled frontend in `web/dist` is committed, so building the Go binary needs no Node. To change the UI:
+
+```sh
+cd web
+npm ci
+npm test                                 # helper tests (Node's built-in runner)
+npx svelte-check --tsconfig ./tsconfig.json
+npm run build                            # rewrites web/dist; commit the result
+```
+
+Go:
 
 ```sh
 go test -race ./...

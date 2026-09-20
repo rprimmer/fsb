@@ -11,6 +11,7 @@ package guard
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -212,57 +213,99 @@ func (g *Guard) Open(p string) (*os.File, fs.FileInfo, error) {
 // omit entries too, but only for the entries themselves (browsing into a
 // hidden directory shows its contents).
 func (g *Guard) List(p string) ([]Entry, error) {
-	f, fi, err := g.Open(p)
+	var out []Entry
+	err := g.ListFunc(p, 1024, func(es []Entry) error {
+		out = append(out, es...)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	if out == nil {
+		out = []Entry{}
+	}
+	return out, nil
+}
+
+// ListFunc streams the visible entries of a directory to fn in batches of up
+// to batch directory entries (filtering can make a batch smaller; empty
+// batches are skipped). Entries arrive in directory order, not sorted. An
+// error returned before fn is first called means nothing was listed; an error
+// afterwards means the listing is incomplete.
+func (g *Guard) ListFunc(p string, batch int, fn func([]Entry) error) error {
+	if batch < 1 {
+		batch = 1
+	}
+	f, fi, err := g.Open(p)
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	if !fi.IsDir() {
-		return nil, ErrNotDir
+		return ErrNotDir
 	}
 	dir := filepath.Clean(p)
-	des, err := f.ReadDir(-1)
-	if err != nil {
-		return nil, mapErr(err)
-	}
-
-	out := make([]Entry, 0, len(des))
-	for _, de := range des {
-		info, err := de.Info()
-		if err != nil {
-			continue // vanished between ReadDir and Info
-		}
-		child := filepath.Join(dir, de.Name())
-		e := Entry{
-			Name:      de.Name(),
-			IsDir:     de.IsDir(),
-			IsSymlink: de.Type()&fs.ModeSymlink != 0,
-			Size:      info.Size(),
-			ModTime:   info.ModTime(),
-			Mode:      info.Mode(),
-		}
-		if e.IsSymlink {
-			real, err := filepath.EvalSymlinks(child)
-			if err != nil {
-				e.Broken = true
-			} else {
-				if rfi, err := os.Stat(real); err == nil {
-					e.IsDir = rfi.IsDir()
-				}
-				if g.violation(real, e.IsDir) != nil {
-					continue
-				}
+	for {
+		des, err := f.ReadDir(batch)
+		out := make([]Entry, 0, len(des))
+		for _, de := range des {
+			if e, ok := g.entry(dir, de); ok {
+				out = append(out, e)
 			}
 		}
-		// dir itself already passed Open's checks, so only the child matters.
-		if g.deny.MatchBelow(dir, child, e.IsDir).Matched {
-			continue
+		if len(out) > 0 {
+			if ferr := fn(out); ferr != nil {
+				return ferr
+			}
 		}
-		if g.hide.MatchBelow(dir, child, e.IsDir).Matched {
-			continue
+		if errors.Is(err, io.EOF) {
+			return nil
 		}
-		out = append(out, e)
+		if err != nil {
+			return mapErr(err)
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
+}
+
+// entry builds the listing entry for de, or reports false if it must not be
+// shown (vanished, denied, hidden, or a symlink to a denied/outside target).
+func (g *Guard) entry(dir string, de fs.DirEntry) (Entry, bool) {
+	info, err := de.Info()
+	if err != nil {
+		return Entry{}, false // vanished between ReadDir and Info
+	}
+	child := filepath.Join(dir, de.Name())
+	e := Entry{
+		Name:      de.Name(),
+		IsDir:     de.IsDir(),
+		IsSymlink: de.Type()&fs.ModeSymlink != 0,
+		Size:      info.Size(),
+		ModTime:   info.ModTime(),
+		Mode:      info.Mode(),
+	}
+	if e.IsSymlink {
+		real, err := filepath.EvalSymlinks(child)
+		if err != nil {
+			e.Broken = true
+		} else {
+			if rfi, err := os.Stat(real); err == nil {
+				// Show the target's size and date, not the link text's.
+				e.IsDir = rfi.IsDir()
+				e.Size = rfi.Size()
+				e.ModTime = rfi.ModTime()
+			}
+			if g.violation(real, e.IsDir) != nil {
+				return Entry{}, false
+			}
+		}
+	}
+	// dir itself already passed Open's checks, so only the child matters.
+	if g.deny.MatchBelow(dir, child, e.IsDir).Matched {
+		return Entry{}, false
+	}
+	if g.hide.MatchBelow(dir, child, e.IsDir).Matched {
+		return Entry{}, false
+	}
+	return e, true
 }

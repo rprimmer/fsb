@@ -163,6 +163,9 @@ type statusRecorder struct {
 	status int
 }
 
+// Unwrap lets http.ResponseController reach the underlying writer (Flush).
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
 func (s *statusRecorder) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)

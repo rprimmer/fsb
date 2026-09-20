@@ -59,7 +59,7 @@ A previous tool offered browser-based FS browsing that was sometimes better than
 - FR-2. Directory listing with name, kind, size, modified time, and permissions; sortable columns; client-side filter-as-you-type.
 - FR-3. Breadcrumb navigation and URL-addressable paths (bookmarkable while the server is running).
 - FR-4. Virtualized listing that stays responsive on directories with 100k+ entries; the API streams or paginates listings.
-- FR-5. Raw file download/view (`Content-Disposition` chosen safely; correct MIME sniffing; range requests supported for large media).
+- FR-5. Raw file download (always `Content-Disposition: attachment` with `application/octet-stream`, never rendered from the app's origin; range requests supported for large media). Inline viewing with MIME detection arrives with sandboxed previews in the walk stage (FR-10, SR-6).
 - FR-6. Hidden-file toggle (dotfiles), independent of the `ignore` file.
 - FR-7. Hide rules from the `ignore` files applied to listings and search; deny rules applied everywhere (see section 8).
 - FR-8. `--debug` flag: verbose logging, including which deny/ignore rule matched a path, and, for denied paths only, a response body naming the matching rule.
@@ -207,7 +207,7 @@ None currently.
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | M0: Skeleton | Repo, CI, chokepoint wrapper, matcher, token/Host/Origin middleware | Security test suite green. **Done 2026-09-20** (tests pass under `-race`; CI workflow written but not yet run on GitHub) |
-| M1: Crawl | FR-1 to FR-9a | Usable daily by the author on `$HOME` |
+| M1: Crawl | FR-1 to FR-9a | Usable daily by the author on `$HOME`. **Built 2026-09-20**; measured on a 100,000-file directory: first rows painted in about 450 ms, full listing in 1.5 s, 31 DOM rows rendered. "Usable daily" is still to be confirmed by real use. |
 | M2: Walk | FR-10 to FR-13 | Previews and search working, no deny bypasses in tests |
 | M3: Public release | Docs, releases, Homebrew tap, security-model write-up | Tagged v0.1.0 |
 | M4: Run | FR-14 to FR-18 as prioritized | Reassess after real use |

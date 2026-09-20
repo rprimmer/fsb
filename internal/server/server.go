@@ -12,7 +12,11 @@ import (
 
 	"github.com/rprimmer/fsb/internal/guard"
 	"github.com/rprimmer/fsb/internal/httpguard"
+	"github.com/rprimmer/fsb/web"
 )
+
+// listBatch is how many directory entries are read per streamed chunk.
+const listBatch = 2000
 
 // Config configures a Server.
 type Config struct {
@@ -47,10 +51,10 @@ func (s *Server) LaunchToken() string { return s.auth.LaunchToken() }
 // Handler returns the full handler stack for a server listening on port.
 func (s *Server) Handler(port int) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /api/status", s.status)
 	mux.HandleFunc("GET /api/list", s.list)
 	mux.HandleFunc("GET /api/file", s.file)
+	mux.Handle("GET /", web.Handler()) // embedded frontend; unknown paths 404
 
 	var h http.Handler = mux
 	h = httpguard.Middleware(s.auth, port)(h)
@@ -64,27 +68,52 @@ func (s *Server) logf(format string, args ...any) {
 	}
 }
 
-func (s *Server) index(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(indexHTML))
-}
-
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	missing := s.cfg.CoreDenyMissing
 	if missing == nil {
 		missing = []string{}
 	}
-	writeJSON(w, map[string]any{"readOnly": true, "coreDenyMissing": missing})
+	writeJSON(w, map[string]any{
+		"readOnly":        true,
+		"coreDenyMissing": missing,
+		"roots":           s.cfg.Guard.Roots(),
+	})
 }
 
+// list streams a directory as NDJSON so the first screen can render before a
+// huge directory has been read: a {"path"} line, then {"entries":[...]} lines
+// in directory order (the client sorts), and a final {"error"} line if the
+// listing breaks after the response has started.
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
-	entries, err := s.cfg.Guard.List(p)
-	if err != nil {
-		s.fail(w, p, err)
-		return
+	rc := http.NewResponseController(w)
+	enc := json.NewEncoder(w)
+	started := false
+	start := func() {
+		if started {
+			return
+		}
+		started = true
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		enc.Encode(map[string]any{"path": p})
 	}
-	writeJSON(w, map[string]any{"path": p, "entries": entries})
+	err := s.cfg.Guard.ListFunc(p, listBatch, func(es []guard.Entry) error {
+		start()
+		if err := enc.Encode(map[string]any{"entries": es}); err != nil {
+			return err
+		}
+		rc.Flush()
+		return nil
+	})
+	switch {
+	case err == nil:
+		start() // an empty directory still gets its header line
+	case !started:
+		s.fail(w, p, err)
+	default:
+		s.logf("listing %q interrupted: %v", p, err)
+		enc.Encode(map[string]any{"error": "listing interrupted"})
+	}
 }
 
 func (s *Server) file(w http.ResponseWriter, r *http.Request) {
@@ -135,8 +164,3 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
-
-const indexHTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>fsb</title></head>
-<body><h1>fsb</h1><p>Read-only filesystem browser (M0 skeleton). The UI arrives in M1.</p></body></html>
-`

@@ -100,22 +100,109 @@ func (e *env) get(t *testing.T, endpoint, path string) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
+// ndjsonNames parses a /api/list body: a {"path"} line, then {"entries"} lines.
+func ndjsonNames(t *testing.T, body string) []string {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	var head struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &head); err != nil || head.Path == "" {
+		t.Fatalf("first line must be the path header, got %q (%v)", lines[0], err)
+	}
+	var names []string
+	for _, l := range lines[1:] {
+		var msg struct {
+			Entries []struct{ Name string } `json:"entries"`
+			Error   string                  `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(l), &msg); err != nil {
+			t.Fatalf("bad NDJSON line %q: %v", l, err)
+		}
+		if msg.Error != "" {
+			t.Fatalf("listing error line: %q", msg.Error)
+		}
+		for _, e := range msg.Entries {
+			names = append(names, e.Name)
+		}
+	}
+	return names
+}
+
+func TestListStreamsLargeDirectoriesInChunks(t *testing.T) {
+	e := newEnv(t, false, nil)
+	big := filepath.Join(e.home, "big")
+	if err := os.MkdirAll(big, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const n = listBatch*2 + 137
+	for i := 0; i < n; i++ {
+		if err := os.WriteFile(filepath.Join(big, "f"+strconv.Itoa(i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, body := e.get(t, "/api/list", big)
+	if code != 200 {
+		t.Fatalf("status = %d", code)
+	}
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) < 4 { // header + at least 3 chunks
+		t.Fatalf("expected the listing in several chunks, got %d lines", len(lines))
+	}
+	if got := len(ndjsonNames(t, body)); got != n {
+		t.Fatalf("entries = %d, want %d", got, n)
+	}
+}
+
+func TestEmptyDirectoryStillReturnsHeader(t *testing.T) {
+	e := newEnv(t, false, nil)
+	empty := filepath.Join(e.home, "empty")
+	if err := os.MkdirAll(empty, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, body := e.get(t, "/api/list", empty)
+	if code != 200 || len(ndjsonNames(t, body)) != 0 {
+		t.Fatalf("status=%d body=%q", code, body)
+	}
+}
+
+func TestEmbeddedUIIsServedToAuthenticatedClients(t *testing.T) {
+	e := newEnv(t, false, nil)
+	resp, err := e.client.Get(e.base + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 || !strings.Contains(string(b), `id="app"`) {
+		t.Fatalf("status=%d, body does not look like the app shell: %.120q", resp.StatusCode, b)
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
+		t.Errorf("Content-Type = %q", resp.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'self'") {
+		t.Error("the app shell must carry the CSP")
+	}
+	// Unknown paths are a plain 404, and the UI is not served without a session.
+	r2, _ := e.client.Get(e.base + "/no-such-asset.js")
+	r2.Body.Close()
+	if r2.StatusCode != 404 {
+		t.Errorf("unknown asset status = %d", r2.StatusCode)
+	}
+	r3, _ := (&http.Client{}).Get(e.base + "/")
+	r3.Body.Close()
+	if r3.StatusCode != 403 {
+		t.Errorf("unauthenticated UI status = %d, want 403", r3.StatusCode)
+	}
+}
+
 func TestListHidesDeniedAndIgnored(t *testing.T) {
 	e := newEnv(t, false, nil)
 	code, body := e.get(t, "/api/list", e.home)
 	if code != 200 {
 		t.Fatalf("status = %d", code)
 	}
-	var out struct {
-		Entries []struct{ Name string } `json:"entries"`
-	}
-	if err := json.Unmarshal([]byte(body), &out); err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, en := range out.Entries {
-		got = append(got, en.Name)
-	}
+	got := ndjsonNames(t, body)
 	if strings.Join(got, ",") != "proj" {
 		t.Fatalf("entries = %v, want only [proj] (.ssh/.aws denied, node_modules hidden)", got)
 	}
@@ -313,12 +400,13 @@ func TestStatusReportsWeakenedCoreRules(t *testing.T) {
 	var st struct {
 		ReadOnly        bool     `json:"readOnly"`
 		CoreDenyMissing []string `json:"coreDenyMissing"`
+		Roots           []string `json:"roots"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
 		t.Fatal(err)
 	}
-	if !st.ReadOnly || len(st.CoreDenyMissing) != 2 {
-		t.Fatalf("status = %+v", st)
+	if !st.ReadOnly || len(st.CoreDenyMissing) != 2 || len(st.Roots) != 1 || st.Roots[0] != e.home {
+		t.Fatalf("status = %+v (want 2 missing core rules and roots [%s])", st, e.home)
 	}
 
 	clean := newEnv(t, false, nil)

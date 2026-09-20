@@ -239,6 +239,9 @@ func TestListOmitsDeniedHiddenAndEscapingEntries(t *testing.T) {
 			if !e.IsSymlink || e.IsDir || e.Broken {
 				t.Errorf("hello-link flags wrong: %+v", e)
 			}
+			if e.Size != int64(len("hello")) {
+				t.Errorf("a symlink should report its target's size (5), got %d", e.Size)
+			}
 		case "broken":
 			if !e.IsSymlink || !e.Broken {
 				t.Errorf("broken flags wrong: %+v", e)
@@ -323,6 +326,57 @@ func TestSpecialFilesAreNeverOpened(t *testing.T) {
 	es, err := fx.g.List(filepath.Join(fx.home, "proj"))
 	if err != nil || !contains(names(es), "pipe") {
 		t.Fatalf("FIFO should be listed: %v %v", names(es), err)
+	}
+}
+
+func TestListFuncBatchesAndFilters(t *testing.T) {
+	fx := newFixture(t)
+	dir := filepath.Join(fx.home, "many")
+	for i := 0; i < 25; i++ {
+		write(t, filepath.Join(dir, "f"+string(rune('a'+i))), "x")
+	}
+	write(t, filepath.Join(dir, ".DS_Store"), "x") // hidden by the default ignore rules
+
+	var chunks, total int
+	err := fx.g.ListFunc(dir, 10, func(es []Entry) error {
+		chunks++
+		total += len(es)
+		if len(es) > 10 {
+			t.Errorf("chunk of %d exceeds the batch size", len(es))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 25 || chunks < 3 {
+		t.Fatalf("total=%d chunks=%d, want 25 entries in at least 3 chunks", total, chunks)
+	}
+}
+
+func TestListFuncStopsWhenTheCallbackFails(t *testing.T) {
+	fx := newFixture(t)
+	dir := filepath.Join(fx.home, "many")
+	for i := 0; i < 20; i++ {
+		write(t, filepath.Join(dir, "f"+string(rune('a'+i))), "x")
+	}
+	boom := errors.New("client went away")
+	calls := 0
+	err := fx.g.ListFunc(dir, 5, func([]Entry) error {
+		calls++
+		return boom
+	})
+	if !errors.Is(err, boom) || calls != 1 {
+		t.Fatalf("err=%v calls=%d, want the callback error after one call", err, calls)
+	}
+}
+
+func TestListFuncErrorBeforeAnyCallback(t *testing.T) {
+	fx := newFixture(t)
+	called := false
+	err := fx.g.ListFunc(filepath.Join(fx.home, ".ssh"), 10, func([]Entry) error { called = true; return nil })
+	if !errors.Is(err, ErrNotFound) || called {
+		t.Fatalf("err=%v called=%v; a denied directory must fail before streaming anything", err, called)
 	}
 }
 
