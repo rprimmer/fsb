@@ -3,6 +3,22 @@
   import VirtualList from './lib/VirtualList.svelte';
   import { ApiError, fileURL, getStatus, streamList, type Entry, type Status } from './lib/api';
   import {
+    COLUMNS,
+    MAX_WIDTH,
+    MIN_WIDTH,
+    clampWidth,
+    defaultLayout,
+    gridTemplate,
+    isSortable,
+    moveBy,
+    moveColumn,
+    parseLayout,
+    totalWidth,
+    type ColId,
+    type Layout,
+    type SortKey,
+  } from './lib/columns';
+  import {
     crumbsFor,
     formatDate,
     formatSize,
@@ -13,9 +29,8 @@
     pathToHash,
   } from './lib/format';
 
-  type SortKey = 'name' | 'size' | 'modTime' | 'kind';
-
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const LAYOUT_KEY = 'fsb.columns.v1';
 
   let status = $state<Status | null>(null);
   let path = $state('');
@@ -29,6 +44,129 @@
   let filterInput: HTMLInputElement | undefined;
   let list: { reset(): void } | undefined;
 
+  // Column layout: a per-viewer preference, kept in localStorage (which can be
+  // unavailable or empty, so every access is guarded).
+  let layout = $state<Layout>(loadLayout());
+  let resizing: { id: ColId; startX: number; startW: number } | null = null;
+  let draggingCol = $state<ColId | null>(null);
+  let dropTarget = $state<ColId | null>(null);
+
+  function loadLayout(): Layout {
+    try {
+      return parseLayout(localStorage.getItem(LAYOUT_KEY));
+    } catch {
+      return defaultLayout();
+    }
+  }
+
+  function saveLayout() {
+    try {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+    } catch {
+      /* storage unavailable: the layout just won't persist */
+    }
+  }
+
+  function setWidth(id: ColId, w: number) {
+    layout = { ...layout, widths: { ...layout.widths, [id]: clampWidth(w) } };
+  }
+
+  function resetLayout() {
+    layout = defaultLayout();
+    try {
+      localStorage.removeItem(LAYOUT_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // --- resizing: drag the edge, or focus it and use the keyboard -------------
+  function startResize(ev: PointerEvent, id: ColId) {
+    ev.preventDefault(); // also stops the header's native drag from starting
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    resizing = { id, startX: ev.clientX, startW: layout.widths[id] };
+  }
+
+  function moveResize(ev: PointerEvent) {
+    if (resizing) setWidth(resizing.id, resizing.startW + ev.clientX - resizing.startX);
+  }
+
+  function endResize() {
+    if (!resizing) return;
+    resizing = null;
+    saveLayout();
+  }
+
+  function resizeKey(ev: KeyboardEvent, id: ColId) {
+    const step = ev.shiftKey ? 50 : 10;
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+      ev.preventDefault();
+      setWidth(id, layout.widths[id] + (ev.key === 'ArrowLeft' ? -step : step));
+      saveLayout();
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      fitColumn(id);
+    }
+  }
+
+  let measureCtx: CanvasRenderingContext2D | null = null;
+
+  /** Fits a column to the widest content among the rows currently rendered. */
+  function fitColumn(id: ColId) {
+    measureCtx ??= document.createElement('canvas').getContext('2d');
+    const ctx = measureCtx;
+    if (!ctx) return;
+    const measure = (el: Element, text: string) => {
+      ctx.font = getComputedStyle(el).font;
+      return ctx.measureText(text).width;
+    };
+    let widest = 0;
+    for (const cell of document.querySelectorAll<HTMLElement>(`.vrow [data-col="${id}"]`)) {
+      const inner = cell.querySelector('.name') ?? cell; // folder names are bold
+      widest = Math.max(widest, measure(inner, cell.textContent?.trim() ?? ''));
+    }
+    const head = document.querySelector<HTMLElement>(`.head [data-col="${id}"]`);
+    if (head) widest = Math.max(widest, measure(head, head.textContent?.trim() ?? '') + 20);
+    setWidth(id, Math.ceil(widest) + 8);
+    saveLayout();
+  }
+
+  // --- reordering: drag a header onto another, or Alt+Arrow on a header ------
+  function dragStart(ev: DragEvent, id: ColId) {
+    draggingCol = id;
+    ev.dataTransfer?.setData('text/plain', id); // Firefox needs data to start a drag
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+  }
+
+  function dragOver(ev: DragEvent, id: ColId) {
+    if (!draggingCol) return; // not one of our headers (e.g. a file dragged in)
+    ev.preventDefault();
+    dropTarget = id;
+  }
+
+  function drop(ev: DragEvent, id: ColId) {
+    ev.preventDefault();
+    if (draggingCol) {
+      layout = { ...layout, order: moveColumn(layout.order, draggingCol, id) };
+      saveLayout();
+    }
+    endDrag();
+  }
+
+  function endDrag() {
+    draggingCol = null;
+    dropTarget = null;
+  }
+
+  function headerKey(ev: KeyboardEvent, id: ColId) {
+    if (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+      ev.preventDefault();
+      layout = { ...layout, order: moveBy(layout.order, id, ev.key === 'ArrowLeft' ? -1 : 1) };
+      saveLayout();
+    }
+  }
+
+  // --- data ------------------------------------------------------------------
   const crumbs = $derived(status && path ? crumbsFor(path, status.roots) : []);
 
   const visible = $derived.by(() => {
@@ -63,7 +201,7 @@
     if (e instanceof ApiError) {
       if (e.status === 404) return 'Not found. The folder does not exist or is not available.';
       if (e.status === 403 && /permission/i.test(e.message)) {
-        return 'Permission denied by macOS. You may need to grant your terminal access in System Settings > Privacy & Security.';
+        return 'Permission denied by the operating system or security software. On macOS, check System Settings > Privacy & Security, and any security tool that guards this folder.';
       }
       if (e.status === 403) return 'Session not authorized. Re-open the single-use URL that fsb printed when it started.';
       return `Server error (${e.status}).`;
@@ -174,6 +312,29 @@
   });
 </script>
 
+{#snippet cell(id: ColId, e: Entry)}
+  {#if id === 'name'}
+    <div role="gridcell" class="c-name" data-col="name">
+      {#if e.broken}
+        <span class="name broken" title="Broken symlink">{e.name}</span>
+      {:else if e.isDir}
+        <a class="name dir" href={pathToHash(joinPath(path, e.name))}>{e.name}/</a>
+      {:else}
+        <a class="name" href={fileURL(joinPath(path, e.name))} download={e.name}>{e.name}</a>
+      {/if}
+      {#if e.isSymlink}<span class="link" title="Symbolic link">→</span>{/if}
+    </div>
+  {:else if id === 'size'}
+    <div role="gridcell" class="c-size" data-col="size">{e.isDir ? '' : formatSize(e.size)}</div>
+  {:else if id === 'modTime'}
+    <div role="gridcell" class="c-date" data-col="modTime">{formatDate(e.modTime)}</div>
+  {:else if id === 'kind'}
+    <div role="gridcell" class="c-kind" data-col="kind">{kindOf(e)}</div>
+  {:else}
+    <div role="gridcell" class="c-mode mono" data-col="mode">{modeString(e)}</div>
+  {/if}
+{/snippet}
+
 {#if status && status.coreDenyMissing.length > 0}
   <div class="banner" role="alert">
     <strong>Warning:</strong> core deny rule(s) disabled: <code>{status.coreDenyMissing.join(', ')}</code>. These paths
@@ -206,51 +367,89 @@
     spellcheck="false"
   />
   <label class="toggle"><input type="checkbox" bind:checked={showHidden} /> Show hidden files</label>
+  <button
+    class="textbtn"
+    onclick={resetLayout}
+    title="Drag a header to reorder, drag its edge to resize (double-click to fit). Keyboard: Alt+Left/Right moves a column; on an edge, Left/Right resizes and Enter fits."
+  >
+    Reset columns
+  </button>
 </div>
 
-<div class="table" role="grid" aria-label="Files" aria-rowcount={visible.length}>
-  <div class="row head" role="row">
-    <div role="columnheader" class="c-name" aria-sort={ariaSort('name')}>
-      <button onclick={() => sortBy('name')}>Name{sortKey === 'name' ? (sortAsc ? ' ▲' : ' ▼') : ''}</button>
-    </div>
-    <div role="columnheader" class="c-size" aria-sort={ariaSort('size')}>
-      <button onclick={() => sortBy('size')}>Size{sortKey === 'size' ? (sortAsc ? ' ▲' : ' ▼') : ''}</button>
-    </div>
-    <div role="columnheader" class="c-date" aria-sort={ariaSort('modTime')}>
-      <button onclick={() => sortBy('modTime')}>Modified{sortKey === 'modTime' ? (sortAsc ? ' ▲' : ' ▼') : ''}</button>
-    </div>
-    <div role="columnheader" class="c-kind" aria-sort={ariaSort('kind')}>
-      <button onclick={() => sortBy('kind')}>Kind{sortKey === 'kind' ? (sortAsc ? ' ▲' : ' ▼') : ''}</button>
-    </div>
-    <div role="columnheader" class="c-mode">Permissions</div>
-  </div>
-
-  {#if error}
-    <p class="msg error" role="alert">{error}</p>
-  {:else if !loading && visible.length === 0}
-    <p class="msg">{entries.length === 0 ? 'This folder is empty.' : 'No items match.'}</p>
-  {/if}
-
-  <VirtualList bind:this={list} items={visible} label="Directory entries">
-    {#snippet row(e: Entry)}
-      <div class="row" role="row">
-        <div role="gridcell" class="c-name">
-          {#if e.broken}
-            <span class="name broken" title="Broken symlink">{e.name}</span>
-          {:else if e.isDir}
-            <a class="name dir" href={pathToHash(joinPath(path, e.name))}>{e.name}/</a>
-          {:else}
-            <a class="name" href={fileURL(joinPath(path, e.name))} download={e.name}>{e.name}</a>
-          {/if}
-          {#if e.isSymlink}<span class="link" title="Symbolic link">→</span>{/if}
+<div class="table">
+  <div
+    class="grid"
+    role="grid"
+    aria-label="Files"
+    aria-rowcount={visible.length}
+    style:--cols={gridTemplate(layout)}
+    style:--total="{totalWidth(layout)}px"
+  >
+    <div class="row head" role="row">
+      {#each layout.order as id (id)}
+        <div
+          role="columnheader"
+          class="hcell {COLUMNS[id].cls}"
+          data-col={id}
+          aria-sort={isSortable(id) ? ariaSort(id) : undefined}
+        >
+          <div
+            class="hdr"
+            class:drop={dropTarget === id && draggingCol !== id}
+            class:dragging={draggingCol === id}
+            role="presentation"
+            draggable="true"
+            ondragstart={(ev) => dragStart(ev, id)}
+            ondragover={(ev) => dragOver(ev, id)}
+            ondrop={(ev) => drop(ev, id)}
+            ondragend={endDrag}
+          >
+            <button
+              onclick={() => isSortable(id) && sortBy(id)}
+              onkeydown={(ev) => headerKey(ev, id)}
+              title={isSortable(id) ? 'Click to sort. Drag or Alt+Left/Right to move.' : 'Drag or Alt+Left/Right to move.'}
+            >
+              {COLUMNS[id].label}{isSortable(id) && sortKey === id ? (sortAsc ? ' ▲' : ' ▼') : ''}
+            </button>
+          </div>
+          <!-- A focusable separator with aria-valuenow is the ARIA "window splitter" widget; the lint rules treat it as static. -->
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+          <div
+            class="resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize {COLUMNS[id].label} column"
+            aria-valuenow={layout.widths[id]}
+            aria-valuemin={MIN_WIDTH}
+            aria-valuemax={MAX_WIDTH}
+            tabindex="0"
+            onpointerdown={(ev) => startResize(ev, id)}
+            onpointermove={moveResize}
+            onpointerup={endResize}
+            onpointercancel={endResize}
+            onkeydown={(ev) => resizeKey(ev, id)}
+            ondblclick={() => fitColumn(id)}
+          ></div>
         </div>
-        <div role="gridcell" class="c-size">{e.isDir ? '' : formatSize(e.size)}</div>
-        <div role="gridcell" class="c-date">{formatDate(e.modTime)}</div>
-        <div role="gridcell" class="c-kind">{kindOf(e)}</div>
-        <div role="gridcell" class="c-mode mono">{modeString(e)}</div>
-      </div>
-    {/snippet}
-  </VirtualList>
+      {/each}
+    </div>
+
+    {#if error}
+      <p class="msg error" role="alert">{error}</p>
+    {:else if !loading && visible.length === 0}
+      <p class="msg">{entries.length === 0 ? 'This folder is empty.' : 'No items match.'}</p>
+    {/if}
+
+    <VirtualList bind:this={list} items={visible} label="Directory entries">
+      {#snippet row(e: Entry)}
+        <div class="row" role="row">
+          {#each layout.order as id (id)}
+            {@render cell(id, e)}
+          {/each}
+        </div>
+      {/snippet}
+    </VirtualList>
+  </div>
 </div>
 
 <footer class="status" aria-live="polite">

@@ -4,6 +4,8 @@ A read-only, local-only web view of your filesystem. One Go binary serves a brow
 
 > **Status: M1 (crawl).** Browse, sort, filter and download from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). Previews, search and keyboard navigation come next. See [PRD/PRD.md](PRD/PRD.md).
 
+Columns can be resized (drag the edge; double-click to fit) and reordered (drag a header, or Alt+Left/Right); the layout is remembered in your browser, and "Reset columns" restores the defaults.
+
 The UI lists directories with 100,000+ entries: the API streams the listing in chunks, so the first rows appear immediately, and only the visible rows are rendered. Paths live in the URL fragment (`#/Users/me/docs`), so a folder is bookmarkable while fsb is running.
 
 ## Quick start

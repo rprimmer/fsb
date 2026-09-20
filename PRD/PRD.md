@@ -57,6 +57,7 @@ A previous tool offered browser-based FS browsing that was sometimes better than
 
 - FR-1. `fsb [path]` starts the server on a random free loopback port, prints the URL (including token), and opens it in the default browser (`--no-open` to suppress).
 - FR-2. Directory listing with name, kind, size, modified time, and permissions; sortable columns; client-side filter-as-you-type.
+- FR-2a. Resizable and reorderable columns. Drag a header's edge to resize (double-click or Enter on the edge fits the column to the visible rows; Left/Right resizes by 10 px, Shift by 50); drag a header onto another, or press Alt+Left/Right on it, to reorder. Widths are clamped to 60-900 px. Layout is a per-viewer preference stored in the browser's `localStorage` (never on the server), tolerates missing or corrupt storage, and has a "Reset columns" control. On narrow windows the table scrolls sideways rather than hiding columns.
 - FR-3. Breadcrumb navigation and URL-addressable paths (bookmarkable while the server is running).
 - FR-4. Virtualized listing that stays responsive on directories with 100k+ entries; the API streams or paginates listings.
 - FR-5. Raw file download (always `Content-Disposition: attachment` with `application/octet-stream`, never rendered from the app's origin; range requests supported for large media). Inline viewing with MIME detection arrives with sandboxed previews in the walk stage (FR-10, SR-6).

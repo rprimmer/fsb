@@ -128,17 +128,39 @@ code,
   color: var(--muted);
   user-select: none;
 }
+.textbtn {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent);
+  margin-left: auto;
+}
+.textbtn:hover {
+  text-decoration: underline;
+}
+.textbtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .table {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: auto;
+}
+
+.grid {
+  flex: 1;
+  min-height: 0;
+  min-width: var(--total);
+  display: flex;
+  flex-direction: column;
 }
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px 170px 130px 110px;
+  grid-template-columns: var(--cols);
   align-items: center;
   height: 100%;
   padding: 0 16px;
@@ -169,18 +191,63 @@ code,
 .c-mode {
   color: var(--muted);
 }
+.row > .hcell {
+  position: relative;
+  overflow: visible; /* the resize handle straddles the column edge */
+}
+.hdr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: grab;
+  border-radius: 4px;
+}
+.hdr.dragging {
+  opacity: 0.45;
+}
+.hdr.drop {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 .head button {
   all: unset;
   cursor: pointer;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .head button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .head .c-size button {
-  display: block;
-  width: 100%;
   text-align: right;
+}
+.resize {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  right: -9px;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.resize::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 5px;
+  width: 2px;
+  background: var(--line);
+  border-radius: 1px;
+}
+.resize:hover::after,
+.resize:focus-visible::after {
+  background: var(--accent);
+}
+.resize:focus-visible {
+  outline: none;
 }
 
 .name.dir {
@@ -212,12 +279,3 @@ code,
   font-size: 12px;
 }
 
-@media (max-width: 760px) {
-  .c-kind,
-  .c-mode {
-    display: none;
-  }
-  .row {
-    grid-template-columns: minmax(0, 1fr) 80px 150px;
-  }
-}
