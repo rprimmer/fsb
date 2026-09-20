@@ -1,0 +1,213 @@
+# PRD: Local Read-Only Filesystem Browser
+
+Status: Draft v0.1 · Date: 2026-09-20 · Owner: Robert Primmer
+Name: `fsb`
+
+## 1. Summary
+
+A local-only, read-only web UI for browsing the user's own Mac filesystem. It runs as a single Go binary that serves an embedded frontend on `127.0.0.1`. Two exclusion files (hide and deny) control what is visible and what is reachable. The tool is built for the author's own use first, and is designed so others can use it via a public GitHub repo.
+
+## 2. Background and motivation
+
+A previous tool offered browser-based FS browsing that was sometimes better than Finder or iTerm, but it was limited. The existing fork (`rprimmer/filebrowser`, from `filebrowser/filebrowser`) is a multi-user file-sharing/management app built around a jailed root, with UI-driven config and CRUD operations. It does not fit a single-user, whole-home, read-only, security-first use case.
+
+## 3. Goals
+
+- G1. Fast, comfortable browsing of the entire home directory in a browser, including very large directories.
+- G2. **Local only**: no network exposure beyond the loopback interface, with defenses against browser-based attacks on localhost.
+- G3. **Read-only by construction**: the binary contains no write code paths.
+- G4. Explicit, testable exclusion semantics via a two-tier hide/deny model.
+- G5. Simple distribution: single binary, `go install`, GitHub Releases; Homebrew later.
+- G6. Grow in stages (crawl, walk, run) without redesigning the security core.
+
+## 4. Non-goals
+
+- Any remote access, sharing, multi-user accounts, or authentication beyond the per-launch token.
+- Any write operation: upload, rename, move, delete, edit.
+- Cross-platform support in v1 (macOS only; Linux is plausible later, Windows is out of scope).
+- Replacing Finder or a terminal for file management.
+- Running as a background daemon or system service (v1).
+
+## 5. Users
+
+- Primary: the author, on their own Mac.
+- Secondary: other developers/power users who find the repo. They should be able to install, run, and trust it after reading the README and the security model.
+
+## 6. Key decisions (settled)
+
+| Area | Decision |
+|---|---|
+| Backend | Go, single static binary, stdlib `net/http` and `io/fs` where possible |
+| Frontend | Svelte + TypeScript, built with Vite, embedded via `//go:embed`; virtualized lists |
+| Network | Bind `127.0.0.1` only, hard-coded (no flag to change it) |
+| Mode | Read-only; GET endpoints only |
+| Roots | Default is `$HOME`. A path argument narrows it; `--root PATH` (repeatable) adds explicit roots such as `/Volumes/X`. `/` as a root requires `--allow-system-root`. Symlinks whose real path falls outside all configured roots are denied by default. |
+| License | MIT |
+| Search | Built-in filename search (walk); content search via `mdfind`, post-filtered through the chokepoint (run) |
+| Local actions | "Reveal in Finder" / "Open in editor" excluded from v1 |
+| Exclusions | Two files: `ignore` (hide) and `deny` (block); see section 8 |
+| Deny scope | Deny rules load from the global config only, never per-directory files |
+| Deny defaults | Two sets: a **core** set of known credential/secret locations that is **active by default**, and an **optional** set of potential exclusions shipped commented out for the user to enable (see 8.3 and risk R1) |
+| Denied response | HTTP 404 by default; explicit reason only with `--debug` |
+| Delivery | CLI first; staged rollout |
+
+## 7. Functional requirements
+
+### 7.1 Crawl stage (MVP)
+
+- FR-1. `fsb [path]` starts the server on a random free loopback port, prints the URL (including token), and opens it in the default browser (`--no-open` to suppress).
+- FR-2. Directory listing with name, kind, size, modified time, and permissions; sortable columns; client-side filter-as-you-type.
+- FR-3. Breadcrumb navigation and URL-addressable paths (bookmarkable while the server is running).
+- FR-4. Virtualized listing that stays responsive on directories with 100k+ entries; the API streams or paginates listings.
+- FR-5. Raw file download/view (`Content-Disposition` chosen safely; correct MIME sniffing; range requests supported for large media).
+- FR-6. Hidden-file toggle (dotfiles), independent of the `ignore` file.
+- FR-7. Hide rules from the `ignore` files applied to listings and search; deny rules applied everywhere (see section 8).
+- FR-8. `--debug` flag: verbose logging, including which deny/ignore rule matched a path, and, for denied paths only, a response body naming the matching rule.
+- FR-9. Graceful handling of permission errors, broken symlinks, and special files (sockets, devices, FIFOs are listed but never opened).
+- FR-9a. **Unprotected-state warning (R1 mitigation).** Because the core deny rules are active by default (section 8.3), the warning now covers only the case where the user has weakened them. When one or more built-in core rules are not in effect (removed or commented out of the deny file), the tool (a) prints a startup notice naming the uncovered paths, e.g. `warning: core deny rule(s) disabled: ~/.ssh/, ~/.aws/; these paths are browsable.`, and (b) shows a persistent banner in the UI with the same message and a pointer to the README section on deny rules. Both disappear once every core rule is back in effect. The state is computed server-side by comparing the loaded rules to the built-in core list, and it cannot be suppressed by a flag.
+
+### 7.2 Walk stage
+
+- FR-10. Previews: images, PDF, Markdown (rendered), source code (syntax highlighted), JSON/CSV, plain text and logs, archive listings (read-only).
+- FR-11. Keyboard-first navigation (arrow keys, enter, backspace, `/` to filter, `g`-style jumps).
+- FR-12. Built-in filename search within the current subtree, running through the chokepoint so hide and deny rules are honored.
+- FR-12a. "Copy path" button on entries and in the breadcrumb.
+- FR-13. Metadata pane: xattrs, symlink target, quarantine flag, UTI/kind, checksums on demand.
+
+### 7.3 Run stage
+
+- FR-14. Full-text and fuzzy search. Delegates to `mdfind` (Spotlight) rather than building an index; all results are post-filtered through the chokepoint (deny and hide rules) before display. A built-in index is reconsidered only if `mdfind` proves inadequate.
+- FR-15. Live updates via filesystem events (fsnotify / FSEvents).
+- FR-16. Multi-pane and tabs; saved views.
+- FR-17. Git status overlays for repositories.
+- FR-18. "Reveal in Finder" / "Open in editor" actions, restricted to a fixed allowlist of actions with no command built from a path (excluded from v1; see section 13). A "copy path" button ships earlier, in the walk stage.
+
+## 8. Exclusion model
+
+### 8.1 Two tiers
+
+| | `ignore` (hide) | `deny` (block) |
+|---|---|---|
+| Purpose | Reduce clutter | Never serve |
+| Syntax | gitignore | gitignore |
+| Effect on listings and search | Entries omitted | Entries omitted |
+| Effect on direct access (stat, read, download, preview) | Allowed | **Blocked, HTTP 404** |
+| Locations | Global (`~/.config/fsb/ignore`) plus optional per-directory `.fsbignore` | **Global only** (`~/.config/fsb/deny`) |
+| `!` negation | Supported (gitignore semantics) | Not supported; deny is never overridable |
+| Shipped defaults | Active (`.DS_Store`, `.git/`, `node_modules/`, etc.) | **Core** known-secret rules active; **optional** rules commented out |
+
+Precedence: deny always wins over ignore. No ignore rule (including negation) can re-expose a denied path.
+
+### 8.2 Enforcement requirements
+
+- ER-1. All filesystem access goes through a single wrapper (the chokepoint). Handlers cannot call `os`/`io/fs` directly; this is enforced by package boundaries and a lint/test.
+- ER-2. The wrapper canonicalizes every path before matching: `..` and `.` removal, duplicate slashes, NUL rejection, and NFC normalization. URL-decoding happens exactly once, in the HTTP layer; the guard never decodes, so a literal `%2e%2e` is just a file name. Trailing dots are not stripped: on macOS they are ordinary characters.
+- ER-3. Symlinks are resolved and rules are evaluated against **both** the requested path and the resolved real path; a match on either denies access. A resolved real path outside every configured root is also denied.
+- ER-4. Matching is case-insensitive to match APFS defaults, with a documented note for case-sensitive volumes.
+- ER-5. Check-then-open races are mitigated by opening first and verifying the opened file's real path (`fstat`/`F_GETPATH`) against the rules before serving any bytes.
+- ER-6. Denied and nonexistent paths are indistinguishable to the client (identical 404 status and body) unless `--debug`. Response timing is not equalized: a lexical deny match returns before the filesystem is touched, so it is measurably faster than a miss. That is accepted for a loopback-only, token-protected server.
+- ER-7. Derived data (search index, thumbnails, caches) must honor deny at build time and at query time.
+- ER-8. Rule files are read at startup (live reload is deferred to the run stage), with parse errors reported clearly and the server failing closed (refusing to start) on a malformed deny or ignore file. If the deny file is missing, the built-in core rules apply. If it exists it is authoritative: a core rule the user removes or comments out is no longer enforced, and FR-9a warns about it.
+
+### 8.3 Default deny rules: core (active) and optional (commented out)
+
+The **core** set covers locations that hold credentials or secrets and are known security issues if exposed. Core rules are **active by default** and are compiled into the binary as a built-in baseline, so they apply even if the deny file is missing (fail closed). `fsb --init` writes them, uncommented, into the deny file so the user can see them. The **optional** set covers potential exclusions that are more situational or prone to false positives; these ship commented out for the user to enable.
+
+Generated by `fsb --init` and documented in the README:
+
+```
+# fsb deny rules: paths matching these are never served (HTTP 404).
+# Global config only; gitignore syntax. Deny always wins over ignore.
+
+# --- Core (active by default: known credential/secret locations) ---
+~/.ssh/
+~/.aws/
+~/.gnupg/
+~/.config/gh/
+~/.netrc
+~/.kube/
+~/Library/Keychains/
+~/Library/Application Support/Google/Chrome/
+~/Library/Application Support/Firefox/
+~/Library/Safari/
+~/Library/Cookies/
+
+# --- Optional (commented out: uncomment to enable) ---
+# .env
+# .env.*
+# *.pem
+# *.key
+# ~/.docker/config.json
+# ~/.npmrc
+# ~/Library/Mail/
+# ~/Library/Messages/
+```
+
+The exact core list is finalized during M0 and versioned, so additions in later releases are called out in release notes.
+
+## 9. Security requirements
+
+- SR-1. Bind to `127.0.0.1` only. No configuration option exposes another interface.
+- SR-2. Validate the `Host` header against `127.0.0.1:PORT` / `localhost:PORT`; reject anything else (DNS rebinding defense).
+- SR-3. Reject requests with an `Origin` or `Referer` from a different origin; no permissive CORS.
+- SR-4. Random per-launch token (at least 128 bits), delivered in the launch URL and then stored in an `HttpOnly`, `SameSite=Strict` cookie; API requests without it are rejected.
+- SR-5. Read-only by construction: only `GET`/`HEAD`; no write code in the binary.
+- SR-6. Serve user files with `X-Content-Type-Options: nosniff`, a restrictive CSP on the app shell, and rendered/untrusted content (HTML, SVG, Markdown) sandboxed so it cannot reach the API with the user's token.
+- SR-7. No telemetry, no outbound network calls, no auto-update.
+- SR-8. Logs must not contain the token.
+
+## 10. Non-functional requirements
+
+- NFR-1. Listing a 100k-entry directory renders the first screen in under 500 ms on a recent Mac.
+- NFR-2. Idle memory under 50 MB; no persistent index in the crawl stage.
+- NFR-3. Cold start to browser open under 1 second.
+- NFR-4. Single binary under 20 MB.
+- NFR-5. Dependencies kept minimal and reviewed; `go.sum` pinned, `govulncheck` in CI.
+- NFR-6. Accessibility: keyboard operable, semantic markup, respects `prefers-color-scheme`.
+
+## 11. Distribution
+
+1. Public GitHub repo, MIT license.
+2. `go install` and GitHub Releases built with GoReleaser (darwin arm64 + amd64), with checksums, and signed/notarized if practical.
+3. Homebrew tap after the walk stage.
+4. Optional later: menu-bar or webview wrapper hosting the same UI.
+
+## 12. Testing strategy
+
+- The matcher and chokepoint get the heaviest testing: table-driven tests plus fuzzing for path canonicalization.
+- Explicit test cases: symlink escapes, `..` and encoded traversal, case variants, negation attempts against deny, TOCTOU swaps, hard-link caveats (documented, not defended), Unicode normalization (NFC vs NFD).
+- Integration tests verify that every endpoint returns 404 for denied paths, including search and preview endpoints.
+- HTTP-level tests for Host/Origin/token enforcement, including simulated DNS rebinding.
+- A CI check that no handler imports `os` or `io/fs` directly.
+
+## 13. Risks and open questions
+
+**Risks**
+
+- **R1. Sensitive paths exposed by default.** The root is the whole home directory, so without protection `~/.ssh` and similar would be reachable. Mitigations (accepted): core known-secret deny rules are active by default and built in (8.3); a startup notice and persistent UI banner appear if the user weakens them (FR-9a). Residual risk: secrets outside the core list (e.g. `.env` files, `*.pem`) remain browsable until the user enables the optional rules, and a user who deliberately disables core rules and ignores the warning stays exposed.
+- R2. Hard links and bind-style mounts can bypass path-based rules (accepted and documented).
+- R3. Rendering untrusted content (HTML/SVG/Markdown) in previews is an XSS surface against a token-holding page (mitigated by SR-6).
+- R4. macOS permission prompts (TCC) for Documents, Desktop, Downloads, and external volumes may surprise users; the docs need to explain this.
+
+**Open questions**
+
+None currently.
+
+**Resolved (2026-09-20)**
+
+- Name: `fsb`.
+- "Reveal in Finder" / "Open in editor": excluded from v1 because they make the server launch local processes. If added in the run stage, use a fixed allowlist of actions and never build a command from a path. A "copy path" button covers the interim need.
+- Search: filename search is built in (walk stage) on top of the chokepoint. Content search, if added, shells out to `mdfind`, and any output from an external search tool is post-filtered through the chokepoint before display, since those tools do not know about deny rules.
+- License: MIT.
+- Multiple roots: see section 6 (`--root`, repeatable).
+- Frontend: Svelte with Vite.
+
+## 14. Milestones
+
+| Milestone | Scope | Exit criteria |
+|---|---|---|
+| M0: Skeleton | Repo, CI, chokepoint wrapper, matcher, token/Host/Origin middleware | Security test suite green. **Done 2026-09-20** (tests pass under `-race`; CI workflow written but not yet run on GitHub) |
+| M1: Crawl | FR-1 to FR-9a | Usable daily by the author on `$HOME` |
+| M2: Walk | FR-10 to FR-13 | Previews and search working, no deny bypasses in tests |
+| M3: Public release | Docs, releases, Homebrew tap, security-model write-up | Tagged v0.1.0 |
+| M4: Run | FR-14 to FR-18 as prioritized | Reassess after real use |
