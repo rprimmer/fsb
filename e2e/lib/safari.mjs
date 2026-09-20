@@ -3,7 +3,7 @@
 // One-time setup, which only you can do: Safari > Settings > Advanced > "Show
 // features for web developers", then Developer > "Allow remote automation".
 // (CI can use `sudo safaridriver --enable`.)
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { sleep } from './util.mjs';
@@ -59,12 +59,23 @@ export async function launchSafari({ width = 1280, height = 900 } = {}) {
     return json.value;
   };
 
+  // safaridriver reuses a Safari that is already running, and Safari refuses
+  // ("Safari was not launched for automation"), which shows up only as a
+  // 30-second timeout. Say so up front instead of leaving that to be guessed.
+  const alreadyRunning = spawnSync('pgrep', ['-x', 'Safari']).status === 0;
+  if (alreadyRunning) {
+    console.warn('# Safari is already running. safaridriver will try to use it and Safari will refuse it; quit Safari (Cmd-Q) first.');
+  }
+
   let created;
   try {
     created = await wd('POST', '/session', { capabilities: { alwaysMatch: { browserName: 'safari' } } });
   } catch (e) {
     child.kill();
-    throw new Error(`could not start a Safari session: ${e.message}`);
+    const hint = alreadyRunning && /timed out/i.test(e.message)
+      ? ' Safari was already running and was not launched for automation: quit Safari completely (Cmd-Q) and run again.'
+      : '';
+    throw new Error(`could not start a Safari session: ${e.message}${hint}`);
   }
   const sid = created.sessionId;
   const S = (method, path, body) => wd(method, `/session/${sid}${path}`, body);

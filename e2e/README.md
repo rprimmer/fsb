@@ -34,6 +34,7 @@ failed tests are written to `e2e/artifacts/`.
 - `lib/chrome.mjs` is a driver over the Chrome DevTools protocol.
 - `lib/safari.mjs` is a driver over W3C WebDriver (`safaridriver`).
 - The tests poll for state (`waitFor`) instead of sleeping, so they hold up on slow machines.
+- Safari under WebDriver reports arrow keys with a modifier held as `key: "\u001c"` (a control character) while `code` stays correct. The app matches navigation keys by `code` (`web/src/lib/keys.ts`) for this reason.
 
 ## Safari
 
@@ -41,16 +42,25 @@ Safari's automation must be enabled once, by you: Safari > Settings > Advanced >
 "Show features for web developers", then Developer > "Allow remote automation".
 The first session may also ask you to authorize it (Touch ID or password).
 
-If the suite reports "session timed out while connecting to a Safari instance",
-Safari is not answering the automation request. Things to try: look for an
-authorization prompt (a system dialog, or a sheet in Safari) and approve it;
-quit Safari completely (Cmd-Q) and run again, since a Safari that was already
-running when the setting was turned on may not pick it up; close any modal
-window Safari is showing; or run `sudo safaridriver --enable` once.
+**Quit Safari completely (Cmd-Q) before running the suite.** `safaridriver`
+reuses a Safari that is already running, and Safari rejects it with "Safari was
+not launched for automation" (visible in the system log). The only symptom is a
+30-second "session timed out while connecting to a Safari instance". With Safari
+quit, `safaridriver` launches its own automation instance and the suite runs in
+an automation window; your normal windows and tabs are untouched afterwards
+(Safari restores them next time you open it).
+
+If it still times out with Safari quit, run `sudo safaridriver --enable` once
+(it asks for an administrator password), look for an authorization prompt (a
+system dialog, or a sheet in Safari), and to see what Safari says, run:
+
+```sh
+log show --last 5m --predicate 'process == "Safari" AND eventMessage CONTAINS[c] "automation"'
+```
 
 Known differences from Chrome, all in the driver and not the app:
 
-- WebDriver cannot start a native drag. The header drag-and-drop test then drives the app's drag handlers with synthetic events and says so in the output.
+- WebDriver cannot complete a native drop. Safari does start the drag (`dragstart` and `dragover` fire from the real gesture) but the drop never arrives, so the header drag-and-drop test then drives the app's drag handlers with synthetic events and says so in the output. A real mouse drag in Safari is worth trying by hand.
 - WebDriver has no console access, so the "no script errors or CSP violations" test is skipped.
 - The clipboard is not read back.
 

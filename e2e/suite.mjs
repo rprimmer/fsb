@@ -58,6 +58,9 @@ export function defineSuite({ label, launch }) {
           && !!p.querySelector('.meta dl')
           && !(p.querySelector('.pbody > .hint')?.textContent ?? '').startsWith('Loading');
         if (!ready) return { ready: false };
+        // An image still loading, or one that failed and is about to fall back to text, is not settled.
+        const img = p.querySelector('.pimg');
+        if (img && !(img.complete && img.naturalWidth > 0)) return { ready: false };
         const code = p.querySelector('pre.code');
         const csv = p.querySelector('table.csv');
         return {
@@ -337,11 +340,16 @@ export function defineSuite({ label, launch }) {
       const kind = await pointOf('.head [data-col="kind"] .hdr');
       const size = await pointOf('.head [data-col="size"] .hdr');
       const started = await d.dragDrop(kind, size);
-      const seen = await d.eval(`return window.__drag`);
-      if (!started || !seen.includes('dragstart')) {
-        // The browser never started a native drag: a driver limit, not an app fault.
-        // Exercise the app's handlers with synthetic drag events instead.
-        t.diagnostic(`${d.name} did not start a native drag; falling back to synthetic drag events`);
+      // A native drop should arrive promptly. Some drivers never start the drag (Chrome
+      // headless without interception) and others start it but cannot complete the drop
+      // (Safari under WebDriver): both are driver limits, not app faults.
+      const dropped = started
+        ? await waitFor(async () => (await d.eval(`return window.__drag`)).includes('drop'), { timeout: 1500 }).then(() => true, () => false)
+        : false;
+      if (!dropped) {
+        // Exercise the app's drag handlers with synthetic events instead.
+        const seen = await d.eval(`return window.__drag`);
+        t.diagnostic(`${d.name} did not complete a native drop (saw: ${seen.join(',') || 'nothing'}); falling back to synthetic drag events`);
         await d.eval(`
           const dt = new DataTransfer();
           const from = document.querySelector('.head [data-col="kind"] .hdr');

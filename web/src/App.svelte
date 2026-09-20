@@ -47,6 +47,7 @@
     parseHash,
     pathToHash,
   } from './lib/format';
+  import { keyOf } from './lib/keys';
   import { firstLines, plural } from './lib/preview';
 
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -150,11 +151,12 @@
 
   function resizeKey(ev: KeyboardEvent, id: ColId) {
     const step = ev.shiftKey ? 50 : 10;
-    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+    const key = keyOf(ev);
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
       ev.preventDefault();
-      setWidth(id, layout.widths[id] + (ev.key === 'ArrowLeft' ? -step : step));
+      setWidth(id, layout.widths[id] + (key === 'ArrowLeft' ? -step : step));
       saveLayout();
-    } else if (ev.key === 'Enter') {
+    } else if (key === 'Enter') {
       ev.preventDefault();
       fitColumn(id);
     }
@@ -209,9 +211,10 @@
   }
 
   function headerKey(ev: KeyboardEvent, id: ColId) {
-    if (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+    const key = keyOf(ev);
+    if (ev.altKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
       ev.preventDefault();
-      layout = { ...layout, order: moveBy(layout, id, ev.key === 'ArrowLeft' ? -1 : 1) };
+      layout = { ...layout, order: moveBy(layout, id, key === 'ArrowLeft' ? -1 : 1) };
       saveLayout();
     }
   }
@@ -542,8 +545,7 @@
     }
     const onControl = t instanceof HTMLAnchorElement || t instanceof HTMLButtonElement || t?.tagName === 'SUMMARY';
     const page = 10;
-    // Some keyboards and remote-control layers report Space only via `code`.
-    const key = ev.code === 'Space' ? ' ' : ev.key;
+    const key = keyOf(ev);
     switch (key) {
       case '/':
         ev.preventDefault();
