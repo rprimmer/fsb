@@ -114,6 +114,11 @@ Precedence: deny always wins over ignore. No ignore rule (including negation) ca
 - ER-7. Derived data (search index, thumbnails, caches) must honor deny at build time and at query time.
 - ER-8. Rule files are read at startup (live reload is deferred to the run stage), with parse errors reported clearly and the server failing closed (refusing to start) on a malformed deny or ignore file. If the deny file is missing, the built-in core rules apply. If it exists it is authoritative: a core rule the user removes or comments out is no longer enforced, and FR-9a warns about it.
 
+- ER-9. Path aliases are reduced to one canonical form before any comparison with a root or a rule. On macOS the data volume's firmlinks make `/System/Volumes/Data/Users/me` the same directory as `/Users/me`; both forms, in any letter case, are treated as `/Users/me`. The directory that rules are built from (the home directory) is resolved the same way, so a symlinked `$HOME` cannot leave rules keyed to a path the guard never compares.
+- ER-10. Children of a listed or searched directory are judged by the directory's real location, not by the symlink or alias it was reached through.
+- ER-11. A permission error on a path that lies inside a denied place is reported as a plain not-found, decided from the nearest ancestor that can be resolved, so an unreadable file in a denied folder cannot be told from a missing one. Permission errors elsewhere stay visible to the user.
+- ER-12. Rule matching ignores trailing whitespace in a name (macOS allows `id.pem ` and `.env<TAB>`), and `**` matches names containing newlines.
+
 ### 8.3 Default deny rules: core (active) and optional (commented out)
 
 The **core** set covers locations that hold credentials or secrets and are known security issues if exposed. Core rules are **active by default** and are compiled into the binary as a built-in baseline, so they apply even if the deny file is missing (fail closed). `fsb --init` writes them, uncommented, into the deny file so the user can see them. The **optional** set covers potential exclusions that are more situational or prone to false positives; these ship commented out for the user to enable.

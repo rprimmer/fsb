@@ -39,6 +39,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: dependency audit (packages that ship in dist)
+        run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npx svelte-check --tsconfig ./tsconfig.json
       - name: build
@@ -68,6 +70,35 @@ jobs:
         with:
           name: e2e-screenshots
           path: e2e/artifacts/
+          if-no-files-found: ignore
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Short runs on every push; the seed corpora also run as ordinary tests above.
+      # Run them longer locally: go test ./internal/guard -run '^$' -fuzz FuzzGuardNeverExposesSecrets -fuzztime 5m
+      - name: fuzz the path guard (secrets must never surface)
+        run: go test ./internal/guard -run '^$' -fuzz '^FuzzGuardNeverExposesSecrets$' -fuzztime 30s
+      - name: fuzz the rule matcher
+        run: |
+          go test ./internal/rules -run '^$' -fuzz '^FuzzDenyMatchesEverythingUnderADeniedDirectory$' -fuzztime 15s
+          go test ./internal/rules -run '^$' -fuzz '^FuzzParseAndMatch$' -fuzztime 15s
+      - name: fuzz the HTTP guard
+        run: |
+          go test ./internal/httpguard -run '^$' -fuzz '^FuzzMiddlewareOnlyAdmitsLegitimateRequests$' -fuzztime 20s
+          go test ./internal/httpguard -run '^$' -fuzz '^FuzzLaunchTokenCannotBeReplayedOrMisplaced$' -fuzztime 10s
+      - name: fuzz the whole server stack
+        run: go test ./internal/server -run '^$' -fuzz '^FuzzPathParameter$' -fuzztime 30s
+      - name: keep any failing input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures
+          path: internal/**/testdata/fuzz/
           if-no-files-found: ignore
 
   vuln:

@@ -1,0 +1,16 @@
+# Proposes updates for the three dependency sets this project has. Security
+# updates for a vulnerable dependency are opened regardless of this schedule.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -61,6 +61,8 @@ Deny always wins. A denied path answers the same 404 as a missing one (add `--de
 
 The secret-file patterns are deliberately broad, so they have costs: **`*.key` also matches Keynote presentations**, `.env` also matches a directory named `.env` (such as a Python virtualenv), and `.env.*` also matches templates like `.env.example`. If that gets in your way, remove the pattern from `~/.config/fsb/deny` (run `fsb --init` first to create it) and accept the startup warning.
 
+See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guaranteed, and how it has been tested.
+
 ### Known limitations
 
 - Rules are path-based: a hard link to a denied file elsewhere is not detected.
