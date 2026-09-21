@@ -182,9 +182,13 @@ func (g *Guard) open(p string) (*os.File, fs.FileInfo, string, error) {
 	if err != nil {
 		return nil, nil, "", err
 	}
-	// Type is unknown before opening, so assume a directory: this can only
-	// over-deny a plain file that shares a name with a dir-only rule.
-	if r := g.deny.Match(clean, true); r.Matched {
+	// Lexical pre-check, before touching the filesystem. The type of the final
+	// component is not known yet, so it is treated as a file here (every
+	// ancestor is a directory regardless); a rule that applies only to
+	// directories is decided below, once the type is known. Assuming a
+	// directory instead would refuse a plain file that shares its name with a
+	// "dir/" rule although listings show it.
+	if r := g.deny.Match(clean, false); r.Matched {
 		return nil, nil, "", &DeniedError{Path: clean, Rule: r.Rule}
 	}
 
