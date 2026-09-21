@@ -9,13 +9,13 @@
 package rules
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
 	"sync"
+	"unicode"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -83,23 +83,60 @@ func Parse(r io.Reader, o ParseOptions) (*Set, error) {
 	if o.Base == "" {
 		o.Base = o.Home
 	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	// Editors add a byte order mark, and older ones end lines with a bare CR. A
+	// rule file that loads but does nothing is the worst outcome, so both are
+	// normalized here.
+	text := strings.TrimPrefix(string(data), "\ufeff")
+	text = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text)
 	s := &Set{}
-	sc := bufio.NewScanner(r)
-	for n := 1; sc.Scan(); n++ {
-		text := strings.TrimSpace(sc.Text())
-		if text == "" || strings.HasPrefix(text, "#") {
+	for n, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		rl, err := compile(text, o)
+		if err := checkLine(line); err != nil {
+			return nil, fmt.Errorf("line %d (%q): %w", n+1, line, err)
+		}
+		rl, err := compile(line, o)
 		if err != nil {
-			return nil, fmt.Errorf("line %d (%q): %w", n, text, err)
+			return nil, fmt.Errorf("line %d (%q): %w", n+1, line, err)
 		}
 		s.rules = append(s.rules, rl)
 	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
 	return s, nil
+}
+
+// slashLookalikes are characters that look like a path separator but are not.
+const slashLookalikes = "\uff0f\uff3c\u2215\u2044\u2571\u29f8\u29f9"
+
+// checkLine refuses text that a person may believe means something it does not:
+// a rule that loads but silently never matches. (git shares these pitfalls; a
+// deny file cannot afford them.)
+func checkLine(l string) error {
+	for i, r := range l {
+		switch {
+		case unicode.Is(unicode.Cf, r) || (unicode.IsSpace(r) && r != ' ' && r != '\t'):
+			return fmt.Errorf("invisible character U+%04X; delete and retype the line", r)
+		case strings.ContainsRune(slashLookalikes, r):
+			return fmt.Errorf("U+%04X looks like a slash but is not one", r)
+		case r == '#' && i > 0 && (l[i-1] == ' ' || l[i-1] == '\t') && (i < 2 || l[i-2] != '\\'): // an escaped space is part of the name
+			return errors.New("inline comments are not supported: put the comment on its own line (write \\# for a literal #)")
+		}
+	}
+	if len(l) >= 2 && (l[0] == '"' || l[0] == '\'') && l[len(l)-1] == l[0] {
+		return errors.New("quotes are not part of the syntax: remove them")
+	}
+	if strings.HasPrefix(l, "!") && len(l) > 1 {
+		l = l[1:]
+	}
+	if strings.HasPrefix(l, "~") && l != "~" && !strings.HasPrefix(l, "~/") {
+		return errors.New("only ~ and ~/... are supported, not another user's home (~name)")
+	}
+	return nil
 }
 
 // Texts returns the source text of every rule, in order.
