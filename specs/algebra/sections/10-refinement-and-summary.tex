@@ -38,7 +38,7 @@ than once per endpoint.
 go test -race ./...                 # rule, guard and server laws
 cd web && npm test                  # frontend laws
 node --test e2e/chrome.test.mjs     # end-to-end (Safari: e2e/safari.test.mjs)
-make -C algebra                     # build this document
+make -C specs/algebra                     # build this document
 \end{lstlisting}
 
 \subsection{Summary}
@@ -60,5 +60,5 @@ make -C algebra                     # build this document
 \end{itemize}
 
 The document is intended to be read alongside \code{SECURITY.md} and the product
-requirements: those state what is promised, and this states, precisely, the
+requirements (\code{PRD.md}), which sit in the enclosing \code{specs} folder: those state what is promised, and this states, precisely, the
 properties from which the promise follows.

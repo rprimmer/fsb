@@ -11,7 +11,7 @@ import (
 	"github.com/rprimmer/fsb/internal/rules"
 )
 
-// Property tests for the laws in algebra/ (section "Access decision").
+// Property tests for the laws in specs/algebra/ (section "Access decision").
 
 // lawGuard builds a tree that exercises the awkward cases together: a dir-only
 // deny rule meeting a plain file of the same name, symlinks in every

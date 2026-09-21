@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Property tests for the laws in algebra/ (section "Rules"). Each test names the
+// Property tests for the laws in specs/algebra/ (section "Rules"). Each test names the
 // law it checks. They use a fixed seed so a failure is reproducible.
 
 var (

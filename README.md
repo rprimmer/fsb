@@ -2,7 +2,7 @@
 
 A read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
 
-> **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See [PRD/PRD.md](PRD/PRD.md).
+> **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See [specs/PRD.md](specs/PRD.md).
 
 ### Keyboard
 
@@ -64,7 +64,7 @@ Deny always wins. A denied path answers the same 404 as a missing one (add `--de
 
 The secret-file patterns are deliberately broad, so they have costs: **`*.key` also matches Keynote presentations**, `.env` also matches a directory named `.env` (such as a Python virtualenv), and `.env.*` also matches templates like `.env.example`. If that gets in your way, remove the pattern from `~/.config/fsb/deny` (run `fsb --init` first to create it) and accept the startup warning.
 
-See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guaranteed, and how it has been tested.
+See [specs/SECURITY.md](specs/SECURITY.md) for the threat model, what is and is not guaranteed, and how it has been tested.
 
 ### Known limitations
 
@@ -74,7 +74,7 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 
 ## Algebraic specification
 
-[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found sixteen defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+[`specs/algebra/`](specs/algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found sixteen defects, all fixed (see its Findings section). Build it with `make -C specs/algebra` (needs a TeX installation; the PDF is written to `specs/algebra/build/`).
 
 ## Development
 

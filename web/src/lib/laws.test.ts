@@ -1,4 +1,4 @@
-// Property tests for the laws in algebra/ (sections on pure frontend logic).
+// Property tests for the laws in specs/algebra/ (sections on pure frontend logic).
 // A fixed-seed generator keeps failures reproducible.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
