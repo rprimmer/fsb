@@ -269,8 +269,13 @@ func translate(p string) (string, error) {
 				continue
 			}
 			class := string(rs[i+1 : j])
-			if strings.HasPrefix(class, "!") {
-				class = "^" + class[1:]
+			if strings.Contains(class, "/") {
+				// A glob class never matches a slash, and an expression that
+				// pretended otherwise could match across components.
+				return "", errors.New("'/' is not allowed inside [...]")
+			}
+			if strings.HasPrefix(class, "!") || strings.HasPrefix(class, "^") {
+				class = "^" + class[1:] + "/" // a negated class must still not match "/"
 			}
 			b.WriteString("[" + class + "]")
 			i = j

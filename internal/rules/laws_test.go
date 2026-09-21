@@ -155,3 +155,32 @@ func TestLawDenyRefusesNegation(t *testing.T) {
 		t.Error("negation accepted in a deny file")
 	}
 }
+
+// Law "single component": a pattern that contains no "/" and no "**" can only
+// match within one path component, never across a "/".
+func TestLawSlashlessPatternsStayWithinOneComponent(t *testing.T) {
+	for _, pat := range []string{"x[!a]y", "x[^a]y", "x?y", "x*y", "[!a]", "x[!a]*"} {
+		s := mustSet(t, []string{pat}, false)
+		for _, p := range []string{"/Users/me/x/y", "/Users/me/xx/y", "/Users/me/x/zy", "/Users/me/p/x/", "/Users/me/x/"} {
+			if s.Match(p, false).Matched {
+				// Only matches whose text lies inside one component are legitimate.
+				comps := strings.Split(strings.TrimPrefix(p, "/"), "/")
+				ok := false
+				for _, c := range comps {
+					if c != "" && mustSet(t, []string{pat}, false).Match("/"+c, false).Matched {
+						ok = true
+					}
+				}
+				if !ok {
+					t.Errorf("pattern %q matched %q across a slash", pat, p)
+				}
+			}
+		}
+	}
+}
+
+func TestSlashInsideAClassIsAParseError(t *testing.T) {
+	if _, err := Parse(strings.NewReader("a[/]b"), ParseOptions{Home: "/Users/me"}); err == nil {
+		t.Error("a class containing / was accepted")
+	}
+}
