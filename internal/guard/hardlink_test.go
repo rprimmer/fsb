@@ -4,62 +4,183 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // A hard link is another name for the same file, so a path rule cannot see it.
-// For the credential locations the guard is told about, a file with more than
-// one name is compared by identity with the files in those locations.
-func TestHardLinkToAProtectedFileIsRefused(t *testing.T) {
-	fx := newFixture(t)
-	secret := filepath.Join(fx.home, ".ssh", "id_ed25519")
-	if err := os.Link(secret, filepath.Join(fx.home, "proj", "innocent.txt")); err != nil {
+// The guard therefore recognizes a regular file that has several names by its
+// identity (device and inode): if any of its names is denied, every name is.
+
+func link(t *testing.T, from, to string) {
+	t.Helper()
+	if err := os.Link(from, to); err != nil {
 		t.Skip("hard links not supported here:", err)
 	}
-	// Made after the guard was configured, in a protected folder of its own.
-	write(t, filepath.Join(fx.home, ".ssh", "later_key"), "LATER-SECRET")
-	if err := os.Link(filepath.Join(fx.home, ".ssh", "later_key"), filepath.Join(fx.home, "proj", "later.txt")); err != nil {
-		t.Fatal(err)
+}
+
+func TestHardLinkToADeniedFileIsRefusedWhateverItIsCalled(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true // let the test create links after the index exists
+	for _, secret := range []string{".ssh/id_ed25519", "work/.env", "work/server.pem", "work/id.key", "work/.env.local"} {
+		write(t, filepath.Join(fx.home, secret), "TOP-SECRET")
 	}
-	// An ordinary file with two names must stay readable.
+	// An ordinary file with two names must stay readable, and it builds the index.
 	write(t, filepath.Join(fx.home, "proj", "a.txt"), "ordinary")
-	if err := os.Link(filepath.Join(fx.home, "proj", "a.txt"), filepath.Join(fx.home, "proj", "b.txt")); err != nil {
-		t.Fatal(err)
-	}
-
-	// Without being told where the credentials are, the limitation stands.
-	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "innocent.txt")); err == nil {
-		f.Close()
-	} else {
-		t.Fatalf("precondition: an unprotected guard cannot see hard links: %v", err)
-	}
-
-	fx.g.Protect(filepath.Join(fx.home, ".ssh"), filepath.Join(fx.home, ".aws"), filepath.Join(fx.home, "does-not-exist"))
-	for _, name := range []string{"innocent.txt", "later.txt"} {
-		p := filepath.Join(fx.home, "proj", name)
-		if f, _, err := fx.g.Open(p); err == nil {
-			f.Close()
-			t.Errorf("%s is a second name for a credential file but was served", name)
-		}
-		if _, err := fx.g.Head(p, 20); err == nil {
-			t.Errorf("Head(%s) succeeded", name)
-		}
-		if got := errorClass(fx.g, p); got != errorClass(fx.g, filepath.Join(fx.home, "proj", "missing.txt")) {
-			t.Errorf("%s fails as %q, unlike a missing path", name, got)
-		}
-	}
+	link(t, filepath.Join(fx.home, "proj", "a.txt"), filepath.Join(fx.home, "proj", "b.txt"))
 	for _, name := range []string{"a.txt", "b.txt"} {
 		f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", name))
 		if err != nil {
-			t.Errorf("%s (an ordinary hard-linked file) must stay reachable: %v", name, err)
-			continue
+			t.Fatalf("%s (an ordinary hard-linked file) must stay reachable: %v", name, err)
 		}
 		f.Close()
 	}
-	// Listings do not show it either.
+
+	// Links made afterwards, under names no rule matches.
+	names := map[string]string{
+		".ssh/id_ed25519": "n1.txt", "work/.env": "n2.txt", "work/server.pem": "n3.txt", "work/id.key": "n4.txt", "work/.env.local": "n5.txt",
+	}
+	for secret, alias := range names {
+		link(t, filepath.Join(fx.home, secret), filepath.Join(fx.home, "proj", alias))
+	}
+	missing := errorClass(fx.g, filepath.Join(fx.home, "proj", "missing.txt"))
+	for secret, alias := range names {
+		p := filepath.Join(fx.home, "proj", alias)
+		if f, _, err := fx.g.Open(p); err == nil {
+			f.Close()
+			t.Errorf("%s is a second name for %s but was served", alias, secret)
+		}
+		if _, err := fx.g.Head(p, 20); err == nil {
+			t.Errorf("Head(%s) succeeded", alias)
+		}
+		if got := errorClass(fx.g, p); got != missing {
+			t.Errorf("%s fails as %q, unlike a missing path (%q)", alias, got, missing)
+		}
+	}
+	// Listings agree with Open (law: listed implies openable).
 	es, _ := fx.g.List(filepath.Join(fx.home, "proj"))
 	for _, e := range es {
-		if e.Name == "innocent.txt" || e.Name == "later.txt" {
+		if _, ok := map[string]bool{"n1.txt": true, "n2.txt": true, "n3.txt": true, "n4.txt": true, "n5.txt": true}[e.Name]; ok {
 			t.Errorf("listing shows %s", e.Name)
 		}
+	}
+	// The secrets' own names are refused as before, and the ordinary pair is untouched.
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", name)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		} else {
+			f.Close()
+		}
+	}
+}
+
+// A new name that appears after the index was built is found by rebuilding it.
+func TestHardLinkCreatedAfterTheIndexWasBuiltIsStillFound(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	write(t, filepath.Join(fx.home, "work", ".env"), "SECRET")
+	write(t, filepath.Join(fx.home, "proj", "x.txt"), "x")
+	link(t, filepath.Join(fx.home, "proj", "x.txt"), filepath.Join(fx.home, "proj", "y.txt"))
+	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "y.txt")); err != nil { // builds the index
+		t.Fatal(err)
+	} else {
+		f.Close()
+	}
+	link(t, filepath.Join(fx.home, "work", ".env"), filepath.Join(fx.home, "proj", "late.txt"))
+	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "late.txt")); err == nil {
+		f.Close()
+		t.Error("a hard link made after the index was built was served")
+	}
+}
+
+// The other name may be outside the served roots. Locations named with Protect
+// are searched too, which is how the credential folders of every home are covered.
+func TestHardLinkToAFileOutsideTheRootsIsFoundThroughProtect(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	outsideSecret := filepath.Join(fx.outside, ".ssh", "id_rsa") // its own path is denied by rule everywhere
+	write(t, outsideSecret, "SECRET")
+	link(t, outsideSecret, filepath.Join(fx.home, "proj", "innocent.txt"))
+	// The roots alone cannot see the other name.
+	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "innocent.txt")); err != nil {
+		t.Fatalf("precondition: the other name is outside every root and unprotected: %v", err)
+	} else {
+		f.Close()
+	}
+	fx.g.Protect(filepath.Join(fx.outside, ".ssh"))
+	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "innocent.txt")); err == nil {
+		f.Close()
+		t.Error("a name for a protected credential file was served")
+	}
+}
+
+func TestLinkIndexWalkIsBounded(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	fx.g.linkWalkMax = 3 // far fewer entries than the tree has
+	write(t, filepath.Join(fx.home, "proj", "x.txt"), "x")
+	link(t, filepath.Join(fx.home, "proj", "x.txt"), filepath.Join(fx.home, "proj", "y.txt"))
+	done := make(chan struct{})
+	go func() {
+		f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "y.txt"))
+		if err == nil {
+			f.Close()
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the index walk did not stop at its limit")
+	}
+}
+
+// The index is built in the background. Until it is ready a file with several
+// names is refused (it cannot yet be shown to be harmless); a file with one name
+// is served at once; and once the walk finishes ordinary linked files are served.
+func TestFilesWithSeveralNamesAreRefusedUntilTheIndexIsReady(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin = 0
+	write(t, filepath.Join(fx.home, "proj", "x.txt"), "x")
+	link(t, filepath.Join(fx.home, "proj", "x.txt"), filepath.Join(fx.home, "proj", "y.txt"))
+	release := make(chan struct{})
+	fx.g.linkWalkHook = func() { <-release }
+	fx.g.StartLinkIndex()
+
+	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "hello.txt")); err != nil {
+		t.Fatalf("a file with one name must not wait for the index: %v", err)
+	} else {
+		f.Close()
+	}
+	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "y.txt")); err == nil {
+		f.Close()
+		t.Error("a file with several names was served before the index was ready")
+	}
+	es, _ := fx.g.List(filepath.Join(fx.home, "proj"))
+	for _, e := range es {
+		if e.Name == "x.txt" || e.Name == "y.txt" {
+			t.Errorf("listing shows %s before the index is ready", e.Name)
+		}
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		fx.g.links.mu.Lock()
+		ready := fx.g.links.ready
+		fx.g.links.mu.Unlock()
+		if ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the index never became ready")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	for _, name := range []string{"x.txt", "y.txt"} {
+		f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", name))
+		if err != nil {
+			t.Errorf("%s must be served once the index is ready: %v", name, err)
+			continue
+		}
+		f.Close()
 	}
 }

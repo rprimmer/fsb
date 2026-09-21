@@ -59,6 +59,16 @@ inside the root is served.
 \Tests{guard/differential\_test.go (both directions; fails 1,536 times if the folding fix is reverted)}
 \end{law}
 
+\begin{law}[Every name of a denied file is denied]
+\label{law:linked}
+If a regular file has several names and one of them is matched by a deny rule,
+then $\Open$ refuses the file under every name, and no listing shows it.  If the
+names cannot yet be determined, the file is refused.  Identity is the pair
+(device, inode), never a hash of the contents, so an ordinary copy of a secret is
+not treated as the secret and no file is read to decide.
+\Tests{guard/hardlink\_test.go (all four rule kinds, links made after the index was built, links to files outside the roots, refusal while the index builds, bounded walk); e2e ``a hard link to a denied file is refused under any name''}
+\end{law}
+
 \begin{law}[Indistinguishable from missing]
 \label{law:indist}
 For every endpoint $f$, a denied path $p$ and a missing path $q$ receive the

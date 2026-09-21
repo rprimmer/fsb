@@ -3,8 +3,8 @@
 
 Stating the laws and then checking them found six defects (1--6), and a
 subsequent audit of every place that compares names or paths, and of the
-environment assumptions behind the rules, found six more (7--12).  Each was
-reproduced by a failing test before it was fixed.  Findings 1, 7, 8, 10, 11 and 12 are
+environment assumptions behind the rules, found seven more (7--13).  Each was
+reproduced by a failing test before it was fixed.  Findings 1, 7, 8 and 10 to 13 are
 security defects; the rest are consistency defects that fail closed
 or are cosmetic, but each is a place where two parts of the program disagreed.
 
@@ -76,9 +76,8 @@ home, or under a wrong \code{\$HOME} were served.
 11 & \textbf{A path is not a file (hard links).}  Rules name paths, so a hard link
 to a credential file placed anywhere else was served under its innocent name; this
 had been recorded only as a limitation.
-& \ref{law:absent}
-& For the credential locations of every home, a file with several names is
-compared by identity with the files there, in \code{Open} and in listings. \\
+& \ref{law:absent}, \ref{law:linked}
+& A file with several names is judged by identity: a denied name denies them all, in \code{Open} and in listings.  First done for the credential locations only. \\
 12 & \textbf{The session cookie followed the host, not the port.}  Cookies are
 scoped by host, so the cookie was also sent to every other web server on
 \code{127.0.0.1} that the same browser visited, which could replay it.  It had
@@ -86,6 +85,14 @@ been recorded as a limitation.
 & \ref{law:cookie-path}
 & Everything is served under a random per-launch prefix and the cookie's path is
 that prefix; requests outside it are refused. \\
+13 & \textbf{Hard links to \code{.env}, \code{.pem} and \code{.key} files.}  The
+identity check of finding 11 covered only the credential folders, so a second name
+for a secret file elsewhere (\code{notes.txt} linked to a \code{.env}) was still
+served.
+& \ref{law:linked}
+& The check covers every denied name under the roots and protected locations, using
+a background index of multi-name files; multi-name files are refused until the
+index is ready. \\
 \bottomrule
 \end{longtable}
 

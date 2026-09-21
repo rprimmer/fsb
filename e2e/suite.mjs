@@ -182,6 +182,21 @@ export function defineSuite({ label, launch }) {
       }
     });
 
+    test('a hard link to a denied file is refused under any name, from the first request on', async () => {
+      await open(fx.work);
+      const head = (p) => d.eval(`const r = await fetch(location.pathname + 'api/head?path=' + encodeURIComponent(${JSON.stringify(p)})); return { status: r.status, body: await r.text() }`);
+      const link = await head(`${fx.work}/src/deep/innocent-name.txt`);
+      assert.equal(link.status, 404, 'a second name for .env must be refused');
+      assert.doesNotMatch(link.body, /hunter2|MYSECRET/);
+      // The listing of its folder does not show it either.
+      const list = await d.eval(`const r = await fetch(location.pathname + 'api/list?path=' + encodeURIComponent(${JSON.stringify(fx.work + '/src/deep')})); return await r.text()`);
+      assert.doesNotMatch(list, /innocent-name/);
+      // An ordinary file with two names is served once the background index is ready.
+      const ok = await waitFor(async () => ((await head(`${fx.work}/src/deep/er/pair-b.dat`)).status === 200 ? true : null), { message: 'the hard-linked pair to become reachable' });
+      assert.ok(ok);
+      assert.equal((await head(`${fx.work}/src/deep/innocent-name.txt`)).status, 404, 'still refused after the index is ready');
+    });
+
     test('shows the same message for a denied folder and a missing one', async () => {
       await open(fx.home);
       const msg = async (path) => {

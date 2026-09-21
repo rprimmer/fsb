@@ -62,9 +62,17 @@ type Entry struct {
 type Guard struct {
 	roots    []string      // real paths
 	rootInfo []fs.FileInfo // the same roots, for comparing by identity
-	protect  []string      // credential locations whose files must not be reachable under other names
-	deny     *rules.Set
-	hide     *rules.Set
+	protect  []string      // extra locations searched for other names of a file (see Protect)
+
+	// Hard-link detection (see linkindex.go). The limits are fields so tests can change them.
+	links          linkIndex
+	linkRebuildMin time.Duration
+	linkWalkMax    int
+	linkWalkTime   time.Duration
+	linkSync       bool   // walk on the caller's goroutine (tests)
+	linkWalkHook   func() // called when a walk starts (tests)
+	deny           *rules.Set
+	hide           *rules.Set
 }
 
 // New creates a Guard. Each root must exist and is resolved to its real path.
@@ -72,7 +80,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 	if len(roots) == 0 {
 		return nil, errors.New("at least one root is required")
 	}
-	g := &Guard{deny: deny, hide: hide}
+	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime}
 	for _, r := range roots {
 		if !filepath.IsAbs(r) {
 			return nil, fmt.Errorf("root %q is not absolute", r)
@@ -92,60 +100,6 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 		g.rootInfo = append(g.rootInfo, fi)
 	}
 	return g, nil
-}
-
-// Protect names credential locations (folders or files, such as ~/.ssh). A
-// regular file that has more than one name (a hard link) is compared by identity
-// with the files in these locations and refused if it is one of them, which
-// closes the gap that path rules leave for a hard link placed somewhere else.
-// The locations are read when needed and only for files with several names, so
-// files added later are covered and ordinary files cost nothing.
-func (g *Guard) Protect(paths ...string) {
-	for _, p := range paths {
-		g.protect = append(g.protect, canonPath(p))
-	}
-}
-
-// hardLinkToProtected reports whether fi is a regular file with several names
-// that is one of the files under the protected locations.
-func (g *Guard) hardLinkToProtected(fi fs.FileInfo) bool {
-	if len(g.protect) == 0 || !fi.Mode().IsRegular() {
-		return false
-	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	return ok && st.Nlink > 1 && g.isProtectedFile(fi)
-}
-
-// Files that are walked when looking for another name of a protected file.
-const maxProtectedWalk = 20000
-
-// isProtectedFile reports whether fi (a regular file with several names) is one
-// of the files under the protected locations.
-func (g *Guard) isProtectedFile(fi fs.FileInfo) bool {
-	seen := 0
-	found := false
-	for _, root := range g.protect {
-		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			if seen++; seen > maxProtectedWalk || found {
-				return filepath.SkipAll
-			}
-			if d.Type().IsRegular() {
-				if info, err := d.Info(); err == nil && os.SameFile(info, fi) {
-					found = true
-					return filepath.SkipAll
-				}
-			}
-			return nil
-		})
-		if found {
-			return true
-		}
-	}
-	// Too large to search: refuse rather than guess (fail closed).
-	return seen > maxProtectedWalk
 }
 
 // Roots returns the resolved root paths.
@@ -317,8 +271,8 @@ func (g *Guard) open(p string) (*os.File, fs.FileInfo, string, error) {
 		return fail(&DeniedError{Path: clean, Rule: r.Rule})
 	}
 	// Another name for a credential file (a hard link) that no path rule can see.
-	if g.hardLinkToProtected(fi) {
-		return fail(&DeniedError{Path: clean, Rule: "hard link to a protected file"})
+	if g.hardLinkToDenied(fi) {
+		return fail(&DeniedError{Path: clean, Rule: "hard link to a denied file"})
 	}
 	return f, fi, canonPath(real), nil
 }
@@ -432,17 +386,15 @@ func (g *Guard) entry(dir string, de fs.DirEntry) (Entry, bool) {
 			}
 		}
 	}
-	// Another name for a credential file, as Open would refuse it.
-	if len(g.protect) > 0 {
-		subject := info
-		if e.IsSymlink && !e.Broken {
-			if rfi, err := os.Stat(child); err == nil {
-				subject = rfi
-			}
+	// Another name for a denied file, as Open would refuse it.
+	subject := info
+	if e.IsSymlink && !e.Broken {
+		if rfi, err := os.Stat(child); err == nil {
+			subject = rfi
 		}
-		if g.hardLinkToProtected(subject) {
-			return Entry{}, false
-		}
+	}
+	if g.hardLinkToDenied(subject) {
+		return Entry{}, false
 	}
 	// dir itself already passed Open's checks, so only the child matters.
 	if g.deny.MatchBelow(dir, child, e.IsDir).Matched {

@@ -67,13 +67,13 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 
 ### Known limitations
 
-- Rules are path-based. A hard link to a credential file (in the `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains or browser-profile folders of any home directory) is recognized by identity and refused, but a hard link to some other denied file, such as a `.env` or `.pem` elsewhere, is not detected.
+- Rules are path-based, so a hard link (another name for the same file) is judged by file identity: if any name of a file with several names is denied, every name is refused, and it disappears from listings. This covers the served roots and the credential folders of every home directory. The index of such files is built in the background at startup (about 20 seconds for a home folder of 700,000 files); until it is ready, files that have several names are refused. A hard link whose other name lies outside both the roots and the credential folders cannot be seen.
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 
 ## Algebraic specification
 
-[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found twelve defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found thirteen defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
 
 ## Development
 

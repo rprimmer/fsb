@@ -36,7 +36,7 @@ Details are in [PRD/PRD.md](PRD/PRD.md), sections 8 and 9.
 
 ## Known limitations
 
-- **Hard links.** Rules are path-based. A hard link to a credential file in a known credential location (any home's `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains, browser profiles) is recognized by file identity and refused. A hard link to any other denied file, such as a `.env` or `.pem` placed elsewhere, is not detected.
+- **Hard links.** Rules are path-based, so a file with several names is judged by identity: if any of its names is denied (a `.env` or `.pem` anywhere in the roots, or anything in a credential folder of any home), all of them are refused and unlisted. The index of multi-name files is built in the background at startup (about 20 seconds for a 700,000-file home) and refreshed when a new multi-name file appears; until then such files are refused rather than guessed. A hard link whose denied name lies outside every root and every credential folder is not detected, and a walk stopped by its size limit (20 million entries) leaves later links unseen.
 - **Broad patterns have costs.** `*.key` also matches Keynote files, `.env` also matches a folder called `.env`, and `.env.*` also matches `.env.example`. You can remove a pattern from your deny file; fsb then warns at startup and in the UI.
 - **`--root /` widens what is exposed.** Deny rules still apply, but only to what they name.
 - **Explicit downloads of cloud-only files.** Clicking a file name downloads it, and for an iCloud file that is not stored locally that starts the download. Hover, preview and metadata never do.

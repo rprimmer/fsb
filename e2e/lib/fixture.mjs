@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import zlib, { deflateSync } from 'node:zlib';
@@ -179,6 +179,10 @@ export function makeFixture({ big = false } = {}) {
   put(join(work, 'disguised.png'), '<html><script>alert(1)</script></html>');
   put(join(work, 'needle-shallow.txt'), 'needle shallow\n');
   symlinkSync('src/main.go', join(work, 'link-to-main'));
+  // A second name for a denied file, and an ordinary file with two names.
+  linkSync(join(work, '.env'), join(work, 'src', 'deep', 'innocent-name.txt'));
+  put(join(work, 'src', 'deep', 'er', 'pair-a.dat'), 'ordinary pair\n');
+  linkSync(join(work, 'src', 'deep', 'er', 'pair-a.dat'), join(work, 'src', 'deep', 'er', 'pair-b.dat'));
 
   const png = makePng();
   put(join(home, 'pics', 'gradient.png'), png);

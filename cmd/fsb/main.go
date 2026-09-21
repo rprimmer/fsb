@@ -109,6 +109,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// also recognized by identity. Every home directory on the machine is
 	// covered, not only $HOME (which may be wrong or overridden).
 	g.Protect(rules.CredentialLocations(home)...)
+	g.StartLinkIndex() // in the background; files with several names are refused until it is ready
 
 	// Loopback only. This address is deliberately not configurable.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
