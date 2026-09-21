@@ -20,8 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/text/unicode/norm"
-
 	"github.com/rprimmer/fsb/internal/rules"
 )
 
@@ -97,7 +95,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 func (g *Guard) Roots() []string { return append([]string(nil), g.roots...) }
 
 // fold normalizes a path for case- and normalization-insensitive comparison.
-func fold(s string) string { return strings.ToLower(norm.NFC.String(s)) }
+func fold(s string) string { return rules.Fold(s) }
 
 // inRoots reports whether real is a root or lies beneath one.
 func (g *Guard) inRoots(real string) bool {

@@ -1,7 +1,8 @@
 // Package rules implements gitignore-style path matching for fsb's two
 // exclusion tiers (hide and deny).
 //
-// Matching is case-insensitive and Unicode-normalized (NFC) to mirror APFS.
+// Matching is case-insensitive (full Unicode case folding) and normalized to
+// mirror APFS; see Fold.
 // A path matches if it, or any ancestor directory, is excluded; once an
 // ancestor is excluded no later rule (including a "!" negation) can bring the
 // path back, as in git.
@@ -15,8 +16,29 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
+
+// Fold reduces a path or pattern to the form in which two names are equal
+// exactly when APFS (case-insensitive) treats them as the same name: Unicode
+// normalization and *full* case folding, under which "ß" and "ss", "ſ" and
+// "s", the Kelvin sign and "k", and ligatures such as "ﬁ" and "fi" all
+// coincide. Rules are matched against folded text, so a denied name cannot be
+// reached by spelling it with one of those characters.
+func Fold(s string) string {
+	ascii := true
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return strings.ToLower(s)
+	}
+	return norm.NFC.String(cases.Fold().String(norm.NFC.String(s)))
+}
 
 // ParseOptions controls how rule text is interpreted.
 type ParseOptions struct {
@@ -97,8 +119,8 @@ func (s *Set) MatchBelow(from, path string, isDir bool) Result {
 	if s == nil || len(s.rules) == 0 {
 		return Result{}
 	}
-	comps := split(norm.NFC.String(path))
-	skip := len(split(norm.NFC.String(from)))
+	comps := split(Fold(path))
+	skip := len(split(Fold(from)))
 	for i := skip; i < len(comps); i++ {
 		prefix := "/" + strings.Join(comps[:i+1], "/")
 		prefixIsDir := i < len(comps)-1 || isDir
@@ -175,7 +197,7 @@ func compile(text string, o ParseOptions) (rule, error) {
 		prefix, p, anchored = strings.TrimRight(o.Base, "/"), "/"+p, true
 	}
 
-	glob, err := translate(norm.NFC.String(p))
+	glob, err := translate(Fold(p))
 	if err != nil {
 		return rl, err
 	}
@@ -187,7 +209,7 @@ func compile(text string, o ParseOptions) (rule, error) {
 	const tail = `\s*$`
 	var expr string
 	if anchored {
-		expr = "^" + regexp.QuoteMeta(norm.NFC.String(prefix)) + glob + tail
+		expr = "^" + regexp.QuoteMeta(Fold(prefix)) + glob + tail
 	} else {
 		expr = "(?:^|/)" + glob + tail
 	}
