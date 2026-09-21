@@ -354,3 +354,35 @@ func TestNewEndpointsRequireASessionAndAreReadOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchEndpointMatchCase(t *testing.T) {
+	e := newEnv(t, false, nil)
+	write(t, filepath.Join(e.home, "proj", "Report-final.txt"), "x")
+	write(t, filepath.Join(e.home, "proj", "report-draft.txt"), "x")
+
+	count := func(params url.Values) int {
+		code, body := e.getQuery(t, "/api/search", params)
+		if code != 200 {
+			t.Fatalf("status = %d", code)
+		}
+		rels, _ := parseSearch(t, body)
+		return len(rels)
+	}
+	base := url.Values{"path": {e.home}, "q": {"Report"}}
+	if n := count(base); n != 2 {
+		t.Errorf("default (case-insensitive): %d results, want 2", n)
+	}
+	for _, v := range []string{"1"} {
+		p := url.Values{"path": {e.home}, "q": {"Report"}, "case": {v}}
+		if n := count(p); n != 1 {
+			t.Errorf("case=%s: %d results, want 1", v, n)
+		}
+	}
+	// Anything but "1" means the default.
+	for _, v := range []string{"0", "", "true", "yes"} {
+		p := url.Values{"path": {e.home}, "q": {"Report"}, "case": {v}}
+		if n := count(p); n != 2 {
+			t.Errorf("case=%q: %d results, want 2 (only 1 turns match-case on)", v, n)
+		}
+	}
+}

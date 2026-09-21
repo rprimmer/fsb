@@ -22,6 +22,7 @@ const KEYS = {
   Backspace: wdKey(0xe003),
   c: 'c',
   s: 's',
+  '/': '/',
 };
 const ALT = wdKey(0xe00a);
 const SHIFT = wdKey(0xe008);

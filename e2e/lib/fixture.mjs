@@ -95,6 +95,9 @@ export function makeFixture({ big = false } = {}) {
   put(join(home, 'node_modules', 'pkg', 'needle.js'), 'hidden needle\n');
   // A dotfile that is neither denied nor ignored: shown only with "Hidden files".
   put(join(work, '.envrc'), 'export FOO=1\n');
+  // Names that differ only in case (they must be different names: APFS is case-insensitive).
+  put(join(home, 'casetest', 'Report-final.txt'), 'x');
+  put(join(home, 'casetest', 'report-draft.txt'), 'x');
 
   put(join(work, 'src', 'main.go'), 'package main\n\nimport "fmt"\n\n// greet prints a greeting.\nfunc greet(name string) string { return fmt.Sprintf("hello, %s", name) }\n\nfunc main() { fmt.Println(greet("fsb")) }\n');
   put(join(work, 'src', 'deep', 'er', 'Needle-Deep.txt'), 'needle deep\n');
@@ -119,6 +122,6 @@ export function makeFixture({ big = false } = {}) {
     for (let i = 1; i <= 100_000; i++) writeFileSync(join(home, 'big', `file-${i}`), '');
   }
   // What the home folder lists: .ssh and .aws are denied, node_modules is hidden.
-  const homeRows = [...(big ? ['big/'] : []), 'pics/', 'work/'];
+  const homeRows = [...(big ? ['big/'] : []), 'casetest/', 'pics/', 'work/'];
   return { root, home, work, xattrs, xattrsHex, homeRows };
 }

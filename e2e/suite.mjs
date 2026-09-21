@@ -136,14 +136,14 @@ export function defineSuite({ label, launch }) {
       await open(fx.home);
       assert.deepEqual(await rows(), fx.homeRows); // .ssh and .aws are denied, node_modules is hidden
       // Showing hidden files must never reveal a denied folder.
-      await d.eval(`document.querySelector('.toggle input').click()`);
-      await waitFor(async () => (await d.eval(`return document.querySelector('.toggle input').checked`)) === true);
+      await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
+      await waitFor(async () => (await d.eval(`return [...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').checked`)) === true);
       assert.deepEqual(await rows(), fx.homeRows);
     });
 
     test('never lists secret files, even with hidden files shown', async () => {
       await open(fx.work);
-      await d.eval(`document.querySelector('.toggle input').click()`);
+      await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await rows()).includes('.envrc'), { message: 'hidden files to appear' });
       const list = await rows();
       for (const secret of ['.env', 'server.pem', 'id.key']) assert.ok(!list.includes(secret), `${secret} must not be listed: ${JSON.stringify(list)}`);
@@ -556,7 +556,7 @@ export function defineSuite({ label, launch }) {
     test('sorts like eza by default, and Folders first is an option that applies to every column', async () => {
       await open(fx.work);
       // Show dotfiles so the leading-dot rule is visible.
-      await d.eval(`document.querySelector('.toggle input').click()`);
+      await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await rows()).includes('.envrc'), { message: 'dotfiles to appear' });
       // Case-insensitive, dotfiles first, folders NOT grouped (src/ sits among the files by name).
       assert.deepEqual(await rows(), ['.envrc', 'app.log', 'data.json', 'disguised.png', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
@@ -580,6 +580,34 @@ export function defineSuite({ label, launch }) {
 
       // The choice is remembered.
       assert.equal(await d.eval(`return JSON.parse(localStorage.getItem('fsb.prefs.v1')).foldersFirst`), true);
+    });
+
+
+    test('Match case applies to the filter and to search', async () => {
+      await open(`${fx.home}/casetest`);
+      const matchCase = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Match case')).querySelector('input')`;
+      const box = await d.eval(`const b = ${matchCase}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);
+
+      // Filter: case-insensitive by default.
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key('/');
+      await d.type('Report');
+      await waitFor(async () => JSON.stringify(await rows()) === JSON.stringify(['report-draft.txt', 'Report-final.txt']), { message: 'both names to match ignoring case' });
+      await d.click(box.x, box.y);
+      await waitFor(async () => JSON.stringify(await rows()) === JSON.stringify(['Report-final.txt']), { message: 'Match case to narrow the filter' });
+      assert.equal(await d.eval(`return JSON.parse(localStorage.getItem('fsb.prefs.v1')).matchCase`), true);
+      await d.click(box.x, box.y);
+      await waitFor(async () => (await rows()).length === 2, { message: 'unchecking to widen the filter again' });
+
+      // Search: the same option, and toggling it re-runs the search.
+      await open(fx.home);
+      await d.eval(`document.querySelector('input[aria-label="Search subfolders by name"]').focus()`);
+      await d.type('Report');
+      await d.key('Enter');
+      await waitFor(async () => (await rows()).length === 2 && !(await d.eval(`return document.querySelector('.status').textContent.includes('Searching')`)), { message: 'the case-insensitive search results' });
+      const b2 = await d.eval(`const b = ${matchCase}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);
+      await d.click(b2.x, b2.y);
+      await waitFor(async () => JSON.stringify(await rows()) === JSON.stringify(['casetest/Report-final.txt']), { message: 'the search to re-run with Match case' });
     });
 
     // ---- attacks from other websites --------------------------------------------

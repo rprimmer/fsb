@@ -231,7 +231,9 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		return err
 	}
 
-	visited, truncated, err := s.cfg.Guard.Search(r.Context(), root, query, guard.DefaultSearchLimits, func(m guard.SearchMatch) error {
+	opts := guard.DefaultSearchLimits
+	opts.MatchCase = r.URL.Query().Get("case") == "1"
+	visited, truncated, err := s.cfg.Guard.Search(r.Context(), root, query, opts, func(m guard.SearchMatch) error {
 		pending = append(pending, m)
 		if len(pending) >= 25 || time.Since(lastFlush) > 150*time.Millisecond {
 			return flush()

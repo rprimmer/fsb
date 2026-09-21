@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // SearchMatch is one filename match.
@@ -19,11 +21,18 @@ type SearchMatch struct {
 	ModTime time.Time `json:"modTime"`
 }
 
-// SearchLimits bounds a search.
-type SearchLimits struct {
+// SearchOptions bounds a search and says how names are compared.
+type SearchOptions struct {
 	MaxResults int
 	MaxVisited int
+	// MatchCase makes the comparison case-sensitive. Names and the query are
+	// still compared after Unicode normalization, because macOS may store an
+	// accented name in a different form than the user types.
+	MatchCase bool
 }
+
+// SearchLimits is the former name of SearchOptions.
+type SearchLimits = SearchOptions
 
 // DefaultSearchLimits are the limits the server uses.
 var DefaultSearchLimits = SearchLimits{MaxResults: 1000, MaxVisited: 500_000}
@@ -38,6 +47,11 @@ var DefaultSearchLimits = SearchLimits{MaxResults: 1000, MaxVisited: 500_000}
 // stopped the search early. fn is called from the calling goroutine.
 func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits, fn func(SearchMatch) error) (visited int, truncated bool, err error) {
 	q := fold(strings.TrimSpace(query))
+	matches := func(name string) bool { return strings.Contains(fold(name), q) }
+	if lim.MatchCase {
+		q = norm.NFC.String(strings.TrimSpace(query))
+		matches = func(name string) bool { return strings.Contains(norm.NFC.String(name), q) }
+	}
 	// Fail (as a listing would) if the root itself is not accessible. From here
 	// on the search works on the root's real location, so a symlink to a
 	// directory cannot change which entries are judged denied or hidden.
@@ -80,7 +94,7 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 				}
 				visited++
 				child := filepath.Join(dir, e.Name)
-				if strings.Contains(fold(e.Name), q) {
+				if matches(e.Name) {
 					rel := strings.TrimPrefix(child, root)
 					rel = strings.TrimPrefix(rel, string(filepath.Separator))
 					m := SearchMatch{Path: child, Rel: rel, Name: e.Name, IsDir: e.IsDir, Size: e.Size, ModTime: e.ModTime}

@@ -142,10 +142,11 @@ export async function streamList(
 export async function streamSearch(
   root: string,
   query: string,
+  matchCase: boolean,
   onMatches: (rows: Row[]) => void,
   signal: AbortSignal,
 ): Promise<SearchDone> {
-  const resp = await fetch(`/api/search?path=${q(root)}&q=${encodeURIComponent(query)}`, { signal });
+  const resp = await fetch(`/api/search?path=${q(root)}&q=${encodeURIComponent(query)}${matchCase ? '&case=1' : ''}`, { signal });
   if (!resp.ok) throw await failure(resp);
   let done: SearchDone = { visited: 0, truncated: false };
   await streamNDJSON(resp, (m) => {

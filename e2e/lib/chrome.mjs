@@ -32,6 +32,7 @@ const KEYS = {
   Backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
   c: { key: 'c', code: 'KeyC', vk: 67, text: 'c' },
   s: { key: 's', code: 'KeyS', vk: 83, text: 's' },
+  '/': { key: '/', code: 'Slash', vk: 191, text: '/' },
 };
 
 export async function launchChrome({ width = 1280, height = 800 } = {}) {

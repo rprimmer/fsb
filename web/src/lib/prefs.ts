@@ -11,6 +11,8 @@ export interface Prefs {
   previewWidth: number;
   /** List folders before files, whatever the sort column. Off by default (matches ls and eza). */
   foldersFirst: boolean;
+  /** Case-sensitive filter and search. Off by default. */
+  matchCase: boolean;
 }
 
 export function clampPaneWidth(w: number): number {
@@ -24,7 +26,7 @@ export function clampPaneWidth(w: number): number {
  * only on a window wide enough to hold it beside the list.
  */
 export function parsePrefs(json: string | null, windowWidth: number): Prefs {
-  const prefs: Prefs = { preview: windowWidth >= 900, hover: true, previewWidth: DEFAULT_PANE_WIDTH, foldersFirst: false };
+  const prefs: Prefs = { preview: windowWidth >= 900, hover: true, previewWidth: DEFAULT_PANE_WIDTH, foldersFirst: false, matchCase: false };
   if (!json) return prefs;
   let raw: unknown;
   try {
@@ -37,6 +39,7 @@ export function parsePrefs(json: string | null, windowWidth: number): Prefs {
   if (typeof r.preview === 'boolean') prefs.preview = r.preview;
   if (typeof r.hover === 'boolean') prefs.hover = r.hover;
   if (typeof r.foldersFirst === 'boolean') prefs.foldersFirst = r.foldersFirst;
+  if (typeof r.matchCase === 'boolean') prefs.matchCase = r.matchCase;
   if (typeof r.previewWidth === 'number' && Number.isFinite(r.previewWidth)) prefs.previewWidth = clampPaneWidth(r.previewWidth);
   return prefs;
 }

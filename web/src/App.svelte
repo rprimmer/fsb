@@ -47,6 +47,7 @@
     parseHash,
     pathToHash,
   } from './lib/format';
+  import { matchesName } from './lib/filter';
   import { keyOf } from './lib/keys';
   import { DEFAULT_PANE_WIDTH, MAX_PANE_WIDTH, MIN_PANE_WIDTH, clampPaneWidth, parsePrefs } from './lib/prefs';
   import { firstLines, plural } from './lib/preview';
@@ -83,10 +84,11 @@
   let hoverPeek = $state(initial.hover);
   let previewWidth = $state(initial.previewWidth);
   let foldersFirst = $state(initial.foldersFirst);
+  let matchCase = $state(initial.matchCase);
 
   function savePrefs() {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek, previewWidth, foldersFirst }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek, previewWidth, foldersFirst, matchCase }));
     } catch {
       /* the choice just will not persist */
     }
@@ -269,11 +271,8 @@
   const crumbs = $derived(status && path ? crumbsFor(path, status.roots) : []);
 
   const visible = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
     const rows = source.filter(
-      (e) =>
-        (showHidden || !e.name.startsWith('.')) &&
-        (!q || (e.rel ?? e.name).toLowerCase().includes(q)),
+      (e) => (showHidden || !e.name.startsWith('.')) && matchesName(e.rel ?? e.name, filter, matchCase),
     );
     // Search results arrive shallowest-first; keep that order until the user sorts.
     if (searchActive && !userSorted) return rows;
@@ -427,6 +426,7 @@
     streamSearch(
       path,
       query,
+      matchCase,
       (rows) => {
         buf.push(...rows);
         if (acc.length === 0) flush();
@@ -837,6 +837,16 @@
   <label class="toggle"><input type="checkbox" bind:checked={showHidden} /> Hidden files</label>
   <label class="toggle" title="List folders before files, whichever column you sort by">
     <input type="checkbox" bind:checked={foldersFirst} onchange={savePrefs} /> Folders first
+  </label>
+  <label class="toggle" title="Applies to the filter and to search. Accented names match however they are stored.">
+    <input
+      type="checkbox"
+      bind:checked={matchCase}
+      onchange={() => {
+        savePrefs();
+        if (searchActive) runSearch(); // results depend on it
+      }}
+    /> Match case
   </label>
   <label class="toggle" title="Show the first lines of a file when you hover over it">
     <input type="checkbox" bind:checked={hoverPeek} onchange={() => { savePrefs(); clearPeek(); }} /> Hover previews
