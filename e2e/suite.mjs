@@ -784,6 +784,15 @@ export function defineSuite({ label, launch }) {
       assert.equal(await d.eval(loadsImage(url)), 'error', 'a page on another site must not get the image');
     });
 
+    test('a page on another local port (same site) cannot use fsb even if it knows the prefix', async () => {
+      const url = `${base}/api/preview?path=${encodeURIComponent(fx.home + '/pics/gradient.png')}`;
+      await open(fx.home); // the browser holds the session cookie
+      await d.goto(attacker.sameHostUrl); // 127.0.0.1 on another port: same site, different origin
+      assert.equal(await d.eval(loadsImage(url)), 'error', 'the image must not load for a same-site page');
+      const r = await d.eval(`try { const res = await fetch(${JSON.stringify(base + '/api/status')}, { credentials: 'include' }); return { ok: true, status: res.status }; } catch (e) { return { ok: false, error: e.name }; }`);
+      assert.equal(r.ok, false, `a same-site read must be refused, got ${JSON.stringify(r)}`);
+    });
+
     test('another site cannot read fsb responses with fetch', async () => {
       await open(fx.home); // make sure the session cookie is in place
       await d.goto(attacker.url);
