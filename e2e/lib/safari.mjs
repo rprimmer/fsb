@@ -129,6 +129,11 @@ export async function launchSafari({ width = 1280, height = 900 } = {}) {
       await pointer([at(x, y)]);
     },
 
+    /** A real left click. */
+    async click(x, y) {
+      await pointer([at(x, y), { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }]);
+    },
+
     async drag(from, to) {
       const steps = [at(from.x, from.y), { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 50 }];
       for (let i = 1; i <= 8; i++) steps.push(at(from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8, 20));

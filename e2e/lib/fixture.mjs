@@ -48,6 +48,16 @@ export function makePng() {
   ]);
 }
 
+function setXattrHex(file, name) {
+  try {
+    if (process.platform === 'darwin') execFileSync('xattr', ['-wx', name, 'de ad be ef 00 01', file], { stdio: 'ignore' });
+    else execFileSync('setfattr', ['-n', `user.${name}`, '-v', '0xdeadbeef0001', file], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function setXattr(file, name, value) {
   try {
     if (process.platform === 'darwin') execFileSync('xattr', ['-w', name, value, file], { stdio: 'ignore' });
@@ -102,6 +112,7 @@ export function makeFixture({ big = false } = {}) {
   put(join(home, 'pics', 'no-extension'), png);
 
   const xattrs = setXattr(join(work, 'data.json'), 'com.example.note', 'hello from an xattr');
+  const xattrsHex = xattrs && setXattrHex(join(work, 'data.json'), 'com.example.blob');
 
   if (big) {
     mkdirSync(join(home, 'big'));
@@ -109,5 +120,5 @@ export function makeFixture({ big = false } = {}) {
   }
   // What the home folder lists: .ssh and .aws are denied, node_modules is hidden.
   const homeRows = [...(big ? ['big/'] : []), 'pics/', 'work/'];
-  return { root, home, work, xattrs, homeRows };
+  return { root, home, work, xattrs, xattrsHex, homeRows };
 }

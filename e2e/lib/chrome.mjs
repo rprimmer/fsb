@@ -147,6 +147,13 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
       await S('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     },
 
+    /** A real left click. */
+    async click(x, y) {
+      await driver.mouseMove(x, y);
+      await S('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+      await S('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+    },
+
     /** Press, move in steps, release. The button must be named on every move or Chrome drops pointer capture. */
     async drag(from, to) {
       await driver.mouseMove(from.x, from.y);

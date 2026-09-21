@@ -605,3 +605,13 @@ pre.xval {
 .hljs-strong {
   font-weight: 700;
 }
+
+.tag {
+  margin-left: 8px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  vertical-align: 1px;
+}

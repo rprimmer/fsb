@@ -442,6 +442,80 @@ export function defineSuite({ label, launch }) {
     });
 
 
+
+    // ---- interface details from manual testing --------------------------------
+    test('the preview pane is a checkbox like the other view options', async () => {
+      await open(fx.work);
+      const box = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Preview pane')).querySelector('input')`;
+      const checked = () => d.eval(`return ${box}.checked`);
+      const start = await previewOpen();
+      assert.equal(await checked(), start, 'the checkbox reflects the pane');
+      assert.equal(await d.eval(`return [...document.querySelectorAll('.tools .textbtn')].some((b) => /preview/i.test(b.textContent))`), false, 'the old show/hide button is gone');
+      const p = await d.eval(`const b = ${box}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);
+      await d.click(p.x, p.y);
+      await waitFor(async () => (await previewOpen()) === !start && (await checked()) === !start, { message: 'the checkbox to toggle the pane' });
+      await d.click(p.x, p.y);
+      await waitFor(async () => (await previewOpen()) === start && (await checked()) === start, { message: 'the checkbox to toggle the pane back' });
+      // Space and the checkbox stay in step.
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key(' ');
+      await waitFor(async () => (await previewOpen()) === !start && (await checked()) === !start, { message: 'Space to update the checkbox' });
+    });
+
+    test('the Columns menu closes on an outside click and on Escape', async () => {
+      await open(fx.work);
+      const isOpen = () => d.eval(`return document.querySelector('.colmenu').open`);
+      const openMenu = async () => {
+        const s = await pointOf('.colmenu summary');
+        await d.click(s.x, s.y);
+        await waitFor(isOpen, { message: 'the menu to open' });
+      };
+      await openMenu();
+      // A click inside the menu keeps it open.
+      const inside = await d.eval(`const b = document.querySelector('.colmenu .menu').getBoundingClientRect(); return { x: b.x + 4, y: b.y + 4 }`);
+      await d.click(inside.x, inside.y);
+      await sleep(200);
+      assert.equal(await isOpen(), true, 'a click inside the menu must not close it');
+      // A click anywhere else closes it.
+      const outside = await pointOf('.status');
+      await d.click(outside.x, outside.y);
+      await waitFor(async () => !(await isOpen()), { message: 'an outside click to close the menu' });
+      // Escape closes it too.
+      await openMenu();
+      await d.key('Escape');
+      await waitFor(async () => !(await isOpen()), { message: 'Escape to close the menu' });
+    });
+
+    test('the current-folder link leaves a search and returns to the listing', async () => {
+      await open(fx.home);
+      await d.eval(`document.querySelector('input[aria-label="Search subfolders by name"]').focus()`);
+      await d.type('needle');
+      await d.key('Enter');
+      await waitFor(async () => (await rows()).length === 2, { message: 'the search results' });
+      assert.equal(await d.eval(`return document.querySelector('.crumbs .crumb.current')?.tagName`), 'A', 'while results are shown the current crumb is a link');
+      const p = await pointOf('.crumbs .crumb.current');
+      await d.click(p.x, p.y);
+      await waitFor(async () => JSON.stringify(await rows()) === JSON.stringify(fx.homeRows), { message: 'the folder listing to return' });
+      assert.equal(await d.eval(`return document.querySelector('.crumbs .crumb.current')?.tagName`), 'SPAN');
+      assert.equal(await d.eval(`return document.querySelector('.status').textContent.includes('Clear search')`), false);
+    });
+
+    test('a binary attribute is labelled hex before its digits', async (t) => {
+      if (!fx.xattrsHex) return t.skip('extended attributes are not available here');
+      await open(fx.work);
+      await preview('data.json');
+      const r = await d.eval(`const li = [...document.querySelectorAll('.preview .xattrs li')].find((l) => l.querySelector('.xname')?.textContent.includes('com.example.blob'));
+        if (!li) return null;
+        const tag = li.querySelector('.tag');
+        const pre = li.querySelector('pre.xval');
+        return { tag: tag?.textContent ?? null, value: pre?.textContent ?? null, tagFirst: !!(tag && pre && (tag.compareDocumentPosition(pre) & Node.DOCUMENT_POSITION_FOLLOWING)), trailingNote: !!li.querySelector('.note') };`);
+      assert.ok(r, 'the binary attribute is listed');
+      assert.equal(r.tag, 'hex');
+      assert.equal(r.value, 'de ad be ef 00 01');
+      assert.equal(r.tagFirst, true, 'the label must come before the digits');
+      assert.equal(r.trailingNote, false, 'nothing may follow the digits');
+    });
+
     // ---- attacks from other websites --------------------------------------------
     // The visitor's browser holds a valid fsb session cookie. A malicious page on
     // another site must not be able to use it. The "attacker" is a real second

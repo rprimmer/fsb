@@ -65,6 +65,7 @@
   let sortAsc = $state(true);
   let userSorted = $state(false);
   let filterInput: HTMLInputElement | undefined;
+  let colMenu: HTMLDetailsElement | undefined;
   let searchEl: HTMLInputElement | undefined;
   let list: { reset(): void; scrollToIndex(i: number): void } | undefined;
 
@@ -526,6 +527,10 @@
   function onKey(ev: KeyboardEvent) {
     lastNavAt = Date.now();
     clearPeek();
+    if (ev.key === 'Escape' && colMenu?.open) {
+      colMenu.open = false;
+      return;
+    }
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     const t = ev.target as HTMLElement | null;
     const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
@@ -635,8 +640,12 @@
       lastScrollAt = Date.now();
       clearPeek();
     };
+    const onOutside = (ev: PointerEvent) => {
+      if (colMenu?.open && !colMenu.contains(ev.target as Node)) colMenu.open = false;
+    };
     window.addEventListener('hashchange', onHash);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onOutside, true);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('wheel', onScroll, { passive: true });
     getStatus()
@@ -651,6 +660,7 @@
     return () => {
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onOutside, true);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('wheel', onScroll);
     };
@@ -766,10 +776,22 @@
   <nav class="crumbs" aria-label="Path">
     {#each crumbs as c, i (c.path)}
       {#if i > 0}<span class="sep" aria-hidden="true">/</span>{/if}
-      {#if i === crumbs.length - 1}
+      {#if i === crumbs.length - 1 && !searchActive}
         <span class="crumb current" aria-current="page">{c.label}</span>
       {:else}
-        <a class="crumb" href={pathToHash(c.path)}>{c.label}</a>
+        <!-- While search results are shown, the current folder's crumb is a way back to its listing. -->
+        <a
+          class="crumb"
+          class:current={i === crumbs.length - 1}
+          href={pathToHash(c.path)}
+          title={searchActive && i === crumbs.length - 1 ? 'Leave the search results' : undefined}
+          onclick={(ev) => {
+            if (searchActive && i === crumbs.length - 1) {
+              ev.preventDefault();
+              clearSearch();
+            }
+          }}>{c.label}</a
+        >
       {/if}
     {/each}
     {#if path}
@@ -802,15 +824,10 @@
   <label class="toggle" title="Show the first lines of a file when you hover over it">
     <input type="checkbox" bind:checked={hoverPeek} onchange={() => { savePrefs(); clearPeek(); }} /> Hover previews
   </label>
-  <button
-    class="textbtn"
-    aria-pressed={showPreview}
-    onclick={() => { showPreview = !showPreview; savePrefs(); }}
-    title="Show or hide the preview pane (Space)"
-  >
-    {showPreview ? 'Hide preview' : 'Show preview'}
-  </button>
-  <details class="colmenu">
+  <label class="toggle" title="Show or hide the preview pane (Space)">
+    <input type="checkbox" bind:checked={showPreview} onchange={savePrefs} /> Preview pane
+  </label>
+  <details class="colmenu" bind:this={colMenu}>
     <summary>Columns</summary>
     <div class="menu">
       {#each COLUMN_IDS as id (id)}

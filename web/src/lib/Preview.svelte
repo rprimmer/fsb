@@ -217,12 +217,11 @@
             <ul class="xattrs">
               {#each meta.xattrs as x (x.name)}
                 <li>
-                  <span class="mono xname">{x.name}</span>
+                  <span class="mono xname">{x.name}</span>{#if x.encoding === 'hex' && !x.large}<span class="tag">hex</span>{/if}
                   {#if x.large}
                     <span class="note">({formatSize(x.size ?? 0)}, too large to show)</span>
                   {:else if x.value !== undefined && x.value !== ''}
                     <pre class="xval">{x.value}</pre>
-                    {#if x.encoding === 'hex'}<span class="note">hex</span>{/if}
                   {:else}
                     <span class="note">(empty)</span>
                   {/if}
