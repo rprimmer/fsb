@@ -50,8 +50,8 @@
   import { keyOf } from './lib/keys';
   import { DEFAULT_PANE_WIDTH, MAX_PANE_WIDTH, MIN_PANE_WIDTH, clampPaneWidth, parsePrefs } from './lib/prefs';
   import { firstLines, plural } from './lib/preview';
+  import { sortRows } from './lib/sort';
 
-  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   const LAYOUT_KEY = 'fsb.columns.v1';
   const PREFS_KEY = 'fsb.prefs.v1';
 
@@ -82,10 +82,11 @@
   let showPreview = $state(initial.preview);
   let hoverPeek = $state(initial.hover);
   let previewWidth = $state(initial.previewWidth);
+  let foldersFirst = $state(initial.foldersFirst);
 
   function savePrefs() {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek, previewWidth }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek, previewWidth, foldersFirst }));
     } catch {
       /* the choice just will not persist */
     }
@@ -276,27 +277,7 @@
     );
     // Search results arrive shallowest-first; keep that order until the user sorts.
     if (searchActive && !userSorted) return rows;
-    const dir = sortAsc ? 1 : -1;
-    rows.sort((a, b) => {
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1; // folders first
-      let c = 0;
-      switch (sortKey) {
-        case 'name':
-          c = collator.compare(a.rel ?? a.name, b.rel ?? b.name);
-          break;
-        case 'size':
-          c = a.size - b.size;
-          break;
-        case 'modTime':
-          c = Date.parse(a.modTime) - Date.parse(b.modTime);
-          break;
-        case 'kind':
-          c = collator.compare(kindOf(a), kindOf(b));
-          break;
-      }
-      return (c || collator.compare(a.name, b.name)) * dir;
-    });
-    return rows;
+    return sortRows(rows, { key: sortKey, asc: sortAsc, foldersFirst });
   });
 
   const selectedIdx = $derived(selectedKey ? visible.findIndex((r) => rowPath(r) === selectedKey) : -1);
@@ -854,6 +835,9 @@
     spellcheck="false"
   />
   <label class="toggle"><input type="checkbox" bind:checked={showHidden} /> Hidden files</label>
+  <label class="toggle" title="List folders before files, whichever column you sort by">
+    <input type="checkbox" bind:checked={foldersFirst} onchange={savePrefs} /> Folders first
+  </label>
   <label class="toggle" title="Show the first lines of a file when you hover over it">
     <input type="checkbox" bind:checked={hoverPeek} onchange={() => { savePrefs(); clearPeek(); }} /> Hover previews
   </label>

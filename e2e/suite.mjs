@@ -552,6 +552,36 @@ export function defineSuite({ label, launch }) {
       assert.equal(await saved(), 380);
     });
 
+
+    test('sorts like eza by default, and Folders first is an option that applies to every column', async () => {
+      await open(fx.work);
+      // Show dotfiles so the leading-dot rule is visible.
+      await d.eval(`document.querySelector('.toggle input').click()`);
+      await waitFor(async () => (await rows()).includes('.envrc'), { message: 'dotfiles to appear' });
+      // Case-insensitive, dotfiles first, folders NOT grouped (src/ sits among the files by name).
+      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'data.json', 'disguised.png', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
+
+      const foldersFirst = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Folders first')).querySelector('input')`;
+      const box = await d.eval(`const b = ${foldersFirst}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);
+      const sizeHeader = async () => { const p = await pointOf('.head [data-col="size"] button'); await d.click(p.x, p.y); };
+
+      // Sorting by size: a folder counts as smaller than any file, so it leads ascending and trails descending.
+      await sizeHeader();
+      await waitFor(async () => (await rows())[0] === 'src/', { message: 'src/ first when sorting by size ascending' });
+      await sizeHeader();
+      await waitFor(async () => (await rows()).at(-1) === 'src/', { message: 'src/ last when sorting by size descending' });
+
+      // Folders first keeps folders in front for BOTH directions.
+      await d.click(box.x, box.y);
+      await waitFor(async () => (await rows())[0] === 'src/', { message: 'src/ first with Folders first (descending)' });
+      await sizeHeader(); // back to ascending
+      await waitFor(async () => (await d.eval(`return document.querySelector('.head [data-col="size"]').getAttribute('aria-sort')`)) === 'ascending');
+      assert.equal((await rows())[0], 'src/');
+
+      // The choice is remembered.
+      assert.equal(await d.eval(`return JSON.parse(localStorage.getItem('fsb.prefs.v1')).foldersFirst`), true);
+    });
+
     // ---- attacks from other websites --------------------------------------------
     // The visitor's browser holds a valid fsb session cookie. A malicious page on
     // another site must not be able to use it. The "attacker" is a real second
