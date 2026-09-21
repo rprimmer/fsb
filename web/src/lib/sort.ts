@@ -23,6 +23,14 @@ const nameOf = (e: Row) => e.rel ?? e.name;
 /** A folder has no size to show, so it sorts as smaller than any file. */
 const sizeOf = (e: Row) => (e.isDir ? -1 : e.size);
 
+/** A time that cannot be read sorts as the oldest, so the order stays total. */
+const timeOf = (e: Row) => {
+  const t = Date.parse(e.modTime);
+  return Number.isNaN(t) ? -Infinity : t;
+};
+
+const cmp = (a: number, b: number) => (a < b ? -1 : a > b ? 1 : 0);
+
 export function compareRows(a: Row, b: Row, o: SortOptions): number {
   if (o.foldersFirst && a.isDir !== b.isDir) return a.isDir ? -1 : 1;
   let c = 0;
@@ -31,16 +39,15 @@ export function compareRows(a: Row, b: Row, o: SortOptions): number {
       c = names.compare(nameOf(a), nameOf(b));
       break;
     case 'size':
-      c = sizeOf(a) - sizeOf(b);
+      c = cmp(sizeOf(a), sizeOf(b));
       break;
     case 'modTime':
-      c = Date.parse(a.modTime) - Date.parse(b.modTime);
+      c = cmp(timeOf(a), timeOf(b));
       break;
     case 'kind':
       c = names.compare(kindOf(a), kindOf(b));
       break;
   }
-  if (Number.isNaN(c)) c = 0;
   // Ties fall back to the name (then to the exact name), so the order is stable and total.
   if (c === 0) c = names.compare(nameOf(a), nameOf(b)) || exact.compare(nameOf(a), nameOf(b));
   return o.asc ? c : -c;

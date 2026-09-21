@@ -1,4 +1,4 @@
-// Name matching for the filter box. Pure, so it can be tested without a browser.
+// Name matching for the filter box (and shared with the folding used elsewhere). Pure, so it can be tested without a browser.
 
 /**
  * Whether name contains query. An empty query matches everything. Both sides
@@ -11,5 +11,16 @@ export function matchesName(name: string, query: string, matchCase: boolean): bo
   const q = query.trim().normalize('NFC');
   if (!q) return true;
   const n = name.normalize('NFC');
-  return matchCase ? n.includes(q) : n.toLowerCase().includes(q.toLowerCase());
+  return matchCase ? n.includes(q) : fold(n).includes(fold(q));
+}
+
+/**
+ * Case folding as APFS (and so the server's search) does it: full folding, in
+ * which "ß" and "ss", "ſ" and "s", the Kelvin sign and "k", and ligatures such
+ * as "ﬁ" and "fi" are equal. Lower-casing, upper-casing (which expands "ß" and the
+ * ligatures) and lower-casing again folds the result, which agrees with full case folding on
+ * every alias measured on APFS (see the tests).
+ */
+export function fold(s: string): string {
+  return s.normalize('NFC').toLowerCase().toUpperCase().toLowerCase().normalize('NFC');
 }

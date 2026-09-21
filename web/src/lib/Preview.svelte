@@ -61,6 +61,11 @@
   let archive = $state<ArchiveListing | null>(null);
   let error = $state('');
 
+  // The controller of the current selection. Everything started for it, including
+  // a fallback after a failed image, is cancelled when the selection changes, so a
+  // late response can never be shown for a different file.
+  let current: AbortController | null = null;
+
   // Load meta and content for the selected entry. A short debounce keeps
   // holding an arrow key from firing a request per row.
   $effect(() => {
@@ -76,6 +81,7 @@
     }
     mode = 'loading';
     const ctrl = new AbortController();
+    current = ctrl;
     const timer = setTimeout(() => {
       getMeta(p, true, ctrl.signal)
         .then((m) => (meta = m))
@@ -141,9 +147,9 @@
   // The server refused to serve this as an image (not really a PNG/JPEG/GIF/
   // WebP): fall back to treating it as an ordinary file.
   function imageFailed() {
-    if (!entry) return;
+    if (!entry || !current || current.signal.aborted) return;
     mode = 'loading';
-    loadHead(fullPath, new AbortController());
+    loadHead(fullPath, current);
   }
 
   function describe(err: unknown): string {
