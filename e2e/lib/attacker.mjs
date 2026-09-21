@@ -10,7 +10,9 @@ import { createServer } from 'node:http';
  */
 export function startAttacker() {
   return new Promise((resolve) => {
+    const cookies = []; // every Cookie header this server has been sent
     const srv = createServer((req, res) => {
+      cookies.push(req.headers.cookie ?? '');
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.end('<!doctype html><title>attacker</title><body>attacker page</body>');
     });
@@ -18,6 +20,10 @@ export function startAttacker() {
       const { port } = srv.address();
       resolve({
         url: `http://localhost:${port}/`,
+        // The same server at fsb's own host but another port: what another local
+        // web server looks like to a browser that holds an fsb session cookie.
+        sameHostUrl: `http://127.0.0.1:${port}/`,
+        seenCookies: () => [...cookies],
         close: () => new Promise((r) => srv.close(r)),
       });
     });

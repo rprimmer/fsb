@@ -165,3 +165,12 @@ test('law: breadcrumbs split by components when a folded spelling has another le
   assert.deepEqual(c.map((x) => x.label), ['/Users/Straße', 'a', 'b']);
   assert.deepEqual(crumbsFor('/x/y', ['/']).map((x) => x.label), ['/', 'x', 'y']);
 });
+
+// Law: every request is relative to the prefix the page was loaded from, so the
+// session cookie (scoped to that prefix) accompanies it.
+test('law: apiBase keeps the launch prefix', async () => {
+  const { apiBase } = await import('./base.ts');
+  assert.equal(apiBase('/abc_DEF-123/'), '/abc_DEF-123/');
+  assert.equal(apiBase('/abc_DEF-123/index.html'), '/abc_DEF-123/');
+  assert.equal(apiBase('/'), '/');
+});

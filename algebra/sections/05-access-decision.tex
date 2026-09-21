@@ -117,6 +117,19 @@ does not have this property, because a folded spelling can be longer or shorter.
 \Tests{guard/foldalias\_test.go::TestRootOfSlashHonoursDenyRulesThroughFoldedFirmlinkSpellings; guard/firmlink\_darwin\_test.go}
 \end{law}
 
+\begin{law}[The session is scoped to a random path]
+\label{law:cookie-path}
+Browsers scope a cookie by host and never by port, so a cookie for
+\code{127.0.0.1} would accompany every request to every other web server on that
+address.  All URLs of \texttt{fsb} therefore live under a random 128-bit prefix
+$/\pi/$ fixed at launch; the cookie is set with \code{Path=/$\pi$/}; and a
+request whose path is not under the prefix is refused exactly like an
+unauthenticated one, whatever cookie it carries.  A cookie that is sent only for
+paths under $/\pi/$ is never sent to another server, which has no such path.
+The frontend forms every request relative to the page's own directory.
+\Tests{httpguard/httpguard\_test.go::TestOnlyURLsUnderThePrefixExist, TestSessionCookieIsScopedToThePrefix; e2e ``the session cookie is scoped to fsb's own prefix'' (fails if the path is widened); web/src/lib/laws.test.ts::apiBase}
+\end{law}
+
 \begin{law}[Canonical form is stable]
 \label{law:canon}
 $\Canon(\Canon(p))=\Canon(p)$.
@@ -143,13 +156,6 @@ race and refused.
 \begin{boundary}[Response timing]
 A denied path can be answered slightly faster than a missing one.  Status and
 body are identical; timing is not equalized.
-\end{boundary}
-
-\begin{boundary}[Cookie scope]
-Cookies are scoped by host and not by port.  The session cookie is therefore
-also sent to any other web server on the loopback address that the same browser
-visits.  It cannot be read by scripts (\code{HttpOnly}) or sent cross-site
-(\code{SameSite=Strict}), but a server that receives it could replay it.
 \end{boundary}
 
 \begin{boundary}[Other processes]

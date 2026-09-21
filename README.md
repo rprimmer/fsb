@@ -44,6 +44,7 @@ go build -o fsb ./cmd/fsb
 - **Loopback only.** Binds `127.0.0.1` on a random port; not configurable.
 - **Rebinding and cross-site defenses.** Requests must carry an allowed `Host`, must not have a foreign `Origin`/`Referer`, and must not be cross-site per `Sec-Fetch-Site`.
 - **Single-use launch token.** The URL printed at startup carries a token that is exchanged once for an `HttpOnly`, `SameSite=Strict` session cookie. The token is never logged.
+- **Cookie scoped to a random path.** Browsers scope cookies by host and never by port, so a plain cookie would be sent to every other web server on `127.0.0.1` that you visit. fsb therefore serves everything under a random per-launch prefix (`http://127.0.0.1:PORT/<random>/`) and sets the cookie's `Path` to it: the browser sends it only for URLs under that prefix, which no other server has. Any URL outside the prefix is refused. Open the printed URL (bookmarks do not survive a restart).
 - **Read-only by construction.** Only `GET`/`HEAD` are served, and the binary contains no write code.
 - **One chokepoint.** Every filesystem access goes through `internal/guard`. A test fails the build if HTTP-facing packages import `os`, `io/fs`, `syscall` or `path/filepath`.
 - **Symlinks and races.** The file is opened first, then its real path is resolved and verified to be the same file before any bytes are served. Symlinks that lead outside the roots or into denied paths are refused.
@@ -67,13 +68,12 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 ### Known limitations
 
 - Rules are path-based. A hard link to a credential file (in the `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains or browser-profile folders of any home directory) is recognised by identity and refused, but a hard link to some other denied file, such as a `.env` or `.pem` elsewhere, is not detected.
-- The session cookie is scoped to the host, not the port, so your browser also sends it to any other web server you visit on `127.0.0.1` (or a forwarded port). Use a separate browser profile for fsb if you run untrusted local web servers.
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 
 ## Algebraic specification
 
-[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found eleven defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found twelve defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
 
 ## Development
 

@@ -166,7 +166,7 @@ export function defineSuite({ label, launch }) {
       ];
       const r = await evalJSON(`
         const out = [];
-        const get = async (ep, p) => { const res = await fetch('/api/' + ep + '?path=' + encodeURIComponent(p)); return { status: res.status, body: await res.text() }; };
+        const get = async (ep, p) => { const res = await fetch(location.pathname + 'api/' + ep + '?path=' + encodeURIComponent(p)); return { status: res.status, body: await res.text() }; };
         for (const ep of ['list', 'file', 'head', 'meta', 'preview']) {
           const missing = await get(ep, ${JSON.stringify(fx.work + '/does-not-exist')});
           for (const p of ${JSON.stringify(denied)}) {
@@ -274,7 +274,7 @@ export function defineSuite({ label, launch }) {
       await selectByKeys('doc.pdf');
       if (!(await previewOpen())) await d.key(' ');
       const src = await waitFor(() => d.eval(`return document.querySelector('.preview iframe.pdfframe')?.getAttribute('src') ?? null`), { message: 'the PDF frame' });
-      assert.match(src, /^\/api\/pdf\?path=/);
+      assert.match(src, /\/api\/pdf\?path=/);
       const h = await d.eval(`const r = await fetch(${JSON.stringify(src)}); return { type: r.headers.get('content-type'), xfo: r.headers.get('x-frame-options'), csp: r.headers.get('content-security-policy'), nosniff: r.headers.get('x-content-type-options'), head: (await r.text()).slice(0, 5) };`);
       assert.deepEqual(h, { type: 'application/pdf', xfo: 'SAMEORIGIN', csp: "frame-ancestors 'self'; script-src 'none'", nosniff: 'nosniff', head: '%PDF-' });
       assert.equal(await d.eval(`return document.querySelector('.preview iframe.pdfframe').hasAttribute('sandbox')`), false);
@@ -283,7 +283,7 @@ export function defineSuite({ label, launch }) {
       const fake = await preview('fake.pdf');
       assert.equal(await d.eval(`return !!document.querySelector('.preview iframe')`), false);
       assert.match(fake.text, /alert\(1\)/);
-      const r = await d.eval(`return (await fetch('/api/pdf?path=' + encodeURIComponent(${JSON.stringify(fx.work + '/fake.pdf')}))).status`);
+      const r = await d.eval(`return (await fetch(location.pathname + 'api/pdf?path=' + encodeURIComponent(${JSON.stringify(fx.work + '/fake.pdf')}))).status`);
       assert.equal(r, 415);
       // The app itself still cannot be framed.
       assert.equal(await d.eval(`return (await fetch('/')).headers.get('x-frame-options')`), 'DENY');
@@ -311,7 +311,7 @@ export function defineSuite({ label, launch }) {
         return { sandbox: f.getAttribute('sandbox'), reach };`);
       assert.equal(f.sandbox, 'allow-scripts', 'no allow-same-origin');
       assert.equal(f.reach, 'blocked', 'the app cannot reach into the frame, nor the frame into the app');
-      const h = await d.eval(`const r = await fetch('/api/mdframe'); return { csp: r.headers.get('content-security-policy'), xfo: r.headers.get('x-frame-options') };`);
+      const h = await d.eval(`const r = await fetch(location.pathname + 'api/mdframe'); return { csp: r.headers.get('content-security-policy'), xfo: r.headers.get('x-frame-options') };`);
       assert.match(h.csp, /default-src 'none'/);
       assert.doesNotMatch(h.csp, /unsafe/);
       assert.equal(h.xfo, 'SAMEORIGIN');
@@ -358,7 +358,7 @@ export function defineSuite({ label, launch }) {
         { message: 'the image to load' },
       );
       assert.deepEqual(img, { w: 60, h: 40 });
-      const headers = await d.eval(`const r = await fetch('/api/preview?path=' + encodeURIComponent(${JSON.stringify(fx.home + '/pics/gradient.png')}));
+      const headers = await d.eval(`const r = await fetch(location.pathname + 'api/preview?path=' + encodeURIComponent(${JSON.stringify(fx.home + '/pics/gradient.png')}));
         return { type: r.headers.get('content-type'), csp: r.headers.get('content-security-policy'), nosniff: r.headers.get('x-content-type-options'), disposition: r.headers.get('content-disposition') };`);
       assert.equal(headers.type, 'image/png');
       assert.match(headers.csp, /sandbox/);
@@ -396,7 +396,7 @@ export function defineSuite({ label, launch }) {
         assert.equal(await peek(), null, `no bubble expected for ${name}`);
       }
       // A denied file cannot be listed, so it can never be hovered; check the request itself.
-      const denied = await d.eval(`return (await fetch('/api/head?path=' + encodeURIComponent(${JSON.stringify(fx.work + '/.env')}))).status`);
+      const denied = await d.eval(`return (await fetch(location.pathname + 'api/head?path=' + encodeURIComponent(${JSON.stringify(fx.work + '/.env')}))).status`);
       assert.equal(denied, 404);
     });
 
@@ -782,7 +782,7 @@ export function defineSuite({ label, launch }) {
       await d.eval(`setTimeout(() => { location.href = ${JSON.stringify(base + '/api/list?path=' + encodeURIComponent(fx.home))}; }, 0); return true;`);
       const body = await waitFor(async () => {
         const here = await d.eval(`return location.origin`);
-        return here === base ? d.eval(`return document.body.innerText`) : null;
+        return here === new URL(base).origin ? d.eval(`return document.body.innerText`) : null;
       }, { message: 'the cross-site navigation to land' });
       assert.match(body, /forbidden/i);
       assert.doesNotMatch(body, /"entries"|"path"|pics/);
@@ -791,11 +791,28 @@ export function defineSuite({ label, launch }) {
       assert.match(await d.eval(`return document.body.innerText`), /readOnly/);
     });
 
+    test('the session cookie is scoped to fsb\'s own prefix, so other local servers never see it', async () => {
+      await open(fx.home); // the browser now holds the session cookie for 127.0.0.1
+      assert.equal(await d.eval(`return document.cookie`), '', 'HttpOnly: not readable by scripts');
+      // Another web server on the same host, another port.
+      await d.goto(attacker.sameHostUrl);
+      await d.eval(`await fetch('/probe', { credentials: 'include' }); await fetch('/x/y/', { credentials: 'include' }); return true`);
+      const seen = attacker.seenCookies();
+      assert.ok(seen.length >= 2, 'the other server was contacted');
+      assert.ok(seen.every((c) => !c.includes('fsb_session')), `the session cookie leaked to another server: ${JSON.stringify(seen)}`);
+      // And fsb itself refuses any URL outside its prefix, even with the session.
+      await open(fx.home);
+      const outside = await d.eval(`return (await fetch('/api/status')).status`);
+      assert.equal(outside, 403, 'a URL outside the prefix must be refused');
+      const inside = await d.eval(`return (await fetch(location.pathname + 'api/status')).status`);
+      assert.equal(inside, 200);
+    });
+
     test('a hostile hostname pointing at fsb is refused (DNS rebinding)', async (t) => {
       if (!d.caps.hostMapping) return t.skip('this driver cannot map extra hostnames to loopback');
       const port = new URL(base).port;
       for (const host of ['evil.test', '127.0.0.1.evil.test', 'localhost.evil.test']) {
-        await d.goto(`http://${host}:${port}/api/status`);
+        await d.goto(`http://${host}:${port}${new URL(base).pathname}/api/status`);
         const body = await d.eval(`return document.body.innerText`);
         assert.match(body, /forbidden/i, `${host}: ${body.slice(0, 80)}`);
         assert.doesNotMatch(body, /readOnly|roots/);
@@ -822,7 +839,7 @@ export function defineSuite({ label, launch }) {
       // The only expected resource errors are the intentional 404s/415s from denied, missing and disguised
       // paths, and requests from the simulated attacker page that fsb's own headers block.
       for (const p of problems.filter((x) => /Failed to load resource/.test(x))) {
-        assert.match(p, /status of (404|415|403)|ERR_BLOCKED_BY_RESPONSE\.NotSameOrigin|ERR_FAILED http:\/\/127\.0\.0\.1:\d+\/api\/status/, `unexpected resource error: ${p}`);
+        assert.match(p, /status of (404|415|403)|ERR_BLOCKED_BY_RESPONSE\.NotSameOrigin|ERR_FAILED http:\/\/127\.0\.0\.1:\d+\/[\w-]+\/api\/status/, `unexpected resource error: ${p}`);
       }
     });
 

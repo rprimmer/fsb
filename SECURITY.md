@@ -23,7 +23,7 @@ secrets you have excluded stay excluded.
 
 | Guarantee | Enforced by |
 |---|---|
-| Reachable only on `127.0.0.1` by your session | Fixed loopback bind; exact `Host` allowlist; strict `Origin`/`Referer`/`Sec-Fetch-Site` checks; a single-use launch token exchanged for an `HttpOnly`, `SameSite=Strict` cookie; `Cross-Origin-Resource-Policy`, `X-Frame-Options` and CSP headers |
+| Reachable only on `127.0.0.1` by your session | Fixed loopback bind; exact `Host` allowlist; strict `Origin`/`Referer`/`Sec-Fetch-Site` checks; a single-use launch token exchanged for an `HttpOnly`, `SameSite=Strict` cookie whose `Path` is a random per-launch prefix under which everything is served (browsers cannot scope a cookie by port, so this is what keeps it from other local servers); `Cross-Origin-Resource-Policy`, `X-Frame-Options` and CSP headers |
 | Read-only | Only `GET`/`HEAD` are served; the binary contains no write code |
 | Deny rules block every access | One chokepoint (`internal/guard`) used by list, download, preview, head, metadata and search; rules are matched against the *real* location, after symlinks and aliases are resolved, and again on the file descriptor that was actually opened |
 | A denied path looks like a missing one | Identical 404 status and body, including for unreadable files inside denied folders |
@@ -37,7 +37,6 @@ Details are in [PRD/PRD.md](PRD/PRD.md), sections 8 and 9.
 ## Known limitations
 
 - **Hard links.** Rules are path-based. A hard link to a credential file in a known credential location (any home's `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains, browser profiles) is recognised by file identity and refused. A hard link to any other denied file, such as a `.env` or `.pem` placed elsewhere, is not detected.
-- **The session cookie is not port-scoped.** Browsers scope cookies by host, so the `HttpOnly` session cookie is also sent to any other web server on `127.0.0.1` that the same browser visits, and a server that sees it could replay it. Use a separate browser profile for fsb if you run local web servers you do not trust.
 - **Broad patterns have costs.** `*.key` also matches Keynote files, `.env` also matches a folder called `.env`, and `.env.*` also matches `.env.example`. You can remove a pattern from your deny file; fsb then warns at startup and in the UI.
 - **`--root /` widens what is exposed.** Deny rules still apply, but only to what they name.
 - **Explicit downloads of cloud-only files.** Clicking a file name downloads it, and for an iCloud file that is not stored locally that starts the download. Hover, preview and metadata never do.

@@ -163,7 +163,7 @@ The exact core list is versioned, so additions in later releases are called out 
 - SR-1. Bind to `127.0.0.1` only. No configuration option exposes another interface.
 - SR-2. Validate the `Host` header against `127.0.0.1:PORT` / `localhost:PORT`; reject anything else (DNS rebinding defense).
 - SR-3. Reject requests with an `Origin` or `Referer` from a different origin; no permissive CORS.
-- SR-4. Random per-launch token (at least 128 bits), delivered in the launch URL and then stored in an `HttpOnly`, `SameSite=Strict` cookie; API requests without it are rejected.
+- SR-4. Random per-launch token (at least 128 bits), delivered in the launch URL and then stored in an `HttpOnly`, `SameSite=Strict` cookie; API requests without it are rejected. Because browsers scope cookies by host and never by port, everything is served under a random per-launch path prefix (at least 128 bits) and the cookie's `Path` is that prefix, so the cookie is never sent to other web servers on the same address; URLs outside the prefix are refused like unauthenticated requests.
 - SR-5. Read-only by construction: only `GET`/`HEAD`; no write code in the binary.
 - SR-6. Serve user files with `X-Content-Type-Options: nosniff`, a restrictive CSP on the app shell, and rendered/untrusted content (HTML, SVG, Markdown) sandboxed so it cannot reach the API with the user's token.
 - SR-7. No telemetry, no outbound network calls, no auto-update.

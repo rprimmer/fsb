@@ -53,6 +53,10 @@ func New(cfg Config) (*Server, error) {
 // LaunchToken is the single-use token for the launch URL.
 func (s *Server) LaunchToken() string { return s.auth.LaunchToken() }
 
+// LaunchPath is the URL path of the application, "/<random prefix>/". The
+// launch URL is this path with "?token=" and LaunchToken.
+func (s *Server) LaunchPath() string { return "/" + s.auth.Prefix() + "/" }
+
 // Handler returns the full handler stack for a server listening on port.
 func (s *Server) Handler(port int) http.Handler {
 	mux := http.NewServeMux()

@@ -78,7 +78,7 @@ func newEnv(t testing.TB, debug bool, coreMissing []string) *env {
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}
 	// Exchange the launch token for the session cookie, as a browser would.
-	resp, err := client.Get(ts.URL + "/?token=" + srv.LaunchToken())
+	resp, err := client.Get(ts.URL + srv.LaunchPath() + "?token=" + srv.LaunchToken())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func newEnv(t testing.TB, debug bool, coreMissing []string) *env {
 	if resp.StatusCode != 200 {
 		t.Fatalf("login status = %d", resp.StatusCode)
 	}
-	return &env{home: home, base: ts.URL, client: client, ts: ts}
+	return &env{home: home, base: ts.URL + strings.TrimSuffix(srv.LaunchPath(), "/"), client: client, ts: ts}
 }
 
 func (e *env) get(t *testing.T, endpoint, path string) (int, string) {

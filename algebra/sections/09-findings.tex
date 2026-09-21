@@ -3,8 +3,8 @@
 
 Stating the laws and then checking them found six defects (1--6), and a
 subsequent audit of every place that compares names or paths, and of the
-environment assumptions behind the rules, found five more (7--11).  Each was
-reproduced by a failing test before it was fixed.  Findings 1, 7, 8, 10 and 11 are
+environment assumptions behind the rules, found six more (7--12).  Each was
+reproduced by a failing test before it was fixed.  Findings 1, 7, 8, 10, 11 and 12 are
 security defects; the rest are consistency defects that fail closed
 or are cosmetic, but each is a place where two parts of the program disagreed.
 
@@ -79,6 +79,13 @@ had been recorded only as a limitation.
 & \ref{law:absent}
 & For the credential locations of every home, a file with several names is
 compared by identity with the files there, in \code{Open} and in listings. \\
+12 & \textbf{The session cookie followed the host, not the port.}  Cookies are
+scoped by host, so the cookie was also sent to every other web server on
+\code{127.0.0.1} that the same browser visited, which could replay it.  It had
+been recorded as a limitation.
+& \ref{law:cookie-path}
+& Everything is served under a random per-launch prefix and the cookie's path is
+that prefix; requests outside it are refused. \\
 \bottomrule
 \end{longtable}
 

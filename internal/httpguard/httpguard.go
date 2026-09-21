@@ -22,9 +22,16 @@ const CookieName = "fsb_session"
 // Auth holds the per-launch secrets. The launch token appears once, in the URL
 // printed at startup, and can be exchanged exactly once for the session cookie,
 // so a copy left in shell or browser history is useless.
+//
+// Everything is served under a random per-launch path prefix, "/<prefix>/", and
+// the session cookie is set with that path. Browsers scope cookies by host and
+// never by port, so without this the cookie would be sent to every other web
+// server on 127.0.0.1 that the same browser visits; with it, the browser sends
+// the cookie only for URLs under the prefix, which no other server has.
 type Auth struct {
 	launch  string
 	session string
+	prefix  string
 	used    atomic.Bool
 }
 
@@ -38,8 +45,16 @@ func NewAuth() (*Auth, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Auth{launch: l, session: s}, nil
+	pb := make([]byte, 16)
+	if _, err := rand.Read(pb); err != nil {
+		return nil, fmt.Errorf("generating path prefix: %w", err)
+	}
+	return &Auth{launch: l, session: s, prefix: base64.RawURLEncoding.EncodeToString(pb)}, nil
 }
+
+// Prefix returns the random path prefix, without slashes. The application is
+// served at "/<prefix>/", and the launch URL is "/<prefix>/?token=...".
+func (a *Auth) Prefix() string { return a.prefix }
 
 // LaunchToken returns the single-use token for the launch URL.
 func (a *Auth) LaunchToken() string { return a.launch }
@@ -78,8 +93,19 @@ func Middleware(a *Auth, port int) func(http.Handler) http.Handler {
 				return
 			}
 
-			if r.URL.Path == "/" && r.URL.Query().Has("token") {
-				exchange(w, r, a)
+			// Only URLs under the prefix exist; anything else is refused exactly
+			// like an unauthenticated request.
+			rest, ok := strings.CutPrefix(r.URL.Path, "/"+a.prefix+"/")
+			if !ok {
+				forbid(w)
+				return
+			}
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/" + rest
+			r2.URL.RawPath = ""
+
+			if r2.URL.Path == "/" && r2.URL.Query().Has("token") {
+				exchange(w, r2, a)
 				return
 			}
 
@@ -88,7 +114,7 @@ func Middleware(a *Auth, port int) func(http.Handler) http.Handler {
 				forbid(w)
 				return
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r2)
 		})
 	}
 }
@@ -99,11 +125,11 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 		http.SetCookie(w, &http.Cookie{
 			Name:     CookieName,
 			Value:    a.session,
-			Path:     "/",
+			Path:     "/" + a.prefix + "/",
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		})
-		w.Header().Set("Location", "/") // drop the token from the address bar
+		w.Header().Set("Location", "/"+a.prefix+"/") // drop the token from the address bar
 		w.WriteHeader(http.StatusSeeOther)
 		return
 	}

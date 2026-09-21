@@ -48,7 +48,13 @@ func (hn *harness) login(t *testing.T) {
 	}
 }
 
+// do sends a request for target ("/x?y" is served at "/<prefix>/x?y"); doRaw
+// sends the target exactly as given.
 func (hn *harness) do(method, target string, hdr map[string]string) *httptest.ResponseRecorder {
+	return hn.doRaw(method, "/"+hn.auth.Prefix()+target, hdr)
+}
+
+func (hn *harness) doRaw(method, target string, hdr map[string]string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, target, nil)
 	r.Host = "127.0.0.1:4242"
 	for k, v := range hdr {
@@ -84,11 +90,11 @@ func TestTokenEntropyAndUniqueness(t *testing.T) {
 func TestExchangeSetsHardenedCookieAndRedirects(t *testing.T) {
 	hn := newHarness(t)
 	rec := hn.do("GET", "/?token="+hn.auth.LaunchToken(), nil)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/"+hn.auth.Prefix()+"/" {
 		t.Fatalf("status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	c := rec.Result().Cookies()[0]
-	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/" {
+	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/"+hn.auth.Prefix()+"/" {
 		t.Fatalf("cookie not hardened: %+v", c)
 	}
 	if c.Value == hn.auth.LaunchToken() {
@@ -271,5 +277,40 @@ func TestAccessLogNeverContainsTheToken(t *testing.T) {
 	}
 	if strings.Contains(out, a.LaunchToken()) || strings.Contains(out, a.session) || strings.Contains(out, "token") {
 		t.Fatalf("log leaks the token: %q", out)
+	}
+}
+
+// Everything lives under the random prefix; a request for any other path is
+// refused like an unauthenticated one, even with a valid session.
+func TestOnlyURLsUnderThePrefixExist(t *testing.T) {
+	hn := newHarness(t)
+	hn.login(t)
+	pfx := "/" + hn.auth.Prefix()
+	for _, target := range []string{"/", "/api/list", "/?token=" + hn.auth.LaunchToken(), pfx, pfx + "x/", "/x" + pfx + "/", "/" + hn.auth.Prefix()[:10] + "/"} {
+		if rec := hn.doRaw("GET", target, map[string]string{"Cookie": CookieName + "=" + hn.cookie.Value}); rec.Code != http.StatusForbidden {
+			t.Errorf("%q: status = %d, want 403", target, rec.Code)
+		}
+	}
+	if rec := hn.do("GET", "/api/list", map[string]string{"Cookie": CookieName + "=" + hn.cookie.Value}); rec.Code != http.StatusOK {
+		t.Errorf("inside the prefix: status = %d", rec.Code)
+	}
+}
+
+// The cookie is scoped to the prefix, so a browser sends it to no other path on
+// this host, which is what stops it reaching other servers on other ports.
+func TestSessionCookieIsScopedToThePrefix(t *testing.T) {
+	hn := newHarness(t)
+	hn.login(t)
+	if want := "/" + hn.auth.Prefix() + "/"; hn.cookie.Path != want {
+		t.Errorf("cookie Path = %q, want %q", hn.cookie.Path, want)
+	}
+	if !hn.cookie.HttpOnly || hn.cookie.SameSite != http.SameSiteStrictMode {
+		t.Error("cookie must stay HttpOnly and SameSite=Strict")
+	}
+	if a, _ := NewAuth(); a.Prefix() == hn.auth.Prefix() || len(a.Prefix()) < 21 {
+		t.Errorf("the prefix must be random and at least 128 bits: %q", a.Prefix())
+	}
+	if rec := hn.do("GET", "/?token="+hn.auth.LaunchToken(), nil); rec.Header().Get("Location") != "" && rec.Header().Get("Location") != "/"+hn.auth.Prefix()+"/" {
+		t.Errorf("redirect goes to %q", rec.Header().Get("Location"))
 	}
 }

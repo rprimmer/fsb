@@ -26,7 +26,7 @@
 
   import DOMPurify from 'dompurify';
 
-  import { ApiError, getArchive, getHead, getMeta, pdfURL, previewURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
+  import { ApiError, apiPath, getArchive, getHead, getMeta, pdfURL, previewURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
   import { basename, dirname, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
   import { fillImages, renderMarkdown } from './markdown';
   import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, parseDelimited, plural, prettyJSON } from './preview';
@@ -327,7 +327,7 @@
           <iframe
             class="mdframe"
             title="Rendered Markdown"
-            src="/api/mdframe"
+            src={apiPath('api/mdframe')}
             sandbox="allow-scripts"
             referrerpolicy="no-referrer"
             bind:this={frame}

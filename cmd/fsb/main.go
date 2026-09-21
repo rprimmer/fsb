@@ -130,7 +130,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	launchURL := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", port, srv.LaunchToken())
+	launchURL := fmt.Sprintf("http://127.0.0.1:%d%s?token=%s", port, srv.LaunchPath(), srv.LaunchToken())
 	fmt.Fprintf(stdout, "fsb: serving %s read-only on http://127.0.0.1:%d\n", strings.Join(g.Roots(), ", "), port)
 	if len(coreMissing) > 0 {
 		fmt.Fprintf(stderr, "fsb: warning: core deny rule(s) disabled: %s; these paths are browsable.\n", strings.Join(coreMissing, ", "))

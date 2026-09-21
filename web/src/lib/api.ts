@@ -1,3 +1,7 @@
+import { apiPath } from './base.ts';
+
+export { apiPath };
+
 export interface Entry {
   name: string;
   isDir: boolean;
@@ -88,35 +92,35 @@ async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
 const q = (path: string) => encodeURIComponent(path);
 
 export function getStatus(): Promise<Status> {
-  return getJSON('/api/status');
+  return getJSON(apiPath('api/status'));
 }
 
 /** A bounded, classified look at the start of a file. Binary and cloud-only files never return content. */
 export function getHead(path: string, bytes: number, signal?: AbortSignal): Promise<Head> {
-  return getJSON(`/api/head?path=${q(path)}&bytes=${bytes}`, signal);
+  return getJSON(apiPath(`api/head?path=${q(path)}&bytes=${bytes}`), signal);
 }
 
 /** The table of contents of a zip, tar or tar.gz file. Nothing is extracted. */
 export function getArchive(path: string, signal?: AbortSignal): Promise<ArchiveListing> {
-  return getJSON(`/api/archive?path=${q(path)}`, signal);
+  return getJSON(apiPath(`api/archive?path=${q(path)}`), signal);
 }
 
 /** Details and extended attributes. With values=false only attribute names are returned. */
 export function getMeta(path: string, values: boolean, signal?: AbortSignal): Promise<Meta> {
-  return getJSON(`/api/meta?path=${q(path)}${values ? '' : '&values=0'}`, signal);
+  return getJSON(apiPath(`api/meta?path=${q(path)}${values ? '' : '&values=0'}`), signal);
 }
 
 /** URL of an inline (sandboxed) image preview. The server refuses anything but PNG, JPEG, GIF and WebP. */
 export function previewURL(path: string): string {
-  return `/api/preview?path=${q(path)}`;
+  return apiPath(`api/preview?path=${q(path)}`);
 }
 
 export function pdfURL(path: string): string {
-  return `/api/pdf?path=${q(path)}`;
+  return apiPath(`api/pdf?path=${q(path)}`);
 }
 
 export function fileURL(path: string): string {
-  return `/api/file?path=${q(path)}`;
+  return apiPath(`api/file?path=${q(path)}`);
 }
 
 /** Reads an NDJSON response line by line, calling handle for each parsed object. */
@@ -154,7 +158,7 @@ export async function streamList(
   onEntries: (entries: Entry[]) => void,
   signal: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch(`/api/list?path=${q(path)}`, { signal });
+  const resp = await fetch(apiPath(`api/list?path=${q(path)}`), { signal });
   if (!resp.ok) throw await failure(resp);
   await streamNDJSON(resp, (m) => {
     if (Array.isArray(m.entries)) onEntries(m.entries as Entry[]);
@@ -172,7 +176,7 @@ export async function streamSearch(
   onMatches: (rows: Row[]) => void,
   signal: AbortSignal,
 ): Promise<SearchDone> {
-  const resp = await fetch(`/api/search?path=${q(root)}&q=${encodeURIComponent(query)}${matchCase ? '&case=1' : ''}`, { signal });
+  const resp = await fetch(apiPath(`api/search?path=${q(root)}&q=${encodeURIComponent(query)}${matchCase ? '&case=1' : ''}`), { signal });
   if (!resp.ok) throw await failure(resp);
   let done: SearchDone = { visited: 0, truncated: false };
   await streamNDJSON(resp, (m) => {

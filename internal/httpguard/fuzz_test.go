@@ -52,6 +52,12 @@ func FuzzMiddlewareOnlyAdmitsLegitimateRequests(f *testing.F) {
 		if cookie == "SESSION" {
 			cookie = a.session // let the fuzzer stand for a legitimate cookie
 		}
+		// The fuzzed path is what follows the prefix; a request without the prefix
+		// must never reach the application (checked below).
+		bare := path
+		if len(path) > 0 && path[0] == '/' && len(cookie)%2 == 0 {
+			path = "/" + a.Prefix() + path
+		}
 		req := &http.Request{Method: method, Host: host, Header: http.Header{}, URL: &url.URL{Path: path}, RequestURI: path}
 		if origin != "" {
 			req.Header.Set("Origin", origin)
@@ -71,6 +77,9 @@ func FuzzMiddlewareOnlyAdmitsLegitimateRequests(f *testing.F) {
 		}
 
 		// The request reached the application: every requirement must hold.
+		if !strings.HasPrefix(path, "/"+a.Prefix()+"/") {
+			t.Fatalf("path %q (from %q) reached the application without the prefix", path, bare)
+		}
 		if method != http.MethodGet && method != http.MethodHead {
 			t.Fatalf("method %q reached the application", method)
 		}
@@ -112,7 +121,8 @@ func FuzzLaunchTokenCannotBeReplayedOrMisplaced(f *testing.F) {
 		h := Middleware(a, 4242)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 		try := func() *httptest.ResponseRecorder {
 			q := url.Values{"token": {token}}
-			req := &http.Request{Method: "GET", Host: "127.0.0.1:4242", Header: http.Header{}, URL: &url.URL{Path: path, RawQuery: q.Encode()}, RequestURI: path}
+			full := "/" + a.Prefix() + path
+			req := &http.Request{Method: "GET", Host: "127.0.0.1:4242", Header: http.Header{}, URL: &url.URL{Path: full, RawQuery: q.Encode()}, RequestURI: full}
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
 			return rec
