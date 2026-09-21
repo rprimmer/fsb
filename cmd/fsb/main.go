@@ -55,6 +55,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		extraRoots stringList
 		debug      = fs.Bool("debug", false, "verbose logging; denied paths answer 404 naming the matching rule")
 		noOpen     = fs.Bool("no-open", false, "do not open the browser; just print the URL")
+		browser    = fs.String("browser", "", `macOS application to open the URL in, e.g. "Google Chrome" (default: your default browser)`)
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
 		sysRoot    = fs.Bool("allow-system-root", false, "allow / as a root")
 	)
@@ -67,6 +68,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	if fs.NArg() > 1 {
 		return errors.New("at most one path argument is allowed")
+	}
+	if err := checkBrowserName(*browser); err != nil {
+		return err
 	}
 
 	home, err := os.UserHomeDir()
@@ -129,9 +133,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "fsb: open this single-use URL: %s\n", launchURL)
 	if !*noOpen && runtime.GOOS == "darwin" {
-		// The URL is passed as one argument, never through a shell.
-		if err := exec.Command("open", launchURL).Start(); err != nil {
-			fmt.Fprintln(stderr, "fsb: could not open the browser:", err)
+		// The URL is passed as one argument, never through a shell. `open` returns
+		// promptly, so its exit status says whether the application was found.
+		name, args := openCommand(*browser, launchURL)
+		if out, err := exec.Command(name, args...).CombinedOutput(); err != nil {
+			fmt.Fprintf(stderr, "fsb: could not open the browser (%v): %s\n", err, strings.TrimSpace(string(out)))
+			fmt.Fprintln(stderr, "fsb: open the URL above yourself, or check the --browser name")
 		}
 	}
 

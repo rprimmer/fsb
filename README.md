@@ -36,7 +36,7 @@ go build -o fsb ./cmd/fsb
 ./fsb               # serve $HOME read-only, print a single-use URL
 ```
 
-`fsb [path]` narrows the root; `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`.
+`fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`.
 
 ## Security model
 

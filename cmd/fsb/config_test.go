@@ -69,3 +69,44 @@ func TestInitWritesActiveCoreRulesAndNeverOverwrites(t *testing.T) {
 		t.Errorf("expected an 'already exists' message, got %q", out.String())
 	}
 }
+
+func TestOpenCommand(t *testing.T) {
+	name, args := openCommand("", "http://127.0.0.1:1/?token=x")
+	if name != "open" || strings.Join(args, "|") != "http://127.0.0.1:1/?token=x" {
+		t.Errorf("default browser: %s %q", name, args)
+	}
+	name, args = openCommand("Google Chrome", "http://127.0.0.1:1/?token=x")
+	if name != "open" || strings.Join(args, "|") != "-a|Google Chrome|http://127.0.0.1:1/?token=x" {
+		t.Errorf("named browser: %s %q", name, args)
+	}
+	// The URL and the name are always single arguments, whatever they contain.
+	_, args = openCommand("My Browser; rm -rf ~", "http://x/?a=1&b=2")
+	if len(args) != 3 || args[1] != "My Browser; rm -rf ~" || args[2] != "http://x/?a=1&b=2" {
+		t.Errorf("arguments must stay whole: %q", args)
+	}
+}
+
+func TestCheckBrowserName(t *testing.T) {
+	for _, ok := range []string{"", "Safari", "Google Chrome", "Firefox", "Brave Browser", "Microsoft Edge"} {
+		if err := checkBrowserName(ok); err != nil {
+			t.Errorf("%q should be accepted: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"-a", "--help", "-g", "Chrome\nSafari", "Chrome\r", "a\x00b"} {
+		if err := checkBrowserName(bad); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}
+
+// A bad --browser value is refused before anything is started.
+func TestRunRejectsABadBrowserNameEarly(t *testing.T) {
+	var out, errb bytes.Buffer
+	err := run([]string{"--browser", "--help", "--no-open"}, &out, &errb)
+	if err == nil || !strings.Contains(err.Error(), "--browser") {
+		t.Fatalf("err = %v, want a --browser error", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("nothing may be started or printed for a bad value, got %q", out.String())
+	}
+}

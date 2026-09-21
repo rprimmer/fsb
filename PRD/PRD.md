@@ -55,7 +55,7 @@ A previous tool offered browser-based FS browsing that was sometimes better than
 
 ### 7.1 Crawl stage (MVP)
 
-- FR-1. `fsb [path]` starts the server on a random free loopback port, prints the URL (including token), and opens it in the default browser (`--no-open` to suppress).
+- FR-1. `fsb [path]` starts the server on a random free loopback port, prints the URL (including token), and opens it in the default browser (`--browser NAME` picks a macOS application instead; `--no-open` suppresses).
 - FR-2. Directory listing with name, kind, size, modified time, and permissions; sortable columns; client-side filter-as-you-type.
 - FR-2a. Resizable and reorderable columns. Drag a header's edge to resize (double-click or Enter on the edge fits the column to the visible rows; Left/Right resizes by 10 px, Shift by 50); drag a header onto another, or press Alt+Left/Right on it, to reorder. Widths are clamped to 60-900 px. Layout is a per-viewer preference stored in the browser's `localStorage` (never on the server), tolerates missing or corrupt storage, and has a "Reset columns" control. On narrow windows the table scrolls sideways rather than hiding columns.
 - FR-3. Breadcrumb navigation and URL-addressable paths (bookmarkable while the server is running).

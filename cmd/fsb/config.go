@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rprimmer/fsb/internal/rules"
 )
@@ -67,4 +68,23 @@ func resolveRoots(home, arg string, extra []string, allowSystemRoot bool) ([]str
 		roots = append(roots, abs)
 	}
 	return roots, nil
+}
+
+// checkBrowserName rejects application names that `open` would take for one of
+// its own options, or that could not be a real application name.
+func checkBrowserName(name string) error {
+	if strings.HasPrefix(name, "-") || strings.ContainsAny(name, "\x00\r\n") {
+		return fmt.Errorf("invalid --browser value %q: give an application name such as \"Google Chrome\"", name)
+	}
+	return nil
+}
+
+// openCommand returns the command that opens url in the default browser, or,
+// if browser is set, in that macOS application. The URL is always a single
+// argument; nothing goes through a shell.
+func openCommand(browser, url string) (string, []string) {
+	if browser == "" {
+		return "open", []string{url}
+	}
+	return "open", []string{"-a", browser, url}
 }
