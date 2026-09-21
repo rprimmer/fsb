@@ -26,10 +26,10 @@
 
   import DOMPurify from 'dompurify';
 
-  import { ApiError, getHead, getMeta, previewURL, type Head, type Meta, type Row } from './api';
+  import { ApiError, getHead, getMeta, pdfURL, previewURL, type Head, type Meta, type Row } from './api';
   import { basename, dirname, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
   import { fillImages, renderMarkdown } from './markdown';
-  import { formatFor, languageFor, looksLikeImage, parseDelimited, plural, prettyJSON } from './preview';
+  import { formatFor, languageFor, looksLikeImage, looksLikePdf, parseDelimited, plural, prettyJSON } from './preview';
 
   const languages = {
     bash, c, cpp, css, diff, dockerfile, go, ini, java, javascript, json, kotlin, makefile,
@@ -53,7 +53,7 @@
   const HEAD_BYTES = 64 * 1024;
   const CSV_ROWS = 200;
 
-  type Mode = 'idle' | 'loading' | 'folder' | 'image' | 'text' | 'binary' | 'empty' | 'dataless' | 'error';
+  type Mode = 'idle' | 'loading' | 'folder' | 'image' | 'pdf' | 'text' | 'binary' | 'empty' | 'dataless' | 'error';
 
   let mode = $state<Mode>('idle');
   let meta = $state<Meta | null>(null);
@@ -83,6 +83,7 @@
       if (e.isDir) mode = 'folder';
       else if (e.broken) mode = 'error';
       else if (looksLikeImage(e.name)) mode = 'image';
+      else if (looksLikePdf(e.name)) checkPdf(p, ctrl);
       else loadHead(p, ctrl);
     }, 120);
     return () => {
@@ -90,6 +91,21 @@
       ctrl.abort();
     };
   });
+
+  // Ask the server whether this really is a PDF (by its bytes) before pointing
+  // a frame at it; otherwise fall back to treating it as an ordinary file.
+  function checkPdf(p: string, ctrl: AbortController) {
+    fetch(pdfURL(p), { headers: { Range: 'bytes=0-0' }, signal: ctrl.signal })
+      .then((r) => {
+        if (ctrl.signal.aborted) return;
+        if (r.ok && r.headers.get('content-type') === 'application/pdf') mode = 'pdf';
+        else if (r.status === 409) mode = 'dataless';
+        else loadHead(p, ctrl);
+      })
+      .catch(() => {
+        if (!ctrl.signal.aborted) loadHead(p, ctrl);
+      });
+  }
 
   function loadHead(p: string, ctrl: AbortController) {
     getHead(p, HEAD_BYTES, ctrl.signal)
@@ -252,6 +268,8 @@
         <p class="hint">Folder</p>
       {:else if mode === 'image'}
         <img class="pimg" src={previewURL(fullPath)} alt={entry.name} onerror={imageFailed} />
+      {:else if mode === 'pdf'}
+        <iframe class="pdfframe" title="PDF preview" src={pdfURL(fullPath)} referrerpolicy="no-referrer"></iframe>
       {:else if mode === 'binary'}
         <p class="hint">Binary file: no preview.</p>
       {:else if mode === 'empty'}

@@ -13,6 +13,21 @@ import (
 // to .png is refused, and SVG (which can carry script) is never accepted. The
 // returned string is the Content-Type to serve.
 func (g *Guard) OpenImage(p string) (*os.File, fs.FileInfo, string, error) {
+	return g.openSniffed(p, sniffImage)
+}
+
+// OpenPDF is OpenImage for PDF documents: the file must begin with "%PDF-".
+// The name is never consulted. The returned string is the Content-Type to serve.
+func (g *Guard) OpenPDF(p string) (*os.File, fs.FileInfo, string, error) {
+	return g.openSniffed(p, func(b []byte) string {
+		if bytes.HasPrefix(b, []byte("%PDF-")) {
+			return "application/pdf"
+		}
+		return ""
+	})
+}
+
+func (g *Guard) openSniffed(p string, sniff func([]byte) string) (*os.File, fs.FileInfo, string, error) {
 	f, fi, err := g.Open(p)
 	if err != nil {
 		return nil, nil, "", err
@@ -32,7 +47,7 @@ func (g *Guard) OpenImage(p string) (*os.File, fs.FileInfo, string, error) {
 	if err != nil && n == 0 {
 		return fail(ErrUnsupported)
 	}
-	ct := sniffImage(head[:n])
+	ct := sniff(head[:n])
 	if ct == "" {
 		return fail(ErrUnsupported)
 	}

@@ -91,6 +91,10 @@ export function previewURL(path: string): string {
   return `/api/preview?path=${q(path)}`;
 }
 
+export function pdfURL(path: string): string {
+  return `/api/pdf?path=${q(path)}`;
+}
+
 export function fileURL(path: string): string {
   return `/api/file?path=${q(path)}`;
 }

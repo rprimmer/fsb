@@ -4,6 +4,24 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
+/** A one-page PDF saying "Hello fsb PDF", with a correct cross-reference table. */
+export function makePdf() {
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 120] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    (() => { const s = 'BT /F1 24 Tf 20 60 Td (Hello fsb PDF) Tj ET'; return `<< /Length ${s.length} >>\nstream\n${s}\nendstream`; })(),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offs = [];
+  objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
 /** A 60x40 RGB gradient PNG built with the standard library only. */
 export function makePng() {
   const w = 60;
@@ -111,6 +129,8 @@ export function makeFixture({ big = false } = {}) {
     '<script>document.title = "PWNED"</script>', '',
     '[click me](javascript:alert(1))', '',
   ].join('\n'));
+  put(join(work, 'doc.pdf'), makePdf());
+  put(join(work, 'fake.pdf'), '<html><script>alert(1)</script></html>');
   put(join(work, 'app.log'), 'plain log line 1\nplain log line 2\n');
   put(join(work, 'random.bin'), Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 131 + 7) % 256)));
   put(join(work, 'disguised.png'), '<html><script>alert(1)</script></html>');

@@ -253,6 +253,27 @@ export function defineSuite({ label, launch }) {
       assert.equal(link.linkTo, 'src/main.go');
     });
 
+    // ---- PDF -----------------------------------------------------------------
+    test('shows a real PDF in the built-in viewer frame, and treats a fake .pdf as text', async () => {
+      await open(fx.work);
+      await selectByKeys('doc.pdf');
+      if (!(await previewOpen())) await d.key(' ');
+      const src = await waitFor(() => d.eval(`return document.querySelector('.preview iframe.pdfframe')?.getAttribute('src') ?? null`), { message: 'the PDF frame' });
+      assert.match(src, /^\/api\/pdf\?path=/);
+      const h = await d.eval(`const r = await fetch(${JSON.stringify(src)}); return { type: r.headers.get('content-type'), xfo: r.headers.get('x-frame-options'), csp: r.headers.get('content-security-policy'), nosniff: r.headers.get('x-content-type-options'), head: (await r.text()).slice(0, 5) };`);
+      assert.deepEqual(h, { type: 'application/pdf', xfo: 'SAMEORIGIN', csp: "frame-ancestors 'self'; script-src 'none'", nosniff: 'nosniff', head: '%PDF-' });
+      assert.equal(await d.eval(`return document.querySelector('.preview iframe.pdfframe').hasAttribute('sandbox')`), false);
+
+      // Not a PDF by its bytes: never framed, shown as ordinary text instead.
+      const fake = await preview('fake.pdf');
+      assert.equal(await d.eval(`return !!document.querySelector('.preview iframe')`), false);
+      assert.match(fake.text, /alert\(1\)/);
+      const r = await d.eval(`return (await fetch('/api/pdf?path=' + encodeURIComponent(${JSON.stringify(fx.work + '/fake.pdf')}))).status`);
+      assert.equal(r, 415);
+      // The app itself still cannot be framed.
+      assert.equal(await d.eval(`return (await fetch('/')).headers.get('x-frame-options')`), 'DENY');
+    });
+
     // ---- rendered Markdown -------------------------------------------------
     const mdInfo = () => d.eval(`const f = document.querySelector('.preview iframe.mdframe'); return f?.dataset.info ? JSON.parse(f.dataset.info) : null`);
 
@@ -621,7 +642,7 @@ export function defineSuite({ label, launch }) {
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await rows()).includes('.envrc'), { message: 'dotfiles to appear' });
       // Case-insensitive, dotfiles first, folders NOT grouped (src/ sits among the files by name).
-      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'data.json', 'disguised.png', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
+      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
 
       const foldersFirst = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Folders first')).querySelector('input')`;
       const box = await d.eval(`const b = ${foldersFirst}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);

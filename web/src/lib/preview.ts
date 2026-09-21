@@ -18,6 +18,11 @@ export function looksLikeImage(name: string): boolean {
   return IMAGE_EXT.has(extOf(name));
 }
 
+/** Whether to try the inline PDF viewer. Only a hint: the server checks the file's bytes. */
+export function looksLikePdf(name: string): boolean {
+  return extOf(name) === 'pdf';
+}
+
 const LANG_BY_EXT: Record<string, string> = {
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
   ts: 'typescript', tsx: 'typescript',

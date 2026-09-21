@@ -32,7 +32,7 @@ func FuzzPathParameter(f *testing.F) {
 
 	ok := map[int]bool{200: true, 206: true, 400: true, 403: true, 404: true, 405: true, 409: true, 415: true, 416: true}
 	f.Fuzz(func(t *testing.T, path, query, bytesParam string) {
-		for _, endpoint := range []string{"/api/list", "/api/file", "/api/head", "/api/meta", "/api/preview", "/api/search"} {
+		for _, endpoint := range []string{"/api/list", "/api/file", "/api/head", "/api/meta", "/api/preview", "/api/pdf", "/api/search"} {
 			params := url.Values{"path": {path}, "q": {query}, "bytes": {bytesParam}, "values": {bytesParam}}
 			resp, err := e.client.Get(e.base + endpoint + "?" + params.Encode())
 			if err != nil {

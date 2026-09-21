@@ -673,3 +673,5 @@ pre.xval {
 .viewtoggle button { border: 0; border-radius: 0; background: transparent; padding: 3px 10px; cursor: pointer; color: inherit; font: inherit; }
 .viewtoggle button.on { background: var(--accent, #0969da); color: #fff; }
 .mdframe { display: block; width: 100%; height: 60vh; min-height: 240px; border: 1px solid var(--line, #ccc); border-radius: 6px; }
+
+.pdfframe { display: block; width: 100%; height: 70vh; min-height: 280px; border: 1px solid var(--line, #ccc); border-radius: 6px; background: #fff; }

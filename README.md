@@ -22,7 +22,8 @@ A read-only, local-only web view of your filesystem. One Go binary serves a brow
 - **Hover peek:** hover a readable file for a moment to see its first lines. Turn it off with the "Hover previews" checkbox. It never reads a file that is stored only in the cloud (see the PRD, SR-9).
 - **Search:** filename search under the current folder, shallowest matches first. It never enters or reports denied or hidden folders and does not follow symlinked folders.
 - **Extended attributes:** shown in the preview pane, and as an optional last column (Columns menu), fetched only for the rows on screen.
-- **Not yet:** PDF preview and archive listings.
+- **PDF:** shown in your browser's built-in viewer, and only when the file's bytes say it is a PDF.
+- **Not yet:** archive listings.
 
 Columns can be resized (drag the edge; double-click to fit) and reordered (drag a header, or Alt+Left/Right); the layout is remembered in your browser, and "Reset columns" restores the defaults.
 

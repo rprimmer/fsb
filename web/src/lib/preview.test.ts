@@ -101,3 +101,10 @@ test('formatFor: Markdown files get the rendered view', async () => {
   assert.equal(formatFor('notes.MARKDOWN'), 'markdown');
   assert.equal(formatFor('a.json'), 'json');
 });
+
+test('looksLikePdf goes by extension only as a hint', async () => {
+  const { looksLikePdf } = await import('./preview.ts');
+  assert.equal(looksLikePdf('a.PDF'), true);
+  assert.equal(looksLikePdf('a.pdf.txt'), false);
+  assert.equal(looksLikePdf('pdf'), false);
+});

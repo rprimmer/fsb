@@ -149,6 +149,12 @@ func FuzzGuardNeverExposesSecrets(f *testing.F) {
 				}
 			}
 		}
+		if file, fi, _, err := fx.g.OpenPDF(p); err == nil {
+			if isSecret(fi) {
+				t.Fatalf("OpenPDF(%q) returned a secret", p)
+			}
+			file.Close()
+		}
 		if file, fi, _, err := fx.g.OpenImage(p); err == nil {
 			if isSecret(fi) {
 				t.Fatalf("OpenImage(%q) returned a secret", p)

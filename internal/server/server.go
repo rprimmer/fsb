@@ -64,6 +64,7 @@ func (s *Server) Handler(port int) http.Handler {
 	mux.HandleFunc("GET /api/preview", s.preview)
 	mux.HandleFunc("GET /api/search", s.search)
 	mux.HandleFunc("GET /api/mdframe", s.mdframe)
+	mux.HandleFunc("GET /api/pdf", s.pdf)
 	mux.Handle("GET /", web.Handler()) // embedded frontend; unknown paths 404
 
 	var h http.Handler = mux
@@ -202,6 +203,29 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", contentType)
 	h.Set("Content-Disposition", "inline")
 	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+}
+
+// pdf serves a file inline as a PDF, but only when its leading bytes say it is
+// one. It is meant for a frame on fsb's own page, so the browser's built-in
+// viewer shows it. PDFs cannot be sandboxed with a CSP sandbox (browsers then
+// refuse to show them), so the protection is different from images: the viewer
+// runs in the browser's own isolated context, the response can run nothing in
+// fsb's origin (script-src 'none', no object or frame content), and it may be
+// framed only by fsb's own pages.
+func (s *Server) pdf(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	f, fi, contentType, err := s.cfg.Guard.OpenPDF(p)
+	if err != nil {
+		s.fail(w, p, err)
+		return
+	}
+	defer f.Close()
+	h := w.Header()
+	h.Set("Content-Type", contentType)
+	h.Set("Content-Disposition", "inline")
+	h.Set("Content-Security-Policy", "frame-ancestors 'self'; script-src 'none'")
+	h.Set("X-Frame-Options", "SAMEORIGIN")
 	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
 }
 
