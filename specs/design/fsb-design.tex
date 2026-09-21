@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+
+\input{preamble}
+\input{../common/macros}
+
+\title{\texttt{fsb}: Design Specification}
+\author{}
+\date{September 21, 2026 \\ Version 0.1 (draft)}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+This document describes how \texttt{fsb} is built and why it was built that way:
+its structure, the mechanism behind each guarantee in the functional specification,
+the alternatives that were considered and rejected, how the design is tested, and
+what it does not do.  It is written for people who maintain the program, review it, or
+test it adversarially.  It changes when the construction changes; the functional
+specification does not.  Requirement identifiers such as \fq{RUL-6} refer to the
+functional specification.
+\end{abstract}
+
+\tableofcontents
+
+\input{sections/01-principles}
+\input{sections/02-architecture}
+\input{sections/03-guard}
+\input{sections/04-rules}
+\input{sections/05-http-layer}
+\input{sections/06-content-endpoints}
+\input{sections/07-frontend}
+\input{sections/08-verification}
+\input{sections/09-decisions}
+\input{sections/10-limitations-and-history}
+
+\end{document}

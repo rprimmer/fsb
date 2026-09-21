@@ -1,0 +1,183 @@
+\section{Exclusion Rules}
+\label{sec:rules}
+
+\subsection{Two tiers}
+
+\begin{center}
+\begin{tabular}{@{}p{0.30\linewidth}p{0.30\linewidth}p{0.30\linewidth}@{}}
+\toprule
+ & \emph{ignore} (hide) & \emph{deny} (block) \\
+\midrule
+Purpose & Reduce clutter & Never serve \\
+File & \code{\~{}/.config/fsb/ignore} & \code{\~{}/.config/fsb/deny} \\
+Listings and search & Entry omitted & Entry omitted \\
+Direct access (read, download, preview, details) & Allowed & Blocked, answered as 404 \\
+Negation (\code{!}) & Allowed & Refused \\
+Defaults & \code{.DS\_Store}, \code{.git/}, \code{node\_modules/} & The core rules (Section~\ref{sec:core}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{req}{RUL-1}
+A path matched by a deny rule is not listed, not found by search, not readable,
+downloadable, previewable or describable, and not reachable through any other
+endpoint.  A request for it is answered exactly as a request for a path that does
+not exist: the same status and the same body, except under \code{--debug}
+(\rid{CLI-6}).  Deny always wins over ignore; no ignore rule, including a negation,
+can expose a denied path.
+\end{req}
+
+\begin{req}{RUL-2}
+A path matched by an ignore rule is omitted from listings and search results but
+remains reachable by its path.  Entering an ignored folder on purpose (by typing its
+path or following a link) lists its contents; only the folder's own entry, in its
+parent's listing, is hidden.
+\end{req}
+
+\begin{req}{RUL-3}
+A denied folder denies everything inside it.  Once a folder is excluded, no later rule
+can bring anything inside it back.
+\end{req}
+
+\begin{req}{RUL-4}
+Symbolic links and aliases do not change what a rule means.  A path is refused if
+\emph{either} the path as requested \emph{or} the real location it resolves to is
+denied; a link whose target is denied is refused, and is not listed.  The children of
+a folder are judged by the folder's real location, however it was reached.  On macOS
+the aliases of the data volume are the same as the ordinary paths:
+\code{/System/Volumes/Data/Users/me} is \code{/Users/me}, in any letter case and
+any spelling that the file system equates (\rid{NAM-1}).
+\end{req}
+
+\begin{req}{RUL-5}
+Every spelling that the file system resolves to a denied file is refused.  This
+includes other letter cases, decomposed accents, characters that fold to ASCII
+(\rid{NAM-1}), doubled or trailing separators, dot segments, symbolic-link and
+firmlink aliases, and resource-fork names such as \code{file/..namedfork/rsrc}.
+\end{req}
+
+\begin{req}{RUL-6}
+A file with more than one name (a hard link) is judged by its identity: if any of
+its names is denied, it is refused under every name and is not listed.  The other
+names are found under the roots and under the credential locations of every home
+folder on the machine, using an index built in the background at startup (about 20
+seconds for a home folder of 700{,}000 files).  Until the index is ready, and for a
+file with several names that it has not yet seen, the file is refused rather than
+guessed.  A denied name that lies outside every root and every credential location
+is not detected.
+\end{req}
+
+\begin{req}{RUL-7}
+A permission error on a path that lies inside a denied place is reported as not
+found, so that an unreadable file in a denied folder cannot be told from a missing
+one.  A permission error elsewhere is reported as such (status 403) and stays visible
+to the user.
+\end{req}
+
+\begin{req}{RUL-8}
+Denying is decided before anything is read.  A denied path never causes a cloud-only
+file to be downloaded.
+\end{req}
+
+\subsection{Rule syntax}
+\label{sec:rulefiles}
+
+The syntax is that of \code{.gitignore}, with the additions and restrictions below.
+
+\begin{req}{RUL-9}
+A line is blank, a comment (first character \code{\#}), or a rule.  Surrounding white
+space is ignored.  A leading byte order mark and any line ending (LF, CR LF or bare
+CR) are accepted.  In a rule, \code{*} matches any characters except \code{/},
+\code{?} one character except \code{/}, \code{[abc]} and \code{[!abc]} a class
+(which never matches \code{/}), and \code{**} any number of folders.  A backslash
+makes the next character literal (\code{\textbackslash\#} for a literal \code{\#}).  A
+trailing \code{/} makes the rule apply to folders only.
+\end{req}
+
+\begin{req}{RUL-10}
+A pattern with no \code{/} matches a name at any depth.  A pattern that begins with
+\code{\~{}/} is relative to the home folder; one that begins with \code{/} is
+absolute; one that contains a \code{/} elsewhere is relative to the home folder; and
+one that begins with \code{**/} matches at any depth.
+\end{req}
+
+\begin{req}{RUL-11}
+Matching ignores letter case and normalization exactly as in \rid{NAM-1}, and ignores
+trailing white space in a name (macOS permits names such as \code{id.pem\textvisiblespace}
+and \code{.env} followed by a tab), and \code{**} matches names that contain newlines.
+\end{req}
+
+\begin{req}{RUL-12}
+A rule file must work as written or fail loudly.  \texttt{fsb} refuses to start,
+naming the file, the line and the problem, for: negation in the deny file; an
+empty pattern; a trailing backslash; a \code{/} inside \code{[...]}; \code{\~{}name}
+(another user's home; only \code{\~{}} and \code{\~{}/...} are supported); a
+pattern wrapped in quotes; an inline comment (a \code{\#} after white space; write
+\code{\textbackslash\#} for a literal one); an invisible or formatting character; and a
+character that looks like a slash but is not one.
+\end{req}
+
+\subsection{Core and optional deny rules}
+\label{sec:core}
+
+\begin{req}{RUL-13}
+The core deny rules cover locations and files that hold credentials or secrets.  They
+are active by default and built in, so they apply even when no deny file exists.
+\code{fsb --init} writes them, uncommented, into the deny file so that the user can
+see them.  They match at any depth, so the same folders in a backup or clone of the
+home folder, in another user's home, or under a wrong \code{HOME} are protected too.
+\end{req}
+
+\begin{req}{RUL-14}
+The core rules are:
+
+\begin{center}
+\begin{tabular}{@{}p{0.45\linewidth}p{0.45\linewidth}@{}}
+\toprule
+Folders & Files \\
+\midrule
+\code{.ssh/}, \code{.aws/}, \code{.gnupg/}, \code{.kube/} &
+\code{.netrc}, \code{.git-credentials}, \code{.pgpass} \\
+\code{**/.config/gh/} &
+\code{.env}, \code{.env.*} \\
+\code{**/Library/Keychains/} &
+\code{*.pem}, \code{*.key} \\
+\code{**/Library/Application Support/Google/Chrome/} &
+\code{id\_rsa}, \code{id\_dsa}, \code{id\_ecdsa}, \code{id\_ed25519}, \code{id\_ecdsa\_sk}, \code{id\_ed25519\_sk} \\
+\code{**/Library/Application Support/Firefox/} &
+\code{*.p12}, \code{*.pfx}, \code{*.ppk}, \code{*.jks}, \code{*.keystore} \\
+\code{**/Library/Safari/}, \code{**/Library/Cookies/} &
+\code{*.kdbx}, \code{*.keychain}, \code{*.keychain-db} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Public key files (\code{id\_rsa.pub} and the like) are not denied.  The list is
+versioned with the release, and additions are called out in the release notes.
+\end{req}
+
+\begin{req}{RUL-15}
+The secret-file patterns are deliberately broad and have known costs.  \code{*.key}
+also matches Keynote presentations; \code{.env} also matches a folder named
+\code{.env} (such as a Python virtual environment) and everything in it; and
+\code{.env.*} also matches committed templates such as \code{.env.example}.  A user who
+needs any of them removes the pattern from the deny file and accepts the warning of
+\rid{RUL-16}.
+\end{req}
+
+\begin{req}{RUL-16}
+When a deny file exists but does not contain one or more core rules (they were removed
+or commented out, or a release added a rule the file predates), \texttt{fsb}
+(a) prints the warning of \rid{CLI-11}, for example
+\code{fsb: warning: core deny rule(s) disabled: .ssh/, .aws/; these paths are
+browsable.}, and (b) shows a persistent banner in the interface with the same
+message.  Both disappear once every core rule is in effect.  Rules are compared as
+names are (\rid{NAM-1}), so \code{.SSH/} counts as the core rule \code{.ssh/}, but a
+rule that differs in meaning does not.  The condition cannot be suppressed by any flag.
+\end{req}
+
+\begin{req}{RUL-17}
+The optional rules, shipped commented out for the user to enable, are situational or
+prone to false positives: \code{\~{}/.docker/config.json}, \code{\~{}/.npmrc},
+\code{\~{}/Library/Mail/} and \code{\~{}/Library/Messages/}.
+\end{req}

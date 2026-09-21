@@ -24,7 +24,7 @@ secrets you have excluded stay excluded.
 | Guarantee | Enforced by |
 |---|---|
 | Reachable only on `127.0.0.1` by your session | Fixed loopback bind; exact `Host` allowlist; strict `Origin`/`Referer`/`Sec-Fetch-Site` checks; a single-use launch token exchanged for an `HttpOnly`, `SameSite=Strict` cookie whose `Path` is a random per-launch prefix under which everything is served (browsers cannot scope a cookie by port, so this is what keeps it from other local servers); `Cross-Origin-Resource-Policy`, `X-Frame-Options` and CSP headers |
-| Read-only | Only `GET`/`HEAD` are served; the binary contains no write code |
+| Read-only | Only `GET`/`HEAD` are served, and there is no operation that changes what is served; the only file `fsb` ever creates is by `--init`, which writes new rule files and never overwrites |
 | Deny rules block every access | One chokepoint (`internal/guard`) used by list, download, preview, head, metadata and search; rules are matched against the *real* location, after symlinks and aliases are resolved, and again on the file descriptor that was actually opened |
 | A denied path looks like a missing one | Identical 404 status and body, including for unreadable files inside denied folders |
 | Rendering a Markdown file cannot run code, load anything remote or reach the app | Three layers, each assuming the one before failed: raw HTML is escaped and links carry no `href` (`web/src/lib/markdown.ts`); the result is sanitized with DOMPurify; and it is shown in an iframe with `sandbox="allow-scripts"` (an opaque origin, so no session and no API access) whose own policy is `default-src 'none'` with only its one fixed script and style admitted by hash, and images limited to `data:`. Local images are fetched through the guarded preview endpoint, and remote images are replaced by a placeholder, so opening a file makes no outside request |
@@ -32,7 +32,7 @@ secrets you have excluded stay excluded.
 | Listing an archive cannot extract, write or exhaust memory | `/api/archive` returns names and sizes only, never member data, through the same guard and deny rules. Format is decided from bytes; a zip claiming more than 200,000 entries is refused; tar scanning stops after 200,000 entries or 512 MiB of decompressed stream; member names are shown as text with control characters replaced |
 | Only the configured roots are reachable | Real-path check against the roots; symlinks that leave them are refused |
 
-Details are in [PRD.md](PRD.md), sections 8 and 9.
+The behavior is specified in [functional/](functional/) (sections on rules and security behavior) and the construction in [design/](design/); the laws are in [algebra/](algebra/).
 
 ## Known limitations
 

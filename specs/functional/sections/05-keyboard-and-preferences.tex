@@ -1,0 +1,50 @@
+\section{Keyboard and Preferences}
+
+\subsection{Keys}
+
+\begin{req}{KEY-1}
+The interface can be operated entirely from the keyboard.  Navigation keys (arrows,
+Home, End, Page Up, Page Down, Space) are matched by the physical key, so they work
+whatever modifier is held; letters and punctuation are matched by the character they
+produce, so the shortcuts follow the user's keyboard layout.  No shortcut acts while
+the user is typing in a text box, except Escape, which leaves it.
+\end{req}
+
+\begin{req}{KEY-2}
+The following keys are defined.
+
+\begin{center}
+\begin{tabular}{@{}p{0.42\linewidth}p{0.5\linewidth}@{}}
+\toprule
+Key & Action \\
+\midrule
+\code{Up}, \code{Down}, \code{PgUp}, \code{PgDn}, \code{Home}, \code{End} & Move the selection \\
+\code{Enter} or \code{Right} & Open the selected folder (a search result opens in its folder) \\
+\code{Left} or \code{Backspace} & Up one folder, reselecting the one just left \\
+\code{Space} & Show or hide the preview pane \\
+\code{/} & Filter this folder \\
+\code{s} & Search subfolders by name (Enter runs, Escape clears) \\
+\code{g} & Go to a path \\
+\code{c} & Copy the selected path (or the folder's) \\
+\code{Escape} & Clear the search, close a menu, leave a text box \\
+\code{Alt+Left}, \code{Alt+Right} on a column header & Reorder the column \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{req}
+
+\subsection{Preferences}
+\label{sec:prefs}
+
+\begin{req}{PREF-1}
+The following are the user's preferences and are kept in the browser's local storage,
+per browser and never on the server or on disk elsewhere: whether the preview pane is
+open and how wide it is, whether hover peek is on, ``Folders first'', ``Match case'',
+and the layout of the columns (order, widths, which are hidden).
+\end{req}
+
+\begin{req}{PREF-2}
+Preferences are optional.  If local storage is missing, blocked, corrupt or from an
+older version, each value falls back to its default on its own and the interface works
+normally.
+\end{req}

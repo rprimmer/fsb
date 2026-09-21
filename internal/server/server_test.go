@@ -422,7 +422,7 @@ func TestStatusReportsWeakenedCoreRules(t *testing.T) {
 	}
 }
 
-// ER-1: HTTP-facing packages reach the filesystem only through guard.Guard.
+// Design principle "one chokepoint" (design specification, section 1): HTTP-facing packages reach the filesystem only through guard.Guard.
 func TestHandlersDoNotImportFilesystemPackages(t *testing.T) {
 	banned := map[string]bool{
 		`"os"`: true, `"io/fs"`: true, `"io/ioutil"`: true,

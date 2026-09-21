@@ -1,0 +1,82 @@
+\section{Limitations, Risks and History}
+\label{sec:history}
+
+\subsection{Risks}
+
+\begin{description}
+  \item[R1: sensitive paths are exposed by default.]  The root is the home folder, so without
+        protection \code{\~{}/.ssh} and similar would be reachable.  Mitigated by the core deny
+        rules, active by default and built in, and by a startup notice and a banner if the user
+        weakens them.  Residual: a secret with an unremarkable name outside the core list, the optional
+        rules left off, and a user who disables the core rules and ignores the warning.
+  \item[R2: files with several names.]  Path rules cannot see a second name for a file.  Covered
+        for denied names under the roots and for the credential locations; see the limits below.
+  \item[R3: untrusted content in a page that holds a session.]  Markdown, PDF and archive names are
+        rendered or shown; mitigated by the layers of Section~\ref{sec:content}.
+  \item[R4: permission prompts.]  macOS asks permission the first time for Documents, Desktop,
+        Downloads and external volumes; the documentation says so.
+\end{description}
+
+\subsection{Known limitations}
+
+\begin{itemize}
+  \item A denied name outside every root and every protected credential location is not found as another
+        name of a file; links created after a size-limited walk are not found.
+  \item Response timing is not equalized: a denied path can be answered slightly faster than a missing
+        one.  The status and body are identical.
+  \item Anything that runs as the user can read the same files.  \texttt{fsb} is not a sandbox against
+        local malware.
+  \item The metadata endpoint reads a symbolic link's text from the requested path after the file was
+        opened; an attacker who could rewrite that link during the call could learn the text of a denied
+        path (not its contents).  Requires a same-user attacker.
+  \item Rule files are read at startup only.
+  \item Not yet tried with real cloud-placeholder files or in Firefox; a real mouse drag of a column
+        header in Safari is unverified.
+  \item The browser test for Safari occasionally fails in a run of tests that need a focused window,
+        and passes on rerun.
+\end{itemize}
+
+\subsection{History of defects found by the design's own checks}
+
+Stating the laws of the algebraic specification, and then auditing every comparison of names and paths,
+found sixteen defects, all fixed and each covered by a test.  In brief:
+
+\begin{enumerate}
+  \item Simple case folding let \code{.\ss h} open \code{.ssh} (a bypass of a deny rule).
+  \item A plain file named like a folder-only rule was listed but could not be opened.
+  \item A negated glob class could match across a path separator.
+  \item A row order that was not transitive when a time could not be parsed.
+  \item The filter and the search disagreed about the sharp s.
+  \item A stale fallback request could show the wrong file's preview.
+  \item Firmlink prefixes were matched by byte length (a bypass under a root of \code{/}).
+  \item Root containment compared spellings (wrong on a case-sensitive volume).
+  \item Breadcrumbs, selection and the core-rule warning compared names by spelling.
+  \item The credential rules were anchored to one home folder.
+  \item A hard link to a credential file was served.
+  \item The session cookie followed the host, not the port.
+  \item A hard link to any other denied file was served.
+  \item Rule files that loaded without error and did nothing.
+  \item Secrets under other names (\code{id\_rsa}, certificate stores, password databases).
+  \item File names that disguised themselves with bidirectional characters.
+\end{enumerate}
+
+The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
+allow checks must decide by identity.
+
+\subsection{Milestones}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.16\linewidth}p{0.36\linewidth}p{0.36\linewidth}@{}}
+\toprule
+Milestone & Scope & Status \\
+\midrule
+M0 Skeleton & Repository, CI, guard, matcher, middleware & Done. \\
+M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file folder measured. Daily use by the author still to confirm. \\
+M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
+Hardening & The audits and defects of the preceding subsection & Done; a professional penetration test is planned near release. \\
+M3 Public release & Documentation, releases, Homebrew formula & Not started; packaging is done last. \\
+M4 Run & The stage-three requirements of the functional specification & Reassess after real use. \\
+\bottomrule
+\end{tabular}
+\end{center}

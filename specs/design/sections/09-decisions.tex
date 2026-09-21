@@ -1,0 +1,35 @@
+\section{Decisions and Alternatives}
+
+Each row is a decision that shaped the design, with what else was possible and why it was not
+chosen.
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{0.20\linewidth}p{0.20\linewidth}p{0.52\linewidth}@{}}
+\toprule
+Decision & Rejected & Why \\
+\midrule
+\endhead
+Write from scratch in Go with an embedded Svelte front end & Fork an existing multi-user file manager & The existing one is built around a jailed root, configuration in its own UI, and create, rename and delete. The security model here (whole home, read only, two-tier rules) is different in kind, and a fork would carry code paths that must not exist. \\
+Two tiers: hide and deny & One list & Hiding clutter is cosmetic and must not be a security control; blocking must be absolute, not overridable, and load only from the global file so that a folder cannot relax it. Deny wins over ignore. \\
+Deny loads only from the global file & Per-folder deny files & A per-folder file could be planted in the tree being browsed to weaken protection. \\
+Core rules built in and active by default & Ship them commented out, with a warning & A tool that exposes \code{\~{}/.ssh} until configured is unsafe by default. The warning now covers only the case where the user weakened them. \\
+Bind loopback only, not configurable & A flag for other interfaces & There is no safe way to serve the whole home folder to a network, so the option is not offered. \\
+Single-use launch token, then a cookie & A permanent token in the URL & A token left in history or a shell must be useless. \\
+Path prefix scoping the cookie & A plain cookie; a custom header on every request & Browsers cannot scope cookies by port. A header cannot accompany images, frames, PDFs and downloads. A random path scopes the cookie exactly. \\
+Identity for hard links, from a background index & A hash of contents; a synchronous walk & A hash flags harmless copies, reads every candidate, and answers a different question. A synchronous walk did not finish in four seconds on a real home folder and would stall a request. Refusing until known keeps it safe meanwhile. \\
+Roots decided by identity & Comparing folded text & Right on a case-insensitive volume, wrong on a case-sensitive one. \\
+Full case folding, from \code{x/text}, applied to rules & \code{ToLower} & The volume uses full folding; simple folding made some spellings of a denied name invisible to the rules. \\
+Refuse a file whose kind the bytes do not confirm & Trust extensions & An extension is chosen by whoever named the file. \\
+Markdown in a sandboxed frame, sanitized, with a hash-pinned policy & Render in the page with a sanitizer only & One layer failing must not compromise the session; the frame has no origin, no network and one fixed script. \\
+PDF in the browser's viewer in a frame with narrow framing headers & Bundle a PDF library; sandbox the frame & A library is large and a second parser to defend; a sandboxed frame is refused by browsers. \\
+Stream listings as newline-delimited JSON & Pagination & The client sorts, which needs all entries; streaming paints early and keeps them all. \\
+Sort in the browser & Sort on the server & The sort key and options change often; the total-order comparison is a pure, testable function. \\
+Pure modules tested with Node's runner & A browser test for every function & Fast, dependency-free, and the laws are stated on them. \\
+Commit the compiled front end & Build it in the Go build & Building the binary must need no Node. CI checks that the committed output is current. \\
+Deny checks over-match; allow checks decide by identity & One equality for both & The two directions fail differently: over-matching a deny only blocks more, over-matching an allow serves the wrong folder. \\
+Refuse files with several names until the index is ready & Allow until known & The window in which a hard link to a secret is served must be zero, at the cost of a short unavailability. \\
+Hand-written manual page in roff & Generate it from Markdown & No build dependency, and the format users expect. \\
+\bottomrule
+\end{longtable}
+\end{center}

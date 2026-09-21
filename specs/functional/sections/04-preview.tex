@@ -1,0 +1,128 @@
+\section{Preview and Metadata}
+\label{sec:preview}
+
+\subsection{The preview pane}
+
+\begin{req}{PRV-1}
+Selecting an entry shows a preview of it in a pane beside the list, together with
+its details (\rid{META-1}) and extended attributes (\rid{META-2}).  The pane is shown
+or hidden with the option \emph{Preview pane} or the Space key, and its width, between
+240 and 900 pixels, is changed by dragging its left edge or from the keyboard.  It
+starts open only on a window wide enough to hold it beside the list.
+\end{req}
+
+\begin{req}{PRV-2}
+Which preview is shown is decided from the \emph{contents} of the file, never from its
+name alone.  The name is only a hint about which check to try first: a file named
+\code{.png} that is not an image is shown as ordinary text or as a binary file, and a
+file with another name whose bytes are a PDF is a PDF.
+\end{req}
+
+\begin{req}{PRV-3}
+Text is shown from the first 64~KB of the file and is always displayed as text, never
+interpreted as markup.  When the file is longer, the pane says how much is shown.  A
+file is text only if that part is valid UTF-8 without control characters; a binary
+file is reported as such, with its size, and its bytes are not sent to the browser.  An
+empty file is reported as empty.
+\end{req}
+
+\begin{req}{PRV-4}
+Source code is shown with syntax highlighting, chosen from the name or extension, for
+these languages: Bash, C, C++, CSS, diff, Dockerfile, Go, INI and TOML, Java,
+JavaScript, JSON, Kotlin, Makefile, Markdown, PHP, Python, Ruby, Rust, SQL, Swift,
+TypeScript, XML and HTML, and YAML.
+\end{req}
+
+\begin{req}{PRV-5}
+A complete JSON file is shown pretty-printed; a JSON file that was cut off by
+\rid{PRV-3} is shown as highlighted source.  A CSV or TSV file is shown as a table of
+its first 200 rows, and the pane says when there are more.
+\end{req}
+
+\begin{req}{PRV-6}
+A file whose leading bytes identify it as PNG, JPEG, GIF or WebP is shown as an
+image.  Files of any other image type are not rendered: in particular SVG and HTML are
+never rendered, because they can carry script.
+\end{req}
+
+\begin{req}{PRV-7}
+A Markdown file (name ending \code{.md} or \code{.markdown}) is shown rendered by
+default, with a \emph{Source} toggle to see the text.  Rendering supports headings,
+emphasis, lists, task lists, tables, code, block quotes and rules.  Raw HTML in the
+file is shown as text and never interpreted.  A link to another file opens that file
+inside \texttt{fsb}, in its folder with the file selected; a link to a web address
+opens in a new browser tab without sending a referrer; a link of any other kind
+(\code{javascript:}, \code{data:}, \code{file:} and so on) is shown as plain text.  An
+image that lies inside the roots is shown; a remote image is replaced by a note that
+it was blocked, so previewing a file never contacts anything outside the machine.  At
+most 20 images of at most 5~MB each are loaded for one file.
+\end{req}
+
+\begin{req}{PRV-8}
+A file that begins with \code{\%PDF-} is shown in the browser's built-in PDF viewer.
+A file named \code{.pdf} that does not begin so is shown as ordinary text or as a
+binary file.
+\end{req}
+
+\begin{req}{PRV-9}
+A file recognized by its bytes as a zip, tar or gzip-compressed tar archive (including
+\code{.jar}) is shown as a table of its contents: each member's name and size, the
+format, and the number of entries.  Nothing is extracted.  At most 1{,}000 entries are
+shown; the listing reports when it stopped at a safety limit
+(Section~\ref{sec:limits}).  Member names are displayed as text with control
+characters replaced and are never used as paths.  A file that has an archive name but
+is not one is shown as ordinary text or as a binary file.
+\end{req}
+
+\begin{req}{PRV-10}
+For a file stored only in the cloud, every preview reports that it is not downloaded
+and reads nothing (\rid{SEC-13}).
+\end{req}
+
+\begin{req}{PRV-11}
+A symbolic link is previewed as what it points to, and the pane names the target.
+\end{req}
+
+\subsection{Hover peek}
+
+\begin{req}{HOV-1}
+Holding the pointer over a readable file for about 400~ms shows a small bubble with
+its first 20 or so lines, as plain text.  Binary files, folders, empty files and
+cloud-only files produce no bubble.
+\end{req}
+
+\begin{req}{HOV-2}
+The bubble is dismissed by moving the pointer away, scrolling, or pressing a key.
+Results are remembered so that hovering again does not re-read the file, and the
+number of simultaneous requests is limited.  The option \emph{Hover previews} turns
+the feature off; the choice is remembered (Section~\ref{sec:prefs}).
+\end{req}
+
+\begin{req}{HOV-3}
+Hover peek passes through the same rules as every other access.  Because hovering
+reveals contents more readily than choosing, files that commonly hold secrets are
+denied by default (Section~\ref{sec:core}) and therefore never produce a bubble.
+\end{req}
+
+\subsection{Details and extended attributes}
+
+\begin{req}{META-1}
+The pane lists the entry's path, kind, size (in a readable unit and in bytes),
+modification time and permissions, the target of a symbolic link, and whether the
+file is stored only in the cloud.
+\end{req}
+
+\begin{req}{META-2}
+Extended attributes are listed with their values.  A value is shown as text if it is
+valid printable UTF-8 and as hexadecimal otherwise (labelled \emph{hex}, the label
+before the digits).  At most 64 attributes are shown, and a value larger than
+4~KB is shown by name and size only.  Attributes are available on macOS and Linux;
+elsewhere none are shown.
+\end{req}
+
+\begin{req}{META-3}
+The optional \emph{Attributes} column, hidden by default and placed last, shows
+attribute \emph{names} only, for example \code{com.apple.quarantine}.  It is fetched
+only for the rows on screen and remembered, and is never part of the listing itself,
+so it cannot slow a large folder.
+\end{req}

@@ -1,0 +1,38 @@
+\documentclass[11pt]{article}
+
+\input{preamble}
+\input{../common/macros}
+
+\title{\texttt{fsb}: Functional Specification}
+\author{}
+\date{September 21, 2026 \\ Version 0.1 (draft)}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+\texttt{fsb} is a local-only, read-only web view of a filesystem: one program
+that serves a browser interface on the loopback address and never changes what it
+shows.  This document specifies its externally observable behavior: how it is
+started and configured, what it lists, searches and previews, which paths it
+refuses and how it refuses them, what the interface does with the keyboard, and
+what its HTTP interface answers.  It does not say how any of this is built; that is
+the subject of the design specification.  Every requirement has an identifier that
+other documents and the tests cite.
+\end{abstract}
+
+\tableofcontents
+
+\input{sections/01-introduction}
+\input{sections/02-invocation}
+\input{sections/03-browsing}
+\input{sections/04-preview}
+\input{sections/05-keyboard-and-preferences}
+\input{sections/06-exclusion-rules}
+\input{sections/07-security-behavior}
+\input{sections/08-http-interface}
+\input{sections/09-limits}
+\input{sections/10-scope-and-distribution}
+\input{sections/appendix-old-ids}
+
+\end{document}

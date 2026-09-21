@@ -1,0 +1,65 @@
+\section{Scope of This Version and Distribution}
+
+\subsection{Stages}
+
+\texttt{fsb} is delivered in three stages that grow the interface without changing
+the security core: \emph{crawl} (browse), \emph{walk} (preview and search) and
+\emph{run} (more).  This version implements the crawl and walk stages, as specified
+in Sections~\ref{sec:invocation} to~\ref{sec:http}.  It has not been run against real
+cloud-placeholder files or in Firefox; those checks are still to be done.
+
+\subsection{Not in this version}
+
+The following are wanted but are not part of this version.  They are recorded here so
+that they are not designed away.
+
+\begin{req}{FUT-1}
+Full-text and fuzzy search by delegating to the system's Spotlight index, with every
+result checked against the deny and ignore rules before it is shown.
+\end{req}
+
+\begin{req}{FUT-2}
+Live updates when files change.
+\end{req}
+
+\begin{req}{FUT-3}
+Several panes, tabs, and saved views.
+\end{req}
+
+\begin{req}{FUT-4}
+Version-control status overlays.
+\end{req}
+
+\begin{req}{FUT-5}
+``Reveal in Finder'' and ``Open in editor'', restricted to a fixed list of actions,
+never building a command from a path.  Excluded from this version because they would
+make the server start local processes; ``Copy path'' covers the need meanwhile.
+\end{req}
+
+\begin{req}{FUT-6}
+Derived data (an index, thumbnails, caches), if ever added, shall honor the deny
+rules when it is built and when it is queried.
+\end{req}
+
+\subsection{Distribution}
+
+\begin{req}{DST-1}
+The program shall be published in a public repository under the MIT license.
+\end{req}
+
+\begin{req}{DST-2}
+Releases shall provide binaries for macOS on Apple silicon and Intel, with checksums,
+signed and notarized where practical, and installation with \code{go install}.
+\end{req}
+
+\begin{req}{DST-3}
+A Homebrew formula shall follow once the walk stage is stable.
+\end{req}
+
+\begin{req}{DST-4}
+The documentation shall explain the security model, the deny rules and their costs,
+and that macOS may ask for permission to read Documents, Desktop, Downloads and
+external volumes the first time.
+\end{req}
+
+Packaging is done last, when everything else is settled.  No release has been made.

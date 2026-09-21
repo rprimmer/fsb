@@ -1,0 +1,51 @@
+\section{The Front End}
+
+\subsection{Structure}
+
+The interface is a single page built with Svelte 5 (runes), TypeScript and Vite.  Its
+logic is kept in small \emph{pure} modules, which import nothing from the browser, so that
+they run under Node's own test runner: ordering (\code{sort}), filtering (\code{filter}),
+column layout (\code{columns}), preferences (\code{prefs}), preview classification and text
+helpers (\code{preview}), the path and location functions (\code{format}, \code{goto}),
+the key mapping (\code{keys}), the Markdown conversion (\code{markdown}), and where the page was
+loaded from (\code{base}).  The components hold only what needs the DOM.
+
+\subsection{Decisions}
+
+\begin{description}
+  \item[Virtualized list.]  Only the rows on screen are drawn, from a scroll position and a
+        fixed row height; a folder of 100{,}000 entries draws about 30 rows.
+  \item[Location as state.]  The current folder, and the entry to select, are in the URL
+        fragment (\code{\#/path?select=name}), which is never sent to the server, so folders
+        are bookmarkable and Back works without any routing library.  Parsing is strict: a
+        bad escape is not silently replaced.
+  \item[Requests relative to the page.]  Every request is formed from the page's own
+        directory, so the random prefix (which scopes the cookie) needs no configuration.
+  \item[Sorting in the browser.]  The server streams entries in the order the file system
+        gave them; the browser sorts, with a comparison that is a total order and does not
+        depend on the input order (a test).  A time that cannot be parsed sorts as the oldest,
+        so the order stays total.
+  \item[Names are displayed, not trusted.]  Characters that would disguise a name are replaced by
+        visible markers for display only.  Names are always inserted as text, never as markup.
+  \item[Preferences are optional.]  They are kept in local storage with every read guarded, and
+        every value falls back on its own.
+  \item[No dynamic code.]  There is no use of \code{eval}, of \code{innerHTML}, or of any
+        other markup sink except one: the output of the syntax highlighter, which escapes its
+        input.
+\end{description}
+
+\subsection{The preview pane as a state machine}
+
+For a selected entry the pane is in one of a few states (idle, loading, folder, image, PDF,
+archive, text, binary, empty, cloud-only, error).  A file name gives a \emph{hint}, the
+server decides from the bytes, and a hint the server rejects falls back to the ordinary head
+request, which never falls back again, so every run ends in a terminal state after at most two
+requests.  Every request started for a selection, including a fall back, shares one
+cancellation handle and is cancelled when the selection changes, so a late answer can never be
+shown for the wrong file.  The laws are in the algebraic specification.
+
+\subsection{Hover peek}
+
+A short delay before the request, a cache, a limit on simultaneous requests, and cancellation
+on pointer movement, scroll or key press.  It requests the same head endpoint as the preview,
+so it is subject to the same rules, and is off if the user turns it off.

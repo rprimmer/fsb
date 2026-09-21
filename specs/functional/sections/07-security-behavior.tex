@@ -1,0 +1,116 @@
+\section{Security Behavior}
+\label{sec:security}
+
+This section states what \texttt{fsb} does to protect the user, as behavior that can
+be observed.  The reasoning, and the ways it was tested, are in the design
+specification and the security policy.
+
+\subsection{Reach}
+
+\begin{req}{SEC-1}
+\texttt{fsb} listens only on the loopback address \code{127.0.0.1}.  No flag,
+setting or environment variable changes this, and it is not reachable from another
+machine.
+\end{req}
+
+\begin{req}{SEC-2}
+A request is refused (status 403) unless its \code{Host} header is exactly
+\code{127.0.0.1:PORT} or \code{localhost:PORT}, so that a web page on another name
+that resolves to the loopback address (DNS rebinding) cannot use it.
+\end{req}
+
+\begin{req}{SEC-3}
+A request is refused (status 403) if it carries an \code{Origin} or \code{Referer}
+from any other origin, if its \code{Sec-Fetch-Site} says it was started by another
+origin or another site (including a page on another port of the same host), or if
+its \code{Origin} is the opaque value \code{null}.  No cross-origin access is
+permitted.
+\end{req}
+
+\begin{req}{SEC-4}
+Only the methods \code{GET} and \code{HEAD} are answered; anything else gets status
+405.  \texttt{fsb} never modifies, creates, renames, moves or deletes anything that
+it serves.  The only file it ever creates is by \code{--init} (\rid{CLI-7}), which
+writes new rule files, and never overwrites.
+\end{req}
+
+\subsection{Credential}
+
+\begin{req}{SEC-5}
+Access requires the session, which is established as follows.  At each start
+\texttt{fsb} generates a random launch token (at least 128 bits), a random session
+value, and a random path prefix (at least 128 bits).  The launch URL carries the
+token.  The first request that presents the correct token is answered with a
+redirect that removes the token from the address bar, and sets the session cookie.
+The token then no longer works, so a copy of the URL left in shell or browser
+history is useless.
+\end{req}
+
+\begin{req}{SEC-6}
+The session cookie is \code{HttpOnly} (scripts cannot read it) and
+\code{SameSite=Strict}.  Its path is the random prefix.
+\end{req}
+
+\begin{req}{SEC-7}
+Browsers scope cookies by host and never by port, so a plain cookie would be sent to
+every other web server on \code{127.0.0.1} that the same browser visits.  For that
+reason every URL of \texttt{fsb} lies under the random prefix (\code{/PREFIX/}), and
+a request whose path is not under it is refused (status 403) like an unauthenticated
+request, whatever cookie it carries.  The interface forms every request relative to
+its own location, so the cookie accompanies exactly the requests that need it.
+\end{req}
+
+\begin{req}{SEC-8}
+A request without a valid session is refused with status 403 and the same body,
+whatever it asked for.  The launch token is never written to the log.
+\end{req}
+
+\subsection{Responses}
+
+\begin{req}{SEC-9}
+Every response carries \code{X-Content-Type-Options: nosniff},
+\code{Cache-Control: no-store}, \code{Referrer-Policy: no-referrer},
+\code{Cross-Origin-Resource-Policy: same-origin}, and, for the interface itself,
+\code{X-Frame-Options: DENY} and a content security policy that permits only
+resources of its own origin, forbids framing, and forbids form submission and base
+URLs.  The interface cannot be framed by another page.
+\end{req}
+
+\begin{req}{SEC-10}
+A file is never displayed from the interface's own origin except as one of the
+previews of Section~\ref{sec:preview}.  Downloading (\rid{API-4}) always answers
+with \code{Content-Type: application/octet-stream} and
+\code{Content-Disposition: attachment}, so a browser saves the file and never
+renders it.
+\end{req}
+
+\begin{req}{SEC-11}
+Inline responses other than the interface itself are limited to: raster images
+whose type is confirmed by their bytes (PNG, JPEG, GIF, WebP), which are sent with a
+policy that sandboxes them and allows nothing else; PDF documents whose bytes begin
+with \code{\%PDF-}, which may be framed only by the interface's own pages; and the
+fixed page that renders Markdown, which runs in a sandboxed frame that has no
+access to the session or the interface, may run only its own fixed script, and may
+load nothing but images given to it as data.  File names are never trusted.
+\end{req}
+
+\begin{req}{SEC-12}
+\texttt{fsb} makes no outbound network connection, sends no telemetry, and does not
+update itself.  Previewing a file never loads anything remote (\rid{PRV-7}).
+\end{req}
+
+\begin{req}{SEC-13}
+\texttt{fsb} never causes a cloud-only file to be downloaded.  The details, the
+hover peek, every preview, and the archive listing check whether the file is stored
+only in the cloud and, if so, report that it is not downloaded (status 409) instead of
+reading it.  The one exception is an explicit download by the user of that file
+(\rid{API-4}), which is the user's request for it.
+\end{req}
+
+\begin{req}{SEC-14}
+A path that is refused for any reason other than a permission error on a
+non-denied path is answered as not found (status 404) with one and the same body.  In
+particular a denied path, a path outside the roots, a path that does not exist, and a
+path that is not a regular file or folder cannot be told apart.  Timing is not
+equalized: a denied path can be answered slightly faster than a missing one.
+\end{req}

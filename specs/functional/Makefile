@@ -1,4 +1,4 @@
-DOC = fsb-algebra
+DOC = fsb-functional
 LATEXMK ?= latexmk
 
 .PHONY: all pdf clean distclean overleaf help

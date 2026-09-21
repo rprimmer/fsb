@@ -1,0 +1,88 @@
+\section{The Rule Matcher}
+\label{sec:rulematcher}
+
+\subsection{Matching}
+
+A rule set is an ordered list of compiled rules.  For a path, the matcher evaluates
+each prefix of the path in turn (the folder itself, its parent, and so on down to the
+path), and the set \emph{excludes} the path if any prefix is excluded: an excluded
+folder excludes everything in it, and no later rule (not even a negation) can bring it
+back, as in git.  Within one prefix the last matching rule wins, which is what makes
+negation in the ignore file work.  The deny file has no negation, so it is a plain
+union of rules.
+
+Matching a path \emph{below} a folder ignores the prefixes at or above that folder.  It is
+used for the hide rules while listing, so that entering a hidden folder on purpose shows
+what is inside it.
+
+\subsection{Compiling a rule}
+
+A rule is translated to a regular expression, case-insensitive and with the dot matching
+a newline (so that a name containing a newline cannot defeat \code{**}), ending in
+\code{\textbackslash s*\$}, so that a name with trailing white space still matches.  The
+translation follows the gitignore glob: \code{*} and \code{?} do not cross a
+separator; \code{**} matches folders; a class \code{[...]} never matches a separator
+(a negated class excludes it explicitly, and a \code{/} inside a class is an error); a
+trailing \code{/} makes the rule apply to folders only.  A pattern is anchored to the home
+folder if it begins with \code{\~{}/}, is absolute if it begins with \code{/}, is relative
+to the home folder if it contains a \code{/} elsewhere, and matches at any depth
+otherwise or after a leading \code{**/}.
+
+\subsection{Name equality}
+\label{sec:fold}
+
+Both the pattern and the path are folded before they are compared (\code{Fold}): Unicode
+normalization (NFC), then \emph{full} case folding, then NFC again.  The rules must
+match names as the volume compares them, and on macOS the case-insensitive volume uses
+full folding, under which the sharp s equals \code{ss}, the long s equals \code{s},
+the Kelvin sign equals \code{k}, and the ligatures \code{ff}, \code{fi}, \code{fl},
+\code{ffi}, \code{ffl} and \code{st} equal their spelled-out forms.  Simple case
+folding, which was used at first, treated these as different names, so
+\code{\~{}/.\ss h} opened \code{\~{}/.ssh} while the rule for \code{.ssh} did not match.  The
+set of aliases was \emph{measured} on the volume, by creating every one- and
+two-letter name and probing every character in the Unicode range, and is a test.
+The client-side filter uses the equivalent lower-, upper-, lower-casing, and the tests
+check that the two agree on the measured aliases.
+
+Names are compared this way so that a deny rule over-matches, which is safe.  Where the
+result is an \emph{allow} (whether a path is inside a root), identity is used instead
+(Section~\ref{sec:roots}).
+
+\subsection{Speed}
+
+Listing a folder evaluates the rules once per entry.  A rule set of about thirty rules
+took about 29~$\mu$s per entry, which would add three seconds to a folder of 100{,}000
+entries, so two optimizations were made, both of which must give the same answer as the
+plain loop:
+
+\begin{itemize}
+  \item A rule whose pattern contains no slash can match only the last component of a
+        path, so it is tested against that component alone (short and anchored) instead of
+        against the whole path at every level.
+  \item For a set without negation, all rules of each kind are combined into one
+        expression, asked first; only when it says a match is possible are the rules
+        consulted one by one, to say \emph{which} rule matched (for \code{--debug}).
+\end{itemize}
+
+The cost is about 9~$\mu$s per entry, and a property test checks that the quick path
+never changes an answer.
+
+\subsection{Loading a rule file}
+
+A rule file is written by a person in an editor, and a deny rule that loads but never
+matches is the worst outcome.  The parser therefore either normalizes or refuses.  It
+strips a leading byte order mark (which otherwise broke the first rule) and accepts any
+line ending (a bare carriage return joined lines).  It refuses, naming the line: an
+inline comment, \code{\~{}name}, a quoted pattern, an invisible character, a lookalike
+of the slash, negation in the deny file, and the malformed patterns of the
+functional specification (\fq{RUL-12}).  Whatever loads, works as written.
+
+\subsection{The built-in rules}
+
+The core deny rules are compiled into the binary, so they apply even without a deny
+file.  The credential rules are not anchored to the current home folder, because the same
+folders exist in backups, clones, other accounts' homes and under a wrong \code{HOME}.  If
+a deny file exists it is authoritative, and \code{CoreMissing} compares the core rules with the
+file's rules \emph{as names} to decide which are not in effect.  The list of credential
+locations for the hard-link index (Section~\ref{sec:linkindex}) mirrors the credential entries of
+the core rules.

@@ -1,0 +1,132 @@
+\section{Invocation and Configuration}
+\label{sec:invocation}
+
+\subsection{Command line}
+
+\begin{req}{CLI-1}
+The command is \code{fsb [flags] [path]}.  With no flags and no path it serves the
+user's home folder.
+\end{req}
+
+\begin{req}{CLI-2}
+The optional \code{path} names the first root.  More than one path argument is an
+error.  A path that does not exist, or is not a folder, is an error.  Symbolic links
+in a root are resolved, so a root is always a real location.
+\end{req}
+
+\begin{req}{CLI-3}
+\code{--root PATH}, which may be repeated, adds further roots (for example
+\code{/Volumes/Data}).  All roots are equal: each is listed as a place the user can
+switch to when there are several.
+\end{req}
+
+\begin{req}{CLI-4}
+The folder \code{/} is refused as a root unless \code{--allow-system-root} is given;
+the message says so.  Rules (Section~\ref{sec:rules}) apply to a root of \code{/} as
+to any other root.
+\end{req}
+
+\begin{req}{CLI-5}
+By default the launch URL is opened in the user's default browser.  \code{--no-open}
+only prints it.  \code{--browser NAME} opens it in the named macOS application
+instead (for example \code{"Google Chrome"}).  A name that begins with \code{-} or
+contains a NUL, carriage return or newline is refused before anything starts.  If
+the browser cannot be opened, \texttt{fsb} says so, keeps running, and the printed
+URL remains usable.  On systems other than macOS the URL is only printed.
+\end{req}
+
+\begin{req}{CLI-6}
+\code{--debug} enables verbose logging on standard error and makes a request for a
+denied path answer with a body that names the matching rule (status still 404).  No
+other flag or setting reveals which rule matched.
+\end{req}
+
+\begin{req}{CLI-7}
+\code{--init} writes the default rule files (Section~\ref{sec:config}) and exits.  It
+creates the folder \code{\~{}/.config/fsb} with mode \code{0700} if needed, creates each
+file with mode \code{0600}, and \emph{never overwrites} a file that exists: it reports
+that the file was left unchanged.  It is the only operation in which \texttt{fsb}
+creates a file.
+\end{req}
+
+\begin{req}{CLI-8}
+\code{-h} or \code{--help} prints the usage text and exits with status 0.  An
+unknown flag prints the error and the usage text and exits with status 1.
+\end{req}
+
+\subsection{Startup output}
+
+\begin{req}{CLI-9}
+On success \texttt{fsb} prints, on standard output, one line naming the roots it
+serves and the loopback address and port, then one line giving the launch URL.  The
+port is chosen by the operating system at each start and is never configurable.
+\end{req}
+
+\begin{req}{CLI-10}
+The launch URL has the form \code{http://127.0.0.1:PORT/PREFIX/?token=TOKEN}, where
+\code{PREFIX} and \code{TOKEN} are random values generated at each start
+(Section~\ref{sec:security}).  It works once; opening it a second time is refused.
+\end{req}
+
+\begin{req}{CLI-11}
+If one or more core deny rules are not in effect (\rid{RUL-16}),
+\texttt{fsb} prints a warning on standard error at startup naming the paths that are
+therefore browsable.
+\end{req}
+
+\subsection{Running and stopping}
+
+\begin{req}{CLI-12}
+\texttt{fsb} runs in the foreground until it receives \code{SIGINT} (Control-C) or
+\code{SIGTERM}.  It then stops accepting requests, allows requests in progress up to
+three seconds to finish, and exits with status 0.
+\end{req}
+
+\begin{req}{CLI-13}
+The exit status is 0 after \code{--help}, \code{--init} and a normal shutdown, and 1
+after any error.  An error is reported on standard error as one line beginning
+\code{fsb:}, and no server is started.
+\end{req}
+
+\begin{req}{CLI-14}
+\texttt{fsb} refuses to start, with a message that names the file and the line, if
+the deny file or the ignore file cannot be parsed
+(Section~\ref{sec:rulefiles}).  It never starts with weaker rules than the user wrote.
+\end{req}
+
+\subsection{Environment}
+
+\begin{req}{ENV-1}
+The home folder is taken from the operating system's notion of the user's home
+(the \code{HOME} environment variable), then resolved to its real location, so that
+a home folder reached through a symbolic link or an alias is treated as the real
+folder.  It determines the default root, the location of the configuration folder,
+and the meaning of \code{\~{}} in rules.
+\end{req}
+
+\subsection{Configuration files}
+\label{sec:config}
+
+\begin{req}{CFG-1}
+Configuration is two optional text files in \code{\~{}/.config/fsb/}: \code{ignore}
+(hide rules) and \code{deny} (block rules).  Both are global; there are no
+per-folder rule files.
+\end{req}
+
+\begin{req}{CFG-2}
+The files are read once, at startup.  Changes take effect at the next start.
+\end{req}
+
+\begin{req}{CFG-3}
+If \code{ignore} does not exist, the built-in ignore rules apply (\code{.DS\_Store},
+\code{.git/}, \code{node\_modules/}).  If \code{deny} does not exist, the core deny
+rules of Section~\ref{sec:core} apply.  If \code{deny} exists it is authoritative:
+whatever it does not contain is not enforced, and a core rule that is missing is
+reported as in \rid{CLI-11} and \rid{RUL-14}.
+\end{req}
+
+\begin{req}{CFG-4}
+User preferences (which columns are shown, the width of the preview pane, and the
+like) are not configuration files: they are kept in the browser
+(Section~\ref{sec:prefs}) and never on disk.
+\end{req}

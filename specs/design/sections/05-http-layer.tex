@@ -1,0 +1,63 @@
+\section{The HTTP Layer}
+
+\subsection{Middleware}
+
+The middleware is a single function that either refuses a request or passes it on with
+the prefix removed.  Its checks, and the order of them, are in the life of a request
+(Section~\ref{sec:guard}); this section records the reasons.
+
+\begin{description}
+  \item[Host.]  A page on another name that resolves to the loopback address still
+        sends its own name in the \code{Host} header, so an exact allowlist of the two
+        loopback names with the port defeats DNS rebinding.  The port is fixed at start.
+  \item[Origin, Referer, Fetch metadata.]  A browser serializes \code{Origin} as exactly
+        scheme, host and port; anything else (a path, credentials, an opaque \code{null}) is
+        refused rather than interpreted.  \code{Sec-Fetch-Site} must be \code{same-origin} or
+        \code{none} (or absent, for clients that do not send it).  The value
+        \code{same-site} is refused because a page on another port of the same host is
+        same-site to the browser, so \code{SameSite=Strict} does not stop it.
+  \item[Read-only.]  Only \code{GET} and \code{HEAD} reach a handler; the endpoint table
+        contains no other method.
+\end{description}
+
+\subsection{The session and the prefix}
+
+The launch token and the session value are 256-bit random values, compared in constant
+time.  The token is exchanged once, atomically, for the session cookie; the response redirects
+to the prefixed root so the token leaves the address bar and the history.
+
+A cookie is scoped by host and by path, never by port.  A plain \code{Path=/} cookie would be
+sent to every other web server on \code{127.0.0.1} that the same browser visits, and a server
+that received it could replay it.  The design therefore serves everything under a random
+128-bit path prefix chosen at start, sets the cookie's path to it, and refuses (403) any URL not
+under it.  The browser then sends the cookie only for URLs under the prefix, which no other
+server has.  The prefix is a scope, not a secret: the session cookie is still required.  The
+front end forms every URL relative to its own location so that this needs no configuration.
+
+\subsection{Headers and framing}
+
+Every response carries the headers of \fq{SEC-9}.  Two endpoints relax framing, deliberately
+and narrowly: the fixed Markdown page and the PDF may be framed by the interface's own pages
+(\code{X-Frame-Options: SAMEORIGIN}, \code{frame-ancestors 'self'}), and the interface itself
+may not.
+
+\subsection{Streaming}
+
+Listings and searches are newline-delimited JSON, flushed as batches are ready, because a
+folder can hold hundreds of thousands of entries and the first screen must not wait for the
+last.  A listing that breaks after it has begun ends with an error line rather than a status
+code, since the status was already sent.  Pagination was rejected: the client sorts, and a
+sort needs all entries, so streaming keeps the whole listing available and still paints early.
+
+\subsection{Errors}
+
+One function maps every guard error to a status.  Denied, outside-the-roots, nonexistent,
+malformed and not-regular all map to the same 404 with the same body; only \code{--debug} adds
+the rule name.  Permission errors on paths that passed every rule map to 403; cloud-only files to
+409; wrong kinds to 415; anything unexpected to 500 with the detail in the log only.
+
+\subsection{Timeouts and shutdown}
+
+The server sets a header-read timeout against slow clients and has no write timeout,
+because streams may legitimately last.  On interrupt or termination it stops accepting requests and
+gives requests in progress three seconds.

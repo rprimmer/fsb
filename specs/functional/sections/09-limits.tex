@@ -1,0 +1,78 @@
+\section{Limits and Non-Functional Requirements}
+\label{sec:limits}
+
+\subsection{Limits}
+
+\begin{req}{LIM-1}
+The following limits apply.  Each bounds the work or the amount of data that one
+request or one preview can cause, and each is reported to the user where it stops
+something.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.50\linewidth}p{0.40\linewidth}@{}}
+\toprule
+Limit & Value \\
+\midrule
+Search results / entries examined by one search & 1{,}000 / 500{,}000 \\
+Text read for a preview & 64~KB (\rid{PRV-3}) \\
+Bytes one \code{api/head} call may request & 1 to 65{,}536 (default 2{,}048) \\
+Rows of a CSV or TSV table & 200 \\
+Lines in a hover bubble & about 20 \\
+Extended attributes shown / largest value shown & 64 / 4~KB \\
+Markdown images per file / size of each & 20 / 5~MB \\
+Archive entries shown & 1{,}000 \\
+Tar entries scanned / decompressed bytes read (tar.gz) & 200{,}000 / 512~MiB \\
+Zip: entries claimed in its directory & 200{,}000 \\
+Column width / preview pane width & 60 to 900 / 240 to 900 pixels \\
+Hard-link index walk (entries / time) & 20{,}000{,}000 / 10 minutes \\
+Time to finish requests at shutdown & 3 seconds \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{req}
+
+\begin{req}{LIM-2}
+When a limit stops a search, an archive listing or a text preview, the interface says
+so (\rid{SRC-2}, \rid{PRV-3}, \rid{PRV-9}); a limit never makes a listing silently
+incomplete.
+\end{req}
+
+\subsection{Non-functional requirements}
+
+\begin{req}{NFR-1}
+Listing a folder of 100{,}000 entries shall paint the first screen in under 500~ms on
+a recent Mac.  \emph{Measured} (2026-09-20, 100{,}000 files): first rows in about
+450~ms, the full listing in 1.5~s, 31 rows drawn.
+\end{req}
+
+\begin{req}{NFR-2}
+Idle memory shall stay under 50~MB, with no persistent index.  \emph{Measured}:
+12.6~MB resident after start.
+\end{req}
+
+\begin{req}{NFR-3}
+From launch to the URL being printed shall take under one second.  \emph{Measured}:
+0.36~s.
+\end{req}
+
+\begin{req}{NFR-4}
+The program shall be a single binary of under 20~MB with the interface embedded.
+\emph{Measured}: 11.3~MB.
+\end{req}
+
+\begin{req}{NFR-5}
+Dependencies shall be few and reviewed, the module checksums pinned, and known
+vulnerabilities scanned for on every change.
+\end{req}
+
+\begin{req}{NFR-6}
+The interface shall be operable from the keyboard (Section~\ref{sec:preview} and the
+key table), use semantic markup, and respect the system's light or dark appearance.
+\end{req}
+
+\begin{req}{NFR-7}
+Rule matching shall cost no more than about 10~$\mu$s per entry with the core rules,
+so that listing a folder of 100{,}000 entries adds about one second at most.
+\emph{Measured}: 9~$\mu$s.
+\end{req}

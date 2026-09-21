@@ -2,7 +2,7 @@
 
 A read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
 
-> **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See [specs/PRD.md](specs/PRD.md).
+> **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See the [functional specification](specs/functional/) and the [design specification](specs/design/).
 
 ### Keyboard
 
@@ -19,7 +19,7 @@ A read-only, local-only web view of your filesystem. One Go binary serves a brow
 ### Preview, hover peek, search, attributes
 
 - **Preview pane:** raster images (PNG, JPEG, GIF, WebP), syntax-highlighted code, Markdown (rendered in a sandboxed frame, with a Source toggle; local images and links to other files work, remote images are never loaded), pretty-printed JSON, CSV/TSV as a table, and plain text, plus details and extended attributes. Images are served sandboxed and identified by their bytes, never their names; SVG and HTML are never rendered.
-- **Hover peek:** hover a readable file for a moment to see its first lines. Turn it off with the "Hover previews" checkbox. It never reads a file that is stored only in the cloud (see the PRD, SR-9).
+- **Hover peek:** hover a readable file for a moment to see its first lines. Turn it off with the "Hover previews" checkbox. It never reads a file that is stored only in the cloud (functional specification, SEC-13).
 - **Names are shown as they are:** a name containing an invisible or reordering character (a right-to-left override, a newline, a control character) is shown with a visible marker such as `‹U+202E›`, so `invoice‮txt.exe` cannot pass for a `.txt` file. Real right-to-left text is untouched, and downloads keep the real name.
 - **Search:** filename search under the current folder, shallowest matches first. It never enters or reports denied or hidden folders and does not follow symlinked folders.
 - **Extended attributes:** shown in the preview pane, and as an optional last column (Columns menu), fetched only for the rows on screen.
@@ -46,7 +46,7 @@ go build -o fsb ./cmd/fsb
 - **Rebinding and cross-site defenses.** Requests must carry an allowed `Host`, must not have a foreign `Origin`/`Referer`, and must not be cross-site per `Sec-Fetch-Site`.
 - **Single-use launch token.** The URL printed at startup carries a token that is exchanged once for an `HttpOnly`, `SameSite=Strict` session cookie. The token is never logged.
 - **Cookie scoped to a random path.** Browsers scope cookies by host and never by port, so a plain cookie would be sent to every other web server on `127.0.0.1` that you visit. fsb therefore serves everything under a random per-launch prefix (`http://127.0.0.1:PORT/<random>/`) and sets the cookie's `Path` to it: the browser sends it only for URLs under that prefix, which no other server has. Any URL outside the prefix is refused. Open the printed URL (bookmarks do not survive a restart).
-- **Read-only by construction.** Only `GET`/`HEAD` are served, and the binary contains no write code.
+- **Read-only.** Only `GET`/`HEAD` are served, and nothing it serves can be modified through it. The only file `fsb` ever creates is by `--init`, which writes new rule files and never overwrites one.
 - **One chokepoint.** Every filesystem access goes through `internal/guard`. A test fails the build if HTTP-facing packages import `os`, `io/fs`, `syscall` or `path/filepath`.
 - **Symlinks and races.** The file is opened first, then its real path is resolved and verified to be the same file before any bytes are served. Symlinks that lead outside the roots or into denied paths are refused.
 
@@ -72,9 +72,22 @@ See [specs/SECURITY.md](specs/SECURITY.md) for the threat model, what is and is 
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 
-## Algebraic specification
+## Documentation
 
-[`specs/algebra/`](specs/algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found sixteen defects, all fixed (see its Findings section). Build it with `make -C specs/algebra` (needs a TeX installation; the PDF is written to `specs/algebra/build/`).
+- **Manual page:** `man ./man/fsb.1` (hand-written roff; check with `mandoc -Tlint man/fsb.1`). Install it as `fsb.1` in a `man1` folder on your `MANPATH`.
+- **[Functional specification](specs/functional/fsb-functional.pdf):** what `fsb` does, as an outside observer sees it. Every requirement has a stable identifier (`RUL-4`, `SEC-7`, ...) that the other documents and the tests cite.
+- **[Design specification](specs/design/fsb-design.pdf):** how it is built and why, the alternatives rejected, how it is tested, and its limits.
+- **[Algebraic specification](specs/algebra/fsb-algebra.pdf):** a formal statement of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found sixteen defects, all fixed (see its Findings section).
+- **[Security policy](specs/SECURITY.md):** the threat model, what is and is not guaranteed, and how it was tested.
+
+The specifications are LaTeX. The built PDFs are committed next to their sources. To rebuild them (needs a TeX installation with `latexmk`):
+
+```sh
+make -C specs            # all three; or run make in one folder
+make -C specs overleaf   # source-only zips in specs/*/dist/ for Overleaf
+```
+
+To edit on [Overleaf](https://www.overleaf.com) instead of installing TeX, upload `specs/<document>/dist/fsb-<document>-overleaf.zip` as a new project and set the main document to `fsb-<document>.tex` with pdfLaTeX; see [specs/OVERLEAF.md](specs/OVERLEAF.md).
 
 ## Development
 

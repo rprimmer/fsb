@@ -1,0 +1,74 @@
+\section{Architecture}
+
+\subsection{Components}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.24\linewidth}p{0.66\linewidth}@{}}
+\toprule
+Component & Responsibility \\
+\midrule
+\code{cmd/fsb} & Command line, startup, the launch URL, opening the browser, shutdown. \\
+\code{internal/rules} & The rule dialect: parsing, matching, name folding, the built-in rules. Knows nothing of files. \\
+\code{internal/guard} & The chokepoint: opening, listing, searching, reading heads, metadata, sniffed endpoints, archive listing, the hard-link index. The only code that touches the file system on behalf of a request. \\
+\code{internal/httpguard} & The middleware that makes a local web server safe: host and origin checks, the session, the prefix, security headers. Knows nothing of files. \\
+\code{internal/server} & The endpoints. Turns guard results into HTTP, and guard errors into status codes. \\
+\code{web} & The embedded front end, and the fixed page that renders Markdown. \\
+\code{e2e} & Browser tests, and their drivers for Chrome and Safari. \\
+\code{specs} & These documents. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Structure}
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=2pt, minimum width=2.6cm, minimum height=0.8cm, align=center, font=\small},
+  arrow/.style={-{Stealth[length=2mm]}, thick},
+  node distance=0.9cm and 1.4cm]
+  \node[box] (browser) {Browser\\interface};
+  \node[box, right=of browser] (hg) {httpguard\\middleware};
+  \node[box, right=of hg] (srv) {server\\endpoints};
+  \node[box, right=of srv] (guard) {guard};
+  \node[box, below=of guard] (rules) {rules};
+  \node[box, below=of srv] (fs) {file system\\(the OS)};
+  \draw[arrow] (browser) -- (hg);
+  \draw[arrow] (hg) -- (srv);
+  \draw[arrow] (srv) -- (guard);
+  \draw[arrow] (guard) -- (rules);
+  \draw[arrow] (guard) -- (fs);
+\end{tikzpicture}
+\end{center}
+
+Dependencies point one way: \code{server} uses \code{guard} and \code{httpguard};
+\code{guard} uses \code{rules}; \code{rules} and \code{httpguard} use nothing of the
+program's own.  \code{cmd/fsb} assembles them.
+
+\subsection{Life of a request}
+
+\begin{enumerate}
+  \item The HTTP server accepts the connection on the loopback address.
+  \item The access log records the method, path and status, never the query
+        (which is where the launch token travels).
+  \item The middleware sets the security headers, then checks, in order: the
+        \code{Host} header; the method; the \code{Origin}, \code{Referer} and
+        \code{Sec-Fetch-Site} headers; that the path is under the random prefix
+        (which it strips); the launch-token exchange; and the session cookie.  A
+        failure of any check is the same 403 (\fq{SEC-2} to \fq{SEC-8}).
+  \item The endpoint reads its parameters and calls one guard operation.
+  \item The guard canonicalizes the path, checks it against the deny rules before and
+        after opening, opens the file, verifies that what was opened is what was
+        checked, and decides the file's kind from its bytes where needed.
+  \item The endpoint turns the result into a response, and every guard error into a
+        status code in one function (\code{fail}), so that denied, missing and
+        outside-the-roots paths cannot be told apart by accident.
+\end{enumerate}
+
+\subsection{Startup}
+
+\code{cmd/fsb} resolves the home folder to its real path, loads the two rule files
+(or their built-in defaults), builds the guard from the roots and rules, names the
+credential locations the guard must also protect, starts the hard-link index
+building in the background, binds the loopback port, prints the launch URL, and only
+then serves.  A failure at any step before serving stops the program with a message.

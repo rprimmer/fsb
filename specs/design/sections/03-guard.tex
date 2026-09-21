@@ -1,0 +1,154 @@
+\section{The Guard}
+\label{sec:guard}
+
+\subsection{Opening a path}
+
+Every operation begins by opening the path, in this order.  The order is the design.
+
+\begin{enumerate}
+  \item \textbf{Canonicalize.}  The path must be non-empty, contain no NUL, and be
+        absolute.  It is cleaned lexically (\code{.}, \code{..} and repeated slashes
+        removed) and reduced to one spelling of each alias (Section~\ref{sec:aliases}).
+        URL-decoding has already happened, exactly once, in the HTTP layer; the guard
+        never decodes, so a literal \code{\%2e\%2e} is just a name.
+  \item \textbf{Lexical deny check.}  The cleaned path is matched against the deny
+        rules \emph{before the file system is touched}.  The type of the final
+        component is not yet known, so it is treated as a file here; a rule that
+        applies only to folders is decided in step~7.  (Assuming a folder would refuse
+        a plain file that shares its name with a \code{dir/} rule although listings
+        show it.)
+  \item \textbf{Open without blocking.}  The path is opened read-only and
+        non-blocking, so that a pipe or a device cannot hang the server.  A permission
+        error is examined (Section~\ref{sec:ancestor}) before it is reported.
+  \item \textbf{Reject special files.}  On the descriptor, anything but a regular file
+        or a folder is refused.  Only then is blocking restored.
+  \item \textbf{Resolve and confirm.}  The real path is resolved (symbolic links
+        followed), and the guard confirms that the file at that real path is the
+        \emph{same file} as the open descriptor (device and inode).  If not, the path
+        changed between the two steps and the request is refused as a race.
+  \item \textbf{Roots and deny on the real location.}  The real path must lie inside a
+        root (by identity, Section~\ref{sec:roots}), and must not match a deny rule.
+  \item \textbf{Precise lexical check.}  With the type now known, the requested path is
+        matched again.  A path is thus refused if \emph{either} its spelling or its real
+        location is denied.
+  \item \textbf{Other names.}  A regular file with several names is checked against
+        the hard-link index (Section~\ref{sec:linkindex}).
+\end{enumerate}
+
+Everything that later reads bytes does so through the descriptor this returns, so
+the decision and the read concern the same file.  Extended attributes, for example,
+are read from that descriptor.
+
+\subsection{Aliases}
+\label{sec:aliases}
+
+macOS keeps its user data on a separate volume whose folders appear at ordinary
+paths through \emph{firmlinks}: \code{/Users} and \code{/System/Volumes/Data/Users}
+are one directory.  Firmlinks are not symbolic links, so resolving links does not
+reduce them, and a rule for \code{/Users/me/.ssh} would not match the longer
+spelling.  Every path is therefore reduced to its ordinary form before any comparison
+with a root or a rule.
+
+The reduction compares path components one at a time, with the same name equality as
+the rules (Section~\ref{sec:fold}), and rebuilds the path from the firmlink's own
+spelling.  An earlier version sliced the path to the byte length of the prefix, which
+cut a folded spelling (\code{/S}\emph{long-s}\code{ystem}) in the middle of a
+character and left it unreduced.  The firmlink table is read from
+\code{/usr/share/firmlinks}, with a built-in copy as fallback.
+
+\subsection{Roots}
+\label{sec:roots}
+
+Each root is resolved to its real path at startup, and its identity (the file
+information of the folder) is kept.  Whether a path lies inside a root is then decided
+by taking the leading components of the path that correspond to the root and
+comparing the \emph{identity} of that folder with the root's.  Comparing folded text
+would be right on a case-insensitive volume but would admit a different sibling on a
+case-sensitive one (\code{Public} for a root of \code{public}).  This is an allow
+decision, so it must not over-match.
+
+\subsection{Permission errors inside denied places}
+\label{sec:ancestor}
+
+An unreadable file inside a denied folder must look exactly like a missing one, or its
+existence leaks.  When opening fails with a permission error, the guard resolves the
+longest prefix of the path that can be resolved (an unsearchable folder stops the
+resolution of what is inside it, not of the folder itself), rebuilds the full real
+path from it, and applies the deny rules to that.  Only if nothing denies it is the
+permission error reported.
+
+\subsection{Listing}
+
+A listing opens the folder as above and receives its real location.  Each child is
+then judged by \emph{that} location and not by the symbolic link or alias the folder
+was reached through, in one function used by both listing and search
+(\code{entry}), so that search cannot show what listing would not.  For a child:
+
+\begin{itemize}
+  \item a symbolic link is resolved; a broken one is marked; one whose target is denied
+        or outside the roots is omitted; the target's size, date and type are shown;
+  \item the child's path is matched against the deny rules and, separately, the hide
+        rules, each ignoring the ancestors above the folder itself (so entering a hidden
+        folder on purpose shows its contents);
+  \item a regular file with several names is checked against the hard-link index.
+\end{itemize}
+
+Entries are handed out in batches as the directory is read, which is what lets the
+interface paint before a huge folder has been read.
+
+\subsection{Search}
+
+Search is a breadth-first walk, so shallow matches come first.  Every folder is opened
+through the same operation, every child goes through \code{entry}, denied and hidden
+folders are never entered, and symbolic links to folders are never followed (which
+also rules out cycles).  It stops at a result limit or an entry limit and reports that a limit
+stopped it.  Names are compared after the folding of Section~\ref{sec:fold}, or, for
+\emph{Match case}, after normalization only.
+
+\subsection{Cloud-only files}
+
+On macOS a file that exists only in the cloud carries a flag in its file information.
+The guard checks it before any read and reports the file as not downloaded; the head,
+the metadata, the previews and the archive listing all refuse to read it.  Reading such
+a file would make the system download it, which \texttt{fsb} must never do implicitly.
+An explicit download by the user is the one path that reads it.
+
+\subsection{Other files and endpoints}
+
+\begin{description}
+  \item[Head] reads at most a stated number of bytes from the descriptor, and returns
+        text only if it is valid UTF-8 without control characters; binary contents never
+        leave the guard.
+  \item[Metadata] describes the entry, and reads extended attributes through the
+        descriptor, capped in number and size.
+  \item[Sniffed endpoints] (image, PDF, archive) share one routine that opens the file,
+        reads its first bytes, decides the kind from them, and rewinds; they differ only
+        in the test applied (Section~\ref{sec:content}).
+\end{description}
+
+\subsection{Hard links}
+\label{sec:linkindex}
+
+Rules name paths, and a hard link is another name for the same file, so a hard link to a
+denied file is invisible to them.  The guard therefore judges a regular file with more
+than one name by its identity: if any of its names is denied, all of them are.
+
+\paragraph{The index.}  Finding the other names of a file means visiting every file
+under the roots, because the operating system offers no way to ask.  A walk therefore
+builds an index from identity to names, containing only regular files with more than one
+name (a few dozen on a typical home folder), and the guard evaluates a file's names
+against the deny rules.  The walk also covers the \emph{protected locations} named by the
+program at startup (the credential folders of every home), so that a link from a served
+folder to a credential file outside the roots is found.
+
+\paragraph{The walk is in the background.}  On a home folder of 700{,}000 files it takes
+about 18 seconds, which must not be spent inside a request.  It is started at startup.
+While it has not finished, and for a file with several names that it has not seen (a link
+made since), the file is \emph{refused}: guessing ``allowed'' would defeat the purpose.
+A later walk that began after the file was first noticed and still does not find it
+shows that the walker cannot see it, and the file is then allowed, so that nothing is
+refused forever.  Walks are spaced by at least twice the time the last one took, and
+bounded by an entry count and a time.
+
+\paragraph{What is not covered.}  A denied name that lies outside every root and every
+protected location, and links made after a walk was stopped by its limit, are not found.

@@ -1,0 +1,71 @@
+\section{Content-Typed Endpoints}
+\label{sec:content}
+
+Three endpoints look inside a file: inline images, inline PDFs, and archive listings.  Each is
+defined by a test on the file's \emph{leading bytes}, never its name, and each opens the file
+through the guard, so every property of Section~\ref{sec:guard} applies to it unchanged.
+
+\subsection{Images}
+
+An image is served inline only if its first bytes are a PNG, JPEG, GIF or WebP signature.
+The response is sent with a policy that sandboxes it and allows no resources, so even a
+crafted file has nothing to reach.  SVG is never accepted, because it can carry script, and
+neither is HTML.  A file named \code{.png} that is not one is refused (415) and the interface
+falls back to the ordinary file preview.
+
+\subsection{PDFs}
+
+A PDF is served inline only if it begins with \code{\%PDF-}.  It cannot be sent with the
+\code{sandbox} policy that images get, because browsers then refuse to display it.  The
+protection is instead the byte check, framing headers that allow only the interface's own
+pages to embed it, a policy that forbids script in the response, and the browser's own PDF
+viewer, which runs in an isolated component of its own.  The interface asks first, with a
+one-byte range request, whether the file really is a PDF, and only then points a frame at it.
+
+\subsection{Archives}
+
+An archive listing returns names and sizes only, never member data, and nothing is extracted.
+The format is decided from bytes: the zip signature, the \code{ustar} marker at offset 257 of a
+tar, or a gzip stream that contains a tar.  The limits of \fq{LIM-1} bound a hostile file:
+
+\begin{itemize}
+  \item A zip's directory is held in memory by the standard library, so the guard first reads
+        the end-of-central-directory record and refuses a zip that claims more entries than it
+        will index (and, when the count is stored elsewhere in a very large zip, refuses by
+        size).
+  \item A tar is streamed, stopping at an entry limit; a gzip-compressed tar is read through a
+        reader capped at a number of decompressed bytes, so a bomb costs a bounded amount of
+        time and memory, and the listing says it was cut short.
+  \item Member names are untrusted: control characters and invalid UTF-8 are replaced, and the
+        interface additionally replaces bidirectional characters, and names are only ever
+        displayed, never used as paths.
+\end{itemize}
+
+\subsection{Rendered Markdown}
+
+Rendering a Markdown file must not run code, load anything remote, or reach the interface.
+It is done in three layers, each assuming the one before failed.
+
+\begin{enumerate}
+  \item \textbf{Escaping.}  The Markdown is converted by a library configured so that raw HTML
+        in the source becomes text; links carry no address at all (an attribute says what
+        they mean: a file on the disk, or a web address); images carry no source (a marker names
+        a local file); a remote or unsupported image becomes a text placeholder.  A link is
+        resolved against the Markdown file's folder to a normalized absolute path, or dropped
+        to plain text if it is not a relative path or an \code{http} or \code{https} address.
+  \item \textbf{Sanitizing.}  The result goes through DOMPurify with a fixed list of allowed
+        tags and attributes.
+  \item \textbf{A sandboxed frame.}  The sanitized markup is sent by \code{postMessage} to a fixed
+        page, framed with \code{sandbox="allow-scripts"} (so it has an opaque origin and no access
+        to the session or the interface).  The page's own policy is \code{default-src 'none'}
+        with images limited to \code{data:}, and admits its one script and one style
+        \emph{by hash}, computed from the page at start so that a change to the page cannot
+        silently invalidate the policy.  The page accepts messages only from its parent.
+\end{enumerate}
+
+Links are not followed inside the frame.  A click sends a message to the interface, which
+validates it and either changes the location to the target file's folder with the file selected,
+or opens a web address in a new tab without a referrer.  Images inside the roots are fetched by
+the interface, through the guarded image endpoint, and passed in as \code{data:} URLs, because the
+cookie's scope and \code{SameSite} would otherwise stop the opaque-origin frame from fetching them.
+Opening a Markdown file therefore makes no request to anything outside the machine.

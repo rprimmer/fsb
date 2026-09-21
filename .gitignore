@@ -3,4 +3,5 @@
 /web/node_modules/
 /dist/
 *.test
-specs/algebra/build/
+specs/*/build/
+specs/*/dist/

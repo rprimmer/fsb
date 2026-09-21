@@ -1,0 +1,160 @@
+\section{Browsing}
+\label{sec:browsing}
+
+\subsection{Names and case}
+\label{sec:names}
+
+\begin{req}{NAM-1}
+Wherever this specification says that two names are ``the same name'', it means
+what the file system means.  On the macOS file system in its default,
+case-insensitive form, two names are the same name when they are equal after
+Unicode normalization and \emph{full} case folding.  Under full folding,
+\code{ss} and the letter sharp s, \code{s} and the long s, \code{k} and the Kelvin
+sign, and the ligatures \code{ff}, \code{fi}, \code{fl}, \code{ffi}, \code{ffl}
+and \code{st} are the same as their spelled-out forms.  A name that the file system
+resolves to a file is that file, and every rule, root check and search treats it as
+such.
+\end{req}
+
+\begin{req}{NAM-2}
+A name that contains characters that would disguise it, namely control characters,
+bidirectional overrides and isolates, line and paragraph separators, the byte order
+mark, and tag characters, is displayed with each such character replaced by a
+visible marker naming its code point (for example \code{\textlangle U+202E\textrangle}).
+Ordinary text, including text in right-to-left scripts, is displayed unchanged.
+Links and downloads use the real name.
+\end{req}
+
+\subsection{Roots and reachability}
+
+\begin{req}{ROOT-1}
+Only the roots (\rid{CLI-2}, \rid{CLI-3}) are reachable.  A request for anything
+outside them, including through a symbolic link that leads outside, is answered as a
+path that does not exist.  Whether a path is inside a root is decided by the
+identity of the folder, not by how the path is spelled.  (On a case-sensitive
+volume, a root named \code{Public} does not admit a different folder named
+\code{public}.)
+\end{req}
+
+\begin{req}{ROOT-2}
+When there is more than one root, the interface offers a way to switch between
+them.  The box \emph{Go to path} (key \code{g}) accepts an absolute path, or one
+beginning \code{\~{}/}, and resolves \code{.}, \code{..}, doubled and trailing
+slashes.  A path outside the roots produces a message that says the folder is not
+served and lists the roots.  \code{\~{}name} (another user's home) is refused.
+\end{req}
+
+\subsection{Listing}
+
+\begin{req}{LST-1}
+Opening a folder lists its entries with the columns \emph{Name}, \emph{Size},
+\emph{Modified}, \emph{Kind} and \emph{Permissions}, and an optional last column,
+\emph{Attributes} (\rid{META-3}).  A folder has no size shown.  Size is right-aligned.
+\end{req}
+
+\begin{req}{LST-2}
+The listing is delivered incrementally, so the first rows appear before a very
+large folder has been read, and only the rows on screen are drawn.  A folder of
+100{,}000 entries remains responsive (Section~\ref{sec:limits}).
+\end{req}
+
+\begin{req}{LST-3}
+Entries are sorted as the tool \code{eza} sorts by default: names compare without
+regard to case, digits inside names compare by value (\code{file2} before
+\code{file10}), and a leading dot sorts before letters, so \code{.bashrc} comes
+first.  Folders are \emph{not} grouped by default.  Clicking a column header sorts
+by that column, and clicking it again reverses the order.  Ties fall back to the
+name, so the order is total and does not depend on the order in which the file
+system returned the entries.
+\end{req}
+
+\begin{req}{LST-4}
+The option \emph{Folders first}, off by default, lists all folders before all files
+under every sort column and in both directions.  A folder, having no size, sorts as
+smaller than any file when sorting by size.  A modification time that cannot be read
+sorts as the oldest.
+\end{req}
+
+\begin{req}{LST-5}
+A symbolic link is shown with a link marker.  Its size, date and kind are those of
+its target.  A link whose target does not exist is shown as broken.  A link whose
+target is denied, or lies outside the roots, is not shown at all.
+\end{req}
+
+\begin{req}{LST-6}
+Sockets, devices and pipes are listed but never opened.
+\end{req}
+
+\begin{req}{LST-7}
+Entries whose names begin with a dot are hidden until the option \emph{Hidden files}
+is turned on.  This option is independent of the ignore file (\rid{RUL-2}) and never
+reveals an entry that a rule hides or denies.
+\end{req}
+
+\begin{req}{LST-8}
+The box \emph{Filter this folder} (key \code{/}) narrows the listing as the user
+types, to entries whose names contain the text.  Matching ignores case and
+normalization as in \rid{NAM-1}, unless the option \emph{Match case} is on, in which
+case only normalization is ignored.  The filter finds the same names that search
+finds (\rid{SRC-3}).
+\end{req}
+
+\begin{req}{LST-9}
+The interface shows the current path as breadcrumbs, each a link to that folder,
+and a button that copies the path (also key \code{c}, which copies the selected
+entry's path, or the folder's when nothing is selected).
+\end{req}
+
+\begin{req}{LST-10}
+The location in the browser's address bar identifies the folder (in the fragment,
+\code{\#/Users/me/docs}) and optionally an entry to select
+(\code{?select=name}), so a folder can be bookmarked and the browser's Back button
+works while \texttt{fsb} is running.
+\end{req}
+
+\begin{req}{LST-11}
+Columns can be resized by dragging their edge (double-click, or Enter on the edge,
+fits the column to the visible rows; Left and Right resize by 10 pixels, with Shift
+by 50), reordered by dragging a header onto another or with Alt and the arrow keys,
+and shown or hidden from the \emph{Columns} menu (Name is always shown).  Widths are
+between 60 and 900 pixels.  \emph{Reset columns} restores the defaults.  The menu
+closes on an outside click and on Escape.  On a narrow window the table scrolls
+sideways and does not hide columns.
+\end{req}
+
+\begin{req}{LST-12}
+Denied entries never appear in a listing (\rid{RUL-1}), whatever options are set.
+The interface shows a badge saying that it is read-only.
+\end{req}
+
+\subsection{Search}
+
+\begin{req}{SRC-1}
+The box \emph{Search subfolders by name} (key \code{s}; Enter runs the search)
+finds entries under the current folder whose names contain the text, at any depth.
+\end{req}
+
+\begin{req}{SRC-2}
+Results stream in as they are found, shallowest first, so the nearest matches
+appear immediately.  The search stops at 1{,}000 results or after 500{,}000 entries
+have been examined, and the interface says when a limit stopped it.
+\end{req}
+
+\begin{req}{SRC-3}
+Search compares names as in \rid{NAM-1} (case, accents and normalization are
+ignored), unless \emph{Match case} is on.  A search for \code{strasse} finds a file
+named with the sharp s.
+\end{req}
+
+\begin{req}{SRC-4}
+Search never enters or reports a denied or hidden folder, never reports a denied or
+hidden entry, and does not follow symbolic links to folders (so it always
+terminates).  Anything a search reports is also shown when the folder that contains
+it is listed.
+\end{req}
+
+\begin{req}{SRC-5}
+Choosing a result opens its folder with that entry selected.  While results are
+shown, the last breadcrumb, Escape, and a \emph{Clear search} control all return to
+the plain listing.
+\end{req}

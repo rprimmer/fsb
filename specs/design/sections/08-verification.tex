@@ -1,0 +1,41 @@
+\section{Verification}
+\label{sec:verification}
+
+The strategy follows the principles: the parts that decide what is served get the heaviest
+testing, and the tests that matter most let the operating system decide the facts.
+
+\subsection{Layers}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.25\linewidth}p{0.65\linewidth}@{}}
+\toprule
+Layer & What it establishes \\
+\midrule
+Unit and integration (Go) & Behavior of the matcher, the guard, the middleware and every endpoint, including deliberately hostile paths. A test fails the build if an HTTP-facing package imports \code{os}, \code{io/fs}, \code{syscall} or \code{path/filepath}. \\
+Property tests & The laws of the algebraic specification, with fixed seeds: monotonicity and order independence of deny, ancestor closure, fold invariance, listed implies openable, found implies listed, and the equivalence of the quick matching path with the plain one. \\
+Fuzzing & The guard (with an oracle that does not trust \texttt{fsb}'s rules: whatever it returns must not be the same inode as a known secret or contain a secret marker), the matcher, the middleware, and the whole server stack. \\
+Differential test against the OS & For each secret, thousands of generated spellings (case, folding aliases, decomposed accents, separators, dot segments, firmlink and symbolic-link aliases, named forks) are filtered by the operating system to those that really reach the secret, and every one must be refused. The reverse direction requires every such spelling of an ordinary file to be served. Reverting the folding fix makes it fail about 1{,}500 times. \\
+Real-volume tests & Root containment on a real case-sensitive volume, run when a location for one is given. \\
+Front-end tests (Node) & The pure modules, including the laws for ordering, filtering, location round trips, link resolution and name display. \\
+Browser tests & A dependency-free suite written once against a driver interface, run with real keyboard and mouse events in Chrome (DevTools protocol) and Safari (WebDriver). It includes attacks from a second origin and from a page on another port, a DNS-rebinding hostname, the cookie's scope, and a 100{,}000-file folder. \\
+Mutation checks & Removing a rule or reverting a fix must make a test fail; this was done for the folding fix, the cookie path, and others. \\
+Algebra & The laws, and the defects found by stating them (Section~\ref{sec:history}). \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Continuous integration}
+
+On every change: formatting, vetting, the Go tests under the race detector, the front-end
+tests, type checking, a build whose output must equal the committed one, an audit of the
+packages that ship, the Chrome browser tests, and timed fuzzing of the four fuzz targets.
+A scan for known vulnerabilities in the Go modules runs as well.  (The workflow has not yet run
+on a hosted service, because the repository has no remote yet.)
+
+\subsection{What testing does not establish}
+
+None of this is a guarantee.  It is a record of what was checked.  A fuzzer reaches only what
+its fixture contains, and an early version missed a bug for that reason; the differential test
+exists because reasoning about names had been wrong.  An independent review, and a
+professional penetration test before wide release, remain planned.

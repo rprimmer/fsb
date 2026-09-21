@@ -1,0 +1,45 @@
+\section{Principles}
+
+The security of \texttt{fsb} rests on a few principles that the rest of the design
+applies.  Each was, at some point, the lesson of a defect (Section~\ref{sec:history}).
+
+\begin{description}
+  \item[One chokepoint.]  Every read of the user's file system goes through one
+        package, the \emph{guard}.  No package that serves HTTP may touch the file
+        system, and a test fails the build if one imports \code{os}, \code{io/fs},
+        \code{syscall} or \code{path/filepath}.  A property of the guard therefore
+        holds for every endpoint at once.
+  \item[Fail closed.]  When a decision cannot be made, the answer is refusal:
+        a malformed rule file stops the program from starting; a file with several
+        names is refused until its names are known; a path that cannot be resolved is
+        not served.
+  \item[Over-match to deny, decide by identity to allow.]  Comparing names can be
+        wrong in either direction.  A deny check may safely match too much (it only
+        blocks more); an allow check must not, and so decides by the identity of the
+        file or folder (device and inode), never by the spelling of its name.
+  \item[Name equality belongs to the volume.]  Whether two names are the same file is
+        a fact about the file system, not about the program.  The program compares
+        names the way the volume does, and tests that claim against the operating
+        system rather than against its own model.
+  \item[Decide from bytes, not names.]  What a file \emph{is} (an image, a PDF, an
+        archive) is decided from its contents.  A name is at most a hint.
+  \item[Read nothing that is not needed.]  Refusal is decided before any byte is
+        read; a cloud-only file is never read implicitly, because reading it downloads
+        it.
+  \item[Each layer assumes the one before it failed.]  Rendered Markdown, for
+        example, is escaped, then sanitized, then shown in a frame that cannot run
+        anything of its own or reach the network.
+  \item[Verify against the environment.]  The tests that matter most let the
+        operating system decide the facts (Section~\ref{sec:verification}).
+\end{description}
+
+\subsection{Technology}
+
+The back end is Go, using the standard library's HTTP server, with one extra
+dependency for Unicode (\code{golang.org/x/text}, for normalization and case
+folding) and one for extended attributes (\code{golang.org/x/sys}).  The front end
+is Svelte 5 with TypeScript, built with Vite, and embedded in the binary with
+\code{go:embed}; the compiled output is committed so that building the binary needs
+no Node.  The front end has three runtime dependencies that ship in the output:
+\code{marked} (Markdown), \code{dompurify} and \code{highlight.js}; Svelte is compiled away.
+The result is a single binary of about 11~MB.

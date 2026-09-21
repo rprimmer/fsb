@@ -1,0 +1,482 @@
+.\" fsb(1): manual page. Hand-written roff (man(7) macros).
+.\" Check with:  mandoc -Tlint man/fsb.1   and   man ./man/fsb.1
+.TH FSB 1 "September 21, 2026" "fsb 0.1" "User Commands"
+.SH NAME
+fsb \- a read-only, local-only web view of your files
+.SH SYNOPSIS
+.B fsb
+.RB [ \-\-debug ]
+.RB [ \-\-no\-open ]
+.RB [ \-\-browser
+.IR NAME ]
+.RB [ \-\-allow\-system\-root ]
+.RB [ \-\-root
+.IR PATH ]...
+.RI [ path ]
+.br
+.B fsb \-\-init
+.br
+.B fsb \-h
+.SH DESCRIPTION
+.B fsb
+serves a web interface for browsing your own files on macOS.
+It listens on the loopback address
+.B 127.0.0.1
+only, prints a single-use address, opens it in your browser, and runs until you
+interrupt it.
+In the browser you can list folders, sort, filter and search by name, and
+preview
+files (text and source code, JSON, CSV, Markdown, images, PDFs, and the
+contents of
+zip and tar archives) without leaving the window.
+.PP
+.B fsb
+is read-only.
+It never modifies, creates, renames, moves or deletes anything it serves.
+The only file it ever creates is by
+.BR \-\-init ,
+which writes two new rule files and never overwrites one.
+.PP
+Two rule files control what you see.
+Paths matching the
+.I ignore
+rules are hidden from listings and search but remain reachable by their path.
+Paths matching the
+.I deny
+rules are never served in any way, and are answered exactly as a path that
+does not
+exist.
+A built-in set of deny rules covers known credential and secret locations, and
+is
+active even if you have no rule files.
+.PP
+Only the folders you name are served.
+With no path,
+.B fsb
+serves your home folder.
+.SH OPTIONS
+Options may be written with one or two leading hyphens.
+.TP
+.I path
+The first root to serve.
+It must be an existing folder.
+At most one is accepted.
+The default is your home folder.
+.TP
+.BI \-\-root " PATH"
+Serve an additional root, such as
+.BR /Volumes/Data .
+May be repeated.
+When there are several roots the interface offers a way to switch between them.
+.TP
+.B \-\-allow\-system\-root
+Permit
+.B /
+as a root.
+Without this option
+.B fsb
+refuses to serve
+.BR / .
+The rules still apply.
+.TP
+.B \-\-no\-open
+Print the launch URL and do not open a browser.
+Use this to paste the URL into a browser of your choice.
+.TP
+.BI \-\-browser " NAME"
+Open the launch URL in the macOS application
+.I NAME
+(for example
+.BR """Google Chrome""" )
+instead of your default browser.
+A name beginning with a hyphen, or containing a NUL, carriage return or
+newline, is
+refused.
+If the application cannot be opened,
+.B fsb
+says so and keeps running; the printed URL still works.
+.TP
+.B \-\-debug
+Log verbosely to standard error, and answer a request for a denied path with a
+body
+naming the rule that matched (the status is still 404).
+Nothing else reveals which rule matched.
+.TP
+.B \-\-init
+Write the default rule files to
+.I ~/.config/fsb/
+and exit.
+The folder is created with mode 0700 and each file with mode 0600.
+A file that already exists is left unchanged and reported.
+.TP
+.B \-h ", " \-\-help
+Print a usage summary and exit with status 0.
+.SH STARTING AND STOPPING
+On success
+.B fsb
+prints, on standard output, a line naming the roots and the address, then the
+launch
+URL:
+.PP
+.RS
+.nf
+fsb: serving /Users/you read-only on http://127.0.0.1:53349
+fsb: open this single-use URL: http://127.0.0.1:53349/AaGF.../?token=...
+.fi
+.RE
+.PP
+The port is chosen at random at each start and is not configurable.
+The URL works once: the first request that uses it sets a session cookie in your
+browser and the token is then useless, so a copy left in your shell history or
+browser
+history cannot be used.
+It also contains a random path prefix under which everything is served; a
+bookmark of
+the URL does not survive a restart.
+.PP
+.B fsb
+runs in the foreground.
+Interrupt it with Control-C or send
+.BR SIGTERM ;
+it stops accepting requests, allows requests in progress up to three seconds to
+finish, and exits with status 0.
+.SH USING THE INTERFACE
+.SS Keys
+.TP
+.BR Up ", " Down ", " PgUp ", " PgDn ", " Home ", " End
+Move the selection.
+.TP
+.BR Enter " or " Right
+Open the selected folder.
+A search result opens in its folder with the file selected.
+.TP
+.BR Left " or " Backspace
+Go up one folder, reselecting the one you left.
+.TP
+.B Space
+Show or hide the preview pane.
+.TP
+.B /
+Filter this folder by name.
+.TP
+.B s
+Search subfolders by name.
+Enter runs the search.
+.TP
+.B g
+Go to a path.
+Accepts an absolute path or one beginning with
+.BR ~/ .
+.TP
+.B c
+Copy the selected entry's path (the folder's, if nothing is selected).
+.TP
+.B Escape
+Clear the search, close a menu, or leave a text box.
+.TP
+.BR Alt+Left ", " Alt+Right
+With a column header focused, move the column.
+.PP
+Shortcuts do not act while you are typing in a text box.
+.SS Options in the window
+.B Hidden files
+shows names that begin with a dot (it never reveals an ignored or denied entry).
+.B Folders first
+lists folders before files under every sort column.
+.B Match case
+makes the filter and search case-sensitive.
+.B Hover previews
+shows the first lines of a file when you hold the pointer over it.
+.B Preview pane
+shows or hides the pane.
+Column widths, order and visibility, and these choices, are remembered by the
+browser,
+never on the server or on disk.
+.SS Names
+Two names are the same name when the file system says so: on the default
+case-insensitive macOS volume, when they are equal after Unicode normalization
+and full
+case folding (so that the sharp s and
+.BR ss ,
+or a ligature and its letters, are the same).
+The filter, search and every rule follow this.
+A name that contains characters that would disguise it, such as a right-to-left
+override or a newline, is shown with a visible marker such as
+.BR <U+202E> .
+.SH FILES
+.TP
+.I ~/.config/fsb/ignore
+Hide rules.
+If absent, the built-in rules apply:
+.BR .DS_Store ,
+.B .git/
+and
+.BR node_modules/ .
+.TP
+.I ~/.config/fsb/deny
+Block rules.
+If absent, the core deny rules below apply.
+If present it is authoritative: a core rule that it lacks is not enforced, and
+.B fsb
+warns about it.
+.PP
+Both files are read once, at startup, and are global; there are no per-folder
+rule
+files.
+A file that cannot be parsed stops
+.B fsb
+from starting.
+.SH RULE SYNTAX
+The syntax is that of
+.BR gitignore (5).
+A line is blank, a comment (first character
+.BR # ),
+or a rule.
+Surrounding white space is ignored, and a leading byte order mark and any line
+ending
+are accepted.
+.TP
+.B *
+Any characters except
+.BR / .
+.TP
+.B ?
+One character except
+.BR / .
+.TP
+.BR [abc] ", " [!abc]
+A character class (which never matches
+.BR / ).
+.TP
+.B **
+Any number of folders:
+.B **/name
+matches at any depth.
+.TP
+.B trailing /
+The rule applies to folders only.
+.TP
+.B \e#
+A literal
+.BR # .
+.TP
+.B !
+Negation, allowed in the ignore file only.
+.PP
+A pattern with no slash matches a name at any depth.
+A pattern beginning
+.B ~/
+is relative to your home folder; one beginning with
+.B /
+is absolute; one containing a slash elsewhere is relative to your home folder.
+Matching ignores letter case and normalization as described under
+.BR Names ,
+and ignores trailing white space in a name.
+.PP
+An excluded folder excludes everything in it.
+Deny wins over ignore, and nothing in the ignore file can expose a denied path.
+.PP
+A rule file must work as written or fail loudly.
+.B fsb
+refuses to start, naming the file, line and problem, for negation in the deny
+file, an
+empty pattern, a trailing backslash, a
+.B /
+inside
+.BR [...] ,
+.BI ~ name
+(another user's home), a pattern in quotes, an inline comment (write
+.B \e#
+for a literal
+.BR # ),
+an invisible or formatting character, and a character that looks like a slash
+but is
+not one.
+.SH DEFAULT DENY RULES
+These core rules are built in and match at any depth, so the same folders in a
+backup,
+in a clone of your home folder or in another account are protected too:
+.PP
+.RS
+.nf
+\&.ssh/  .aws/  .gnupg/  .kube/
+**/.config/gh/
+**/Library/Keychains/
+**/Library/Application Support/Google/Chrome/
+**/Library/Application Support/Firefox/
+**/Library/Safari/  **/Library/Cookies/
+\&.netrc  .git\-credentials  .pgpass
+\&.env  .env.*  *.pem  *.key
+id_rsa  id_dsa  id_ecdsa  id_ed25519  id_ecdsa_sk  id_ed25519_sk
+*.p12  *.pfx  *.ppk  *.jks  *.keystore
+*.kdbx  *.keychain  *.keychain\-db
+.fi
+.RE
+.PP
+Public key files such as
+.B id_rsa.pub
+are not denied.
+The secret-file patterns are deliberately broad:
+.B *.key
+also matches Keynote presentations,
+.B .env
+also matches a folder of that name (such as a Python virtual environment), and
+.B .env.*
+also matches templates such as
+.BR .env.example .
+If you need one of them, remove the line from your deny file; you will get the
+warning
+below.
+.PP
+Optional rules, commented out in the file
+.B \-\-init
+writes, are
+.BR ~/.docker/config.json ,
+.BR ~/.npmrc ,
+.B ~/Library/Mail/
+and
+.BR ~/Library/Messages/ .
+.PP
+If your deny file lacks a core rule, at startup
+.B fsb
+prints
+.PP
+.RS
+.nf
+fsb: warning: core deny rule(s) disabled: .ssh/, .aws/; these paths are browsable.
+.fi
+.RE
+.PP
+and the interface shows a banner with the same message until every core rule
+is back in
+effect.
+This cannot be turned off.
+.PP
+A file with several names (a hard link) is judged by its identity: if any name
+is
+denied, every name is refused and unlisted.
+The names are found by an index built in the background at startup (about 20
+seconds
+for a home folder of 700,000 files); until it is ready, files that have
+several names
+are refused.
+.SH ENVIRONMENT
+.TP
+.B HOME
+Your home folder.
+It is resolved to its real location and determines the default root, the
+location of
+the configuration folder, and the meaning of
+.B ~
+in rules.
+.SH EXIT STATUS
+.TP
+.B 0
+Normal shutdown, or
+.BR \-\-help ,
+or
+.BR \-\-init .
+.TP
+.B 1
+Any error, reported on standard error as one line beginning
+.BR fsb: .
+No server is started.
+.SH SECURITY
+.B fsb
+is designed so that a web page cannot use it.
+It listens only on 127.0.0.1; it refuses requests whose
+.B Host
+is not exactly the loopback address and port, and any request that carries
+another
+origin (including a page on another port of the same host).
+The session cookie is
+.B HttpOnly
+and
+.BR SameSite=Strict ,
+and is scoped to a random path prefix, so that the browser never sends it to
+another web
+server on 127.0.0.1.
+Only
+.B GET
+and
+.B HEAD
+are answered.
+Files are never rendered from the interface's own origin except as the previews
+described above; downloads are always sent as attachments.
+.B fsb
+makes no outbound connection, sends no telemetry, and never causes a
+cloud-only file to
+be downloaded.
+A denied path is indistinguishable from a missing one.
+.PP
+Anything that runs as you can read the same files:
+.B fsb
+is not a sandbox against local malware.
+See the security policy shipped with the source for the threat model, the
+guarantees and
+the known limitations.
+.SH EXAMPLES
+Browse your home folder:
+.PP
+.RS
+.B fsb
+.RE
+.PP
+Browse one folder, and open it in Chrome:
+.PP
+.RS
+.B fsb \-\-browser """Google Chrome""" ~/Documents
+.RE
+.PP
+Serve two folders and paste the URL yourself:
+.PP
+.RS
+.B fsb \-\-no\-open \-\-root /Volumes/Data ~/src
+.RE
+.PP
+Write the rule files, then edit them:
+.PP
+.RS
+.nf
+fsb \-\-init
+$EDITOR ~/.config/fsb/deny
+.fi
+.RE
+.SH DIAGNOSTICS
+.TP
+.B fsb: refusing to serve / without \-\-allow\-system\-root
+Serving the whole system needs the explicit option.
+.TP
+.B fsb: deny rules: FILE: line N (...): MESSAGE
+A rule file could not be parsed, and
+.B fsb
+did not start.
+Fix the line named.
+.TP
+.B fsb: could not open the browser
+The application named by
+.B \-\-browser
+was not found.
+The server is running; open the printed URL yourself.
+.TP
+.B Not found. This path is outside the folders fsb serves
+Shown in the interface for a path outside every root; start
+.B fsb
+with a different path, or add
+.BR \-\-root .
+.SH LIMITATIONS
+A hard link whose denied name lies outside every root and outside the credential
+folders is not detected.
+Rule files are read at startup only.
+A denied path can be answered slightly faster than a missing one.
+.B fsb
+targets macOS; the interface is tested in Chrome and Safari.
+.SH SEE ALSO
+.BR open (1),
+.BR gitignore (5)
+.PP
+The functional and design specifications and the security policy, in the
+.I specs
+folder of the source.
+.SH AUTHORS
+Robert Primmer.

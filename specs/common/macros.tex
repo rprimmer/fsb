@@ -1,0 +1,12 @@
+% Macros shared by every specification in this folder.
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\Tests}[1]{\par\smallskip\noindent\begingroup\raggedright\small\textit{Checked by:} \path{#1}\par\endgroup}
+
+% A numbered requirement of the functional specification. The identifier is a
+% label, so \rid{ID} is a link and a reference to an identifier that does not
+% exist is reported by LaTeX as an undefined reference.
+\newenvironment{req}[1]{\par\medskip\noindent\phantomsection\label{req:#1}\textbf{#1}\hspace{0.7em}\ignorespaces}{\par}
+\newcommand{\rid}[1]{\hyperref[req:#1]{\textsf{#1}}}
+% A requirement of the functional specification named from another document.
+\newcommand{\fq}[1]{\textsf{#1}}
+\newcommand{\shall}{\textit{shall}}

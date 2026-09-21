@@ -1,0 +1,97 @@
+\section{Introduction}
+
+\subsection{Purpose}
+
+This specification states what \texttt{fsb} does, precisely enough that a person
+could write an equivalent program from it and a tester could check the program
+against it.  A statement belongs here if a user, or a tester who cannot see the
+source, could confirm it.  How the behavior is achieved, and why that way was
+chosen, belongs to the design specification.
+
+\subsection{Product summary}
+
+\texttt{fsb} serves a web interface for browsing the user's own files on macOS.
+It listens on the loopback address only, opens the interface in a browser, and
+lets the user list folders, filter and search by name, and preview files.  It
+never writes to, renames, moves or deletes anything it serves.  Two rule files let
+the user hide clutter (\emph{ignore}) and permanently block sensitive locations
+(\emph{deny}); a built-in set of deny rules for known credential locations is
+active even when no file exists.
+
+\subsection{Goals}
+
+\begin{description}
+  \item[G1] Fast, comfortable browsing of an entire home folder in a browser,
+        including folders with 100{,}000 or more entries.
+  \item[G2] \emph{Local only}: no exposure beyond the loopback interface, with
+        defenses against attacks that a web page can mount on a local server.
+  \item[G3] \emph{Read-only}: nothing that \texttt{fsb} serves can be altered
+        through it.
+  \item[G4] Explicit, testable exclusion semantics: a two-tier hide and deny model.
+  \item[G5] Simple distribution: a single binary.
+  \item[G6] Growth in stages (crawl, walk, run) without redesigning the security
+        core.
+\end{description}
+
+\subsection{Non-goals}
+
+\begin{itemize}
+  \item Remote access, sharing, multiple users, or any authentication beyond the
+        per-launch credential of Section~\ref{sec:security}.
+  \item Any operation that changes files: upload, rename, move, delete, edit.
+  \item Platforms other than macOS in this version.
+  \item Replacing Finder or a terminal as a file manager.
+  \item Running as a background service.
+\end{itemize}
+
+\subsection{Users}
+
+The primary user is the author, on their own Mac.  Secondary users are developers
+and power users who install the program from a public repository and need to trust
+it after reading its documentation: the manual page, the README, and the security
+policy.
+
+\subsection{Terms}
+
+\begin{description}
+  \item[Root] A folder that \texttt{fsb} serves.  Nothing outside the roots is
+        reachable.
+  \item[Entry] A file, folder or link inside a folder.
+  \item[Ignore (hide)] A rule that removes an entry from listings and search
+        results.  The entry stays reachable by its path.
+  \item[Deny (block)] A rule that makes a path unreachable by any means.  A denied
+        path is answered exactly as a path that does not exist.
+  \item[Core rules] The built-in deny rules for known credential and secret
+        locations.
+  \item[Launch URL] The single-use address that \texttt{fsb} prints at startup.
+  \item[Session] The browser's authenticated state after the launch URL has been
+        used once.
+  \item[Cloud-only file] A file whose contents are stored only in a cloud service
+        and not on this machine (an ``optimized storage'' placeholder).
+\end{description}
+
+\subsection{Conventions}
+
+\begin{itemize}
+  \item A requirement is written \emph{shall}.  Each has an identifier such as
+        \rid{CLI-4}, which is a link in the PDF; the identifiers are stable and are
+        cited by tests and by the other specifications.  An identifier is never
+        reused.
+  \item ``The user'' is the person at the keyboard; ``the browser'' is the
+        browser they opened the interface in.
+  \item Paths are absolute unless stated.  ``Case'' and ``the same name''
+        are defined in Section~\ref{sec:names}.
+  \item Limits are collected in Section~\ref{sec:limits}.
+\end{itemize}
+
+\subsection{Related documents}
+
+\begin{description}
+  \item[Design specification] How the behavior is achieved, and why.
+  \item[Algebraic specification] The laws that the access rules and the pure
+        functions obey, each tied to an executable check.
+  \item[Security policy] The threat model, the guarantees, the known limitations,
+        and how they were tested.
+  \item[Manual page] \code{fsb(1)}: the command line, files and exit status, in the
+        form users expect.
+\end{description}

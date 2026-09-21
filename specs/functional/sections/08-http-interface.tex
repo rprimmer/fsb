@@ -1,0 +1,112 @@
+\section{HTTP Interface}
+\label{sec:http}
+
+The browser interface talks to \texttt{fsb} over HTTP.  This interface is described
+so that it can be tested and reviewed.  It is \emph{internal}: it may change between
+versions, it is not a supported programming interface, and it is refused to anything
+that does not hold the session (Section~\ref{sec:security}).
+
+All paths in this section are relative to the random prefix (\rid{SEC-7}): the
+interface is at \code{/PREFIX/}, and the endpoints at \code{/PREFIX/api/\ldots}.  Every
+endpoint takes the request path in the query parameter \code{path}, an absolute path,
+decoded once; a literal \code{\%2e\%2e} is just part of a name.
+
+\subsection{Endpoints}
+
+\begin{req}{API-1}
+The interface answers the endpoints of the following table, and no others.  All are
+\code{GET} (or \code{HEAD}).
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.17\linewidth}p{0.20\linewidth}p{0.55\linewidth}@{}}
+\toprule
+Endpoint & Parameters & Answer \\
+\midrule
+\code{/} & & The interface (static files). \\
+\code{api/status} & & JSON: \code{readOnly} (always true), \code{coreDenyMissing} (list), \code{roots}, \code{home}. \\
+\code{api/list} & \code{path} & The entries of a folder, streamed (\rid{API-2}). \\
+\code{api/file} & \code{path} & The file's bytes as a download (\rid{API-4}). \\
+\code{api/head} & \code{path}, \code{bytes} & A classified look at the start of a file (\rid{API-5}). \\
+\code{api/meta} & \code{path}, \code{values} & Details and extended attributes (\rid{API-6}). \\
+\code{api/preview} & \code{path} & A raster image for inline display. \\
+\code{api/pdf} & \code{path} & A PDF for inline display. \\
+\code{api/archive} & \code{path} & The table of contents of an archive. \\
+\code{api/search} & \code{path}, \code{q}, \code{case} & Name matches under a folder, streamed (\rid{API-3}). \\
+\code{api/mdframe} & & The fixed page that renders Markdown. \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{req}
+
+\begin{req}{API-2}
+\code{api/list} answers with newline-delimited JSON: a line \code{\{"path":P\}}, then
+lines \code{\{"entries":[\ldots]\}} in the order the file system gave them (the client
+sorts), then, only if the listing broke after it had started,
+\code{\{"error":"listing interrupted"\}}.  An entry has \code{name}, \code{isDir},
+\code{size}, \code{modTime} and \code{mode}, and, when true, \code{isSymlink} and
+\code{broken}.  A denied, hidden or unreachable entry is not present.  A path that is
+not a folder, is denied, or does not exist is answered 404.
+\end{req}
+
+\begin{req}{API-3}
+\code{api/search} answers with newline-delimited JSON: a line
+\code{\{"path":P,"query":Q\}}, then lines \code{\{"matches":[\ldots]\}} as results are
+found (each with \code{path}, \code{rel}, \code{name}, \code{isDir}, \code{size} and
+\code{modTime}), then \code{\{"done":true,"visited":N,"truncated":B\}}, or
+\code{\{"error":"search interrupted"\}}.  \code{case=1} makes matching case-sensitive.
+The limits are those of \rid{SRC-2}.  An empty query finds nothing.
+\end{req}
+
+\begin{req}{API-4}
+\code{api/file} answers a regular file with \code{Content-Type:
+application/octet-stream} and \code{Content-Disposition: attachment; filename=\ldots}
+and supports range requests (status 206) for large files.  A folder is answered 404.
+\end{req}
+
+\begin{req}{API-5}
+\code{api/head} reads at most \code{bytes} bytes (default 2048, at most 65{,}536; a
+value outside 1 to 65{,}536 is answered 400) and answers JSON with \code{kind}
+(\code{text}, \code{binary}, \code{empty} or \code{dataless}), \code{size}, and, for
+text, \code{text} and \code{truncated}.  Text is returned only if it is valid UTF-8; a
+binary or cloud-only file's bytes are never returned.
+\end{req}
+
+\begin{req}{API-6}
+\code{api/meta} answers JSON with \code{name}, \code{path}, \code{isDir}, \code{size},
+\code{modTime}, \code{mode}, \code{isSymlink}, \code{symlinkTarget}, \code{dataless}
+and \code{xattrs} (each with \code{name}, and, unless \code{values=0}, \code{value},
+\code{encoding} (\code{utf8} or \code{hex}), \code{size} and \code{large}).
+\end{req}
+
+\begin{req}{API-7}
+\code{api/preview}, \code{api/pdf} and \code{api/archive} answer only for a file whose
+bytes are of the corresponding kind (\rid{PRV-2}); any other file is answered 415.
+\code{api/preview} and \code{api/pdf} support range requests.
+\end{req}
+
+\subsection{Status codes}
+
+\begin{req}{API-8}
+The status codes and their meanings are the following.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lp{0.75\linewidth}@{}}
+\toprule
+Status & Meaning \\
+\midrule
+200, 206 & Success (206: a range of the file). \\
+303 & The launch token was accepted; the session cookie is set (\rid{SEC-5}). \\
+400 & A parameter is out of range (\code{bytes}). \\
+403 & No valid session, a wrong \code{Host}, a cross-origin request, or a URL outside the prefix (Section~\ref{sec:security}); or a permission error on a non-denied path (\rid{RUL-7}). \\
+404 & Not found: the path does not exist, is denied, lies outside the roots, or is not a regular file or folder (\rid{SEC-14}). \\
+405 & A method other than \code{GET} or \code{HEAD}. \\
+409 & The file is stored only in the cloud and was not read (\rid{SEC-13}). \\
+415 & The file is not of the kind the endpoint serves (\rid{API-7}). \\
+416 & A range that cannot be satisfied. \\
+500 & An internal error (the details are logged, not sent). \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{req}
