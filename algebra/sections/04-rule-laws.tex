@@ -1,0 +1,110 @@
+\section{The Rule Algebra}
+\label{sec:rules}
+
+\subsection{Definitions}
+
+A rule $r$ has a compiled test $\Hit(r,q,t)$: whether $r$ selects the path $q$
+whose final component has type $t$.  It is evaluated on folded text
+(Definition~\ref{def:fold}) with a pattern that was folded the same way.
+
+\begin{definition}[Exclusion]
+\label{def:excl}
+For a rule set $\mathcal R$ and a path $p$ of type $t$, let
+$\Anc(p)=\{q\mid q\text{ is a prefix of }p\}$, where each proper prefix has type
+$\Dir$ and $p$ has type $t$.  The last rule of $\mathcal R$ that hits $q$ decides
+$q$: it excludes $q$ unless it is negated.  Then
+\[
+  \Match(\mathcal R,p,t)\;=\;\exists\, q\in\Anc(p):\ q\text{ is excluded by }\mathcal R.
+\]
+Because an excluded ancestor already makes the whole path excluded, a later
+negation cannot re-include something inside it, as in git.
+\end{definition}
+
+\begin{definition}[Match below]
+\label{def:matchbelow}
+$\MatchBelow(\mathcal R,f,p,t)$ is $\Match$ restricted to the prefixes of $p$
+that are strictly longer than $f$.  It is used to apply hide rules while listing
+a directory: entering a hidden directory on purpose shows its contents.
+\end{definition}
+
+\subsection{Laws for a rule set without negation (Deny)}
+
+\begin{law}[Deny monotonicity]
+\label{law:deny-monotone}
+If $\mathcal R\subseteq\mathcal R'$ then
+$\Match(\mathcal R,p,t)\Rightarrow\Match(\mathcal R',p,t)$.  Adding a deny rule
+never makes anything accessible.
+\Tests{rules/laws_test.go::TestLawDenyIsMonotoneAndOrderIndependent}
+\end{law}
+
+\begin{law}[Order independence]
+\label{law:deny-order}
+If $\mathcal R'$ is a permutation of $\mathcal R$, then
+$\Match(\mathcal R,p,t)=\Match(\mathcal R',p,t)$.
+\Tests{rules/laws_test.go::TestLawDenyIsMonotoneAndOrderIndependent}
+\end{law}
+
+\begin{law}[No negation in deny]
+\label{law:no-negation}
+Parsing a deny file that contains a negated rule fails.  Together with
+Laws~\ref{law:deny-monotone} and~\ref{law:deny-order} this gives the security
+reading of a deny file: it is a plain \emph{set} of exclusions.
+\Tests{rules/laws_test.go::TestLawDenyRefusesNegation}
+\end{law}
+
+\subsection{Laws for every rule set}
+
+\begin{law}[Ancestor closure]
+\label{law:ancestor}
+If $\Match(\mathcal R,p,\Dir)$ then $\Match(\mathcal R,p\cdot n,t)$ for every
+name $n$ and type $t$.  This holds also when $\mathcal R$ contains negated
+rules.
+\Tests{rules/laws_test.go::TestLawAncestorClosure}
+\end{law}
+
+\begin{law}[Fold invariance]
+\label{law:fold-invariance}
+If $\fold{p}=\fold{p'}$ then $\Match(\mathcal R,p,t)=\Match(\mathcal R,p',t)$:
+a path is excluded exactly when any spelling that the file system treats as the
+same name is.  In particular no spelling of a denied name (upper case, decomposed
+accents, long s, Kelvin sign, sharp s, ligatures) escapes a rule.
+\Tests{rules/laws_test.go::TestLawMatchDependsOnlyOnTheFoldedPath; guard/foldalias_test.go}
+\end{law}
+
+\begin{law}[Narrowing]
+\label{law:narrowing}
+$\MatchBelow(\mathcal R,f,p,t)\Rightarrow\Match(\mathcal R,p,t)$.  Ignoring
+ancestors can only remove matches.
+\Tests{rules/laws_test.go::TestLawMatchBelowNeverAddsMatches}
+\end{law}
+
+\begin{law}[Single component]
+\label{law:component}
+If a pattern contains neither \code{/} nor \code{**}, then $\Hit(r,q,t)$ depends
+only on the final component of $q$.  Glob classes never match \code{/}: a
+negated class excludes it, and a \code{/} inside a class is a pattern error
+(fail closed).
+\Tests{rules/laws_test.go::TestLawSlashlessPatternsStayWithinOneComponent; TestSlashInsideAClassIsAParseError}
+\end{law}
+
+\begin{law}[Trailing whitespace is not significant]
+\label{law:tail}
+For every rule $r$ and path $q$, $\Hit(r,q\cdot\!\!\text{``}n\text{''},t)=
+\Hit(r,q\cdot\!\!\text{``}n\ \text{''},t)$ for names whose trailing characters
+are white space (space, tab, newline).  macOS permits such names and they must
+not slip past a rule for \code{*.pem}.
+\Tests{rules/rules_test.go; guard/review_test.go}
+\end{law}
+
+\subsection{Boundaries}
+
+\begin{boundary}[Hard links]
+Rules are path-based, so a hard link to a denied file, placed where no rule
+names it, is not detected.  This is a stated limitation of the design.
+\end{boundary}
+
+\begin{boundary}[Case classes in ranges]
+A positive class range such as \code{[+-0]} can include \code{/} by range even
+though the class text does not.  No shipped rule uses such a range; a future
+tightening would expand ranges before compiling.
+\end{boundary}

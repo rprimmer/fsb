@@ -1,0 +1,78 @@
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{needspace}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage{xurl}
+
+\definecolor{codeblue}{HTML}{1F4E79}
+\definecolor{codegreen}{HTML}{3A6B35}
+\definecolor{codegray}{HTML}{555555}
+\definecolor{codebackground}{HTML}{F5F7F9}
+\definecolor{rulegray}{HTML}{D7DCE2}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=codeblue,
+  urlcolor=codeblue,
+  citecolor=codeblue,
+  pdftitle={An Algebraic Specification of fsb},
+  pdfsubject={Behavioral specification of the fsb read-only file browser}
+}
+
+\lstdefinestyle{program}{
+  basicstyle=\small\ttfamily,
+  backgroundcolor=\color{codebackground},
+  frame=single,
+  rulecolor=\color{rulegray},
+  framerule=0.4pt,
+  xleftmargin=0.5em,
+  xrightmargin=0.5em,
+  aboveskip=0.8em,
+  belowskip=0.8em,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  keywordstyle=\color{codeblue}\bfseries,
+  commentstyle=\color{codegreen},
+  stringstyle=\color{codegray}
+}
+
+\lstset{style=program}
+
+\newtheorem{law}{Law}[section]
+\newtheorem{proposition}[law]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[law]{Definition}
+\newtheorem{observation}[law]{Observation}
+\newtheorem{boundary}[law]{Boundary}
+
+\setlist{itemsep=0.25em, topsep=0.4em}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{3}
+\raggedbottom
+\sloppy
+\emergencystretch=3em
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\texttt{fsb}}
+\fancyhead[R]{Algebraic Specification}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}

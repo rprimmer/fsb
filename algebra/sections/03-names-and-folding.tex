@@ -1,0 +1,65 @@
+\section{Names and Folding}
+\label{sec:names}
+
+\subsection{The name equivalence}
+
+The rules are matched against names that the operating system will treat as
+identical.  On a case-insensitive APFS volume two names denote the same file
+exactly when they are equal after Unicode normalization and \emph{full} case
+folding.  Full folding differs from simple folding: it expands some characters
+into several.
+
+\begin{definition}[Fold]
+\label{def:fold}
+$\fold{s}=\Nfc\bigl(\mathsf{cf}(\Nfc(s))\bigr)$, where $\mathsf{cf}$ is Unicode
+full case folding.  For names, $x\approx y \iff \fold{x}=\fold{y}$.  The
+extension to paths applies $\Fold$ to the whole string, which is equivalent to
+folding component by component because folding never introduces or removes a
+separator.
+\end{definition}
+
+\begin{law}[Idempotence]
+\label{law:fold-idempotent}
+$\fold{\fold{s}}=\fold{s}$.
+\end{law}
+
+\begin{observation}[Measured aliases]
+\label{obs:aliases}
+The set of single characters that APFS folds onto ASCII names was measured by
+creating every ASCII name of length one and two, and then probing every
+character in the Unicode range \code{U+0080}--\code{U+2FFFF}.  On the tested
+system the aliases are exactly the following; each row names the ASCII
+spelling that the character opens.
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+character & opens \\
+\midrule
+\code{\ss} (sharp s), capital sharp s (\code{U+1E9E}) & \code{ss} \\
+long s (\code{U+017F}) & \code{s} \\
+Kelvin sign (\code{U+212A}) & \code{k} \\
+ligatures \code{U+FB00}--\code{U+FB06} & \code{ff}, \code{fi}, \code{fl}, \code{ffi}, \code{ffl}, \code{st} \\
+\bottomrule
+\end{tabular}
+\end{center}
+This is full case folding, not simple folding: under simple folding
+\code{\ss} would remain a distinct character.
+\end{observation}
+
+\begin{law}[Fold agrees on the measured aliases]
+\label{law:fold-aliases}
+For every pair in Observation~\ref{obs:aliases},
+$\fold{\text{character}}=\fold{\text{ASCII spelling}}$.  The server's $\Fold$
+(Go, \code{x/text/cases}) and the client's $\Fold$ (JavaScript,
+lower-, upper-, then lower-casing) both satisfy the law.
+\Tests{rules/fold_test.go::TestFoldMatchesTheAliasesAPFSTreatsAsEqual; web/src/lib/laws.test.ts (filter agreement)}
+\end{law}
+
+\begin{boundary}[Folding is a property of the volume]
+\label{bnd:volume}
+The alias set is a fact about the file system, not about \texttt{fsb}.  A
+case-sensitive volume distinguishes more names and a future OS release could
+change the table.  The specification therefore treats $\approx$ as the
+\emph{coarsest} equivalence the program must respect: comparing after folding
+can only over-match, and over-matching a deny rule fails closed.
+\end{boundary}

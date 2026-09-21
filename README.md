@@ -70,6 +70,10 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 
+## Algebraic specification
+
+[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it found six defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+
 ## Development
 
 The compiled frontend in `web/dist` is committed, so building the Go binary needs no Node. To change the UI:

@@ -1,0 +1,74 @@
+\section{Findings}
+\label{sec:findings}
+
+Stating the laws and then checking them found six defects.  Each was reproduced
+by a failing test before it was fixed.  Only the first is a security defect; the
+rest are consistency defects that fail closed or are cosmetic, but each is a
+place where two parts of the program disagreed.
+
+\begin{longtable}{@{}p{0.03\linewidth}p{0.30\linewidth}p{0.24\linewidth}p{0.36\linewidth}@{}}
+\toprule
+& Defect & Law broken & Fix \\
+\midrule
+\endhead
+1 & \textbf{Deny bypass through full case folding.}  On APFS the name
+\code{.\ss h} opens \code{.ssh}, but the matcher folded with simple folding, so
+a rule for \code{\~{}/.ssh} did not match it; \code{Open}, \code{Head} and the
+listing of the parent all served the denied folder.  Also long s, the Kelvin
+sign and the ligatures.
+& \ref{law:fold-invariance}, \ref{law:absent}
+& Rules, roots and search compare after full folding (\code{rules.Fold}); the alias
+set was measured on this file system and is a test.  \label{find:fold} \\
+2 & \textbf{Listed but unopenable.}  A plain file named like a \code{dir/} deny
+rule (a file called \code{cache}) was shown by \code{List} but refused by
+\code{Open}, because \code{Open}'s pre-check assumed every path is a directory.
+& \ref{law:listed-open}
+& The pre-check treats the final component as a file; the precise check after
+opening still refuses real directories. \\
+3 & \textbf{Glob class matched across a slash.}  \code{[!a]} compiled to
+\code{[\^{}a]}, which matches \code{/}, so a pattern with no slash could match
+across directory components.
+& \ref{law:component}
+& Negated classes exclude \code{/}; a \code{/} inside a class is a pattern error. \\
+4 & \textbf{Row order not transitive.}  A modified time that could not be parsed
+compared equal to everything, so \code{a}$=$\code{b}, \code{a}$=$\code{c} but
+\code{b}$<$\code{c}.  The resulting order depended on the input order.
+& \ref{law:total}, \ref{law:input-order}
+& Unreadable times sort as the oldest; comparisons no longer use subtraction. \\
+5 & \textbf{Filter and search disagreed.}  The filter box folded with simple
+lower-casing, so \code{strasse} did not find \code{Stra\ss e}, while filename
+search did.
+& \ref{law:filter}
+& The filter folds with lower-, upper-, lower-casing, which matches full folding
+on the measured aliases. \\
+6 & \textbf{Stale fallback.}  After an image failed to load, the fall-back request
+had its own cancellation handle, so a slow answer could replace the preview of a
+newer selection.  \label{find:stale}
+& \ref{law:fresh}
+& One handle per selection is shared by every request started for it. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Observations that are not defects}
+
+\begin{itemize}
+  \item A dangling symbolic link is listed (marked as broken) but cannot be
+        opened.  Law~\ref{law:listed-open} excludes it.
+  \item Hidden entries are not listed but can be opened, and a hidden directory
+        that is entered on purpose shows its contents.
+        (Law~\ref{law:hidden-reachable}.)
+  \item A symbolic link \emph{named} like a denied file is refused even when its
+        target is harmless.  Definition~\ref{def:ok} checks both names.
+  \item The macOS by-inode path \code{/.vol/<device>/<inode>} was probed as a
+        possible alias that would evade path rules; on the tested system the
+        directory is empty and the path cannot be opened.
+\end{itemize}
+
+\subsection{What the method did and did not find}
+
+Findings 1 to 3 come from the rule and access laws and are about names: two
+spellings, two types, two segments treated as one.  Findings 4 to 6 come from
+the frontend laws.  The laws that held on first check (monotonicity, order
+independence, ancestor closure, narrowing, search implies listed, denied is
+absent, the round trips) are as informative as the failures, since they turn
+long-standing assumptions into checked statements.

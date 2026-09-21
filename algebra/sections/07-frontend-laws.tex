@@ -1,0 +1,100 @@
+\section{Frontend Functions}
+\label{sec:frontend}
+
+These functions are pure, so their laws are checked exhaustively enough by
+seeded random testing.
+
+\subsection{Row order}
+
+Let $\Cmp_{k,a,g}$ be the row comparison for sort key $k\in\{\text{name, size,
+time, kind}\}$, direction $a$, and grouping flag $g$ (``Folders first'').  A
+folder has no size and sorts as smaller than any file; a modification time that
+cannot be read sorts as the oldest; ties fall back to the name, then to the
+exact name.
+
+\begin{law}[Total preorder]
+\label{law:total}
+For every $k,a,g$, $\Cmp$ is antisymmetric
+($\Cmp(x,y)=-\Cmp(y,x)$), transitive, and total.  This holds even for rows whose
+time is unparseable.
+\Tests{web/src/lib/laws.test.ts: compareRows is antisymmetric and transitive}
+\end{law}
+
+\begin{law}[Input order does not matter]
+\label{law:input-order}
+For distinct names, $\Sort(\pi(xs))=\Sort(xs)$ for every permutation $\pi$.
+(Two names that differ only by normalization cannot coexist in one directory on
+APFS, so the premise excludes them.)
+\Tests{web/src/lib/laws.test.ts: sortRows is independent of input order}
+\end{law}
+
+\begin{law}[Grouping]
+\label{law:grouping}
+If $g$, every folder precedes every file, for every key and both directions;
+grouping does not flip with the direction.
+\Tests{web/src/lib/laws.test.ts: Folders first groups folders}
+\end{law}
+
+\begin{law}[Reversal]
+\label{law:reversal}
+If $\neg g$, the descending order is the reverse of the ascending order.
+\Tests{web/src/lib/laws.test.ts: descending is the reverse of ascending}
+\end{law}
+
+\subsection{Filter}
+
+\begin{law}[Filter agrees with search]
+\label{law:filter}
+For case-insensitive matching, $\Filter(n,q)\iff \fold{n}\ni\fold{q}$, where the
+client's $\Fold$ equals the server's on the aliases of Observation~\ref{obs:aliases}.
+The filter box therefore finds the same names that filename search finds.  With
+``Match case'' both sides compare after normalization only.
+\Tests{web/src/lib/laws.test.ts: the filter agrees with search; guard/matchcase_test.go}
+\end{law}
+
+\subsection{Navigation}
+
+\begin{law}[Hash round trip]
+\label{law:hash}
+$\FromHash(\ToHash(p,s))=(p,s)$ for every path and selection made of names,
+including names containing \code{\%}, \code{\#}, \code{?}, \code{\&}, \code{=},
+quotes, spaces, and non-ASCII characters.  A literal \code{?} in a path is always
+encoded, so the first \code{?} of a hash starts the options.
+\Tests{web/src/lib/laws.test.ts: parseHash inverts pathToHash; format.test.ts}
+\end{law}
+
+\begin{law}[Go to path is clean and idempotent]
+\label{law:goto}
+If $\Goto(s)=p$ then $p$ is absolute, contains no \code{.}, \code{..} or empty
+component (except the root itself), never climbs above the root, and
+$\Goto(p)=p$.
+\Tests{web/src/lib/laws.test.ts: resolveGoto is clean and idempotent; goto.test.ts}
+\end{law}
+
+\begin{law}[Roots are prefix closed]
+\label{law:roots-prefix}
+$p$ is within a root $r$ iff $p=r$ or $p$ begins with $r$ followed by \code{/},
+so a sibling sharing a prefix (\code{/Users/mex} against \code{/Users/me}) is
+outside.  The client check is advisory; the server's $\InRoots$ decides.
+\Tests{web/src/lib/laws.test.ts: withinRoots}
+\end{law}
+
+\subsection{Markdown links and images}
+
+\begin{law}[Links resolve to normalised absolute paths]
+\label{law:link-path}
+If $\Link(b,h)$ names a file, the path is absolute and contains no \code{.},
+\code{..} or empty component; relative targets are resolved against the
+directory $b$ of the Markdown file and cannot climb above the root.
+\Tests{web/src/lib/laws.test.ts: resolveLink yields normalised absolute file paths; markdown.test.ts}
+\end{law}
+
+\begin{law}[Links and images carry no address]
+\label{law:link-inert}
+The generated markup has no \code{href} and no \code{src} on links or images
+before sanitizing; remote images are replaced by a placeholder, raw HTML is
+escaped, and only \code{http} and \code{https} links are ever opened, in a new
+tab without a referrer.  Only base64 raster \code{data:} URLs fetched through the
+guarded preview endpoint are put into images.
+\Tests{web/src/lib/markdown.test.ts; e2e Markdown tests}
+\end{law}

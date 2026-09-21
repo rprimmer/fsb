@@ -1,0 +1,62 @@
+\section{Content-Typed Endpoints}
+\label{sec:content}
+
+Three endpoints look inside a file: inline image preview, inline PDF, and
+archive listing.  Each is defined by a predicate on the file's \emph{bytes},
+never its name, and each factors through $\Open$, so Laws~\ref{law:absent}
+and~\ref{law:indist} apply to them unchanged.
+
+\begin{definition}[Sniff]
+$\Sniff_{\mathrm{img}}$ accepts a byte sequence that begins with the PNG, JPEG,
+GIF, or WebP signature; $\Sniff_{\mathrm{pdf}}$ accepts one that begins with
+\code{\%PDF-}; $\Sniff_{\mathrm{arc}}$ accepts the start of a zip, a tar
+(\code{ustar} at offset 257), or a gzip stream that contains a tar.
+\end{definition}
+
+\begin{law}[Content decides]
+\label{law:sniff}
+The endpoint succeeds only if the corresponding sniff accepts the file's leading
+bytes; the file name is never consulted.  A file named \code{a.png},
+\code{a.pdf} or \code{a.zip} with other contents is refused with 415, and a file
+with a different name but the right contents is accepted.  SVG and HTML are never
+accepted.
+\Tests{guard/m2_test.go (OpenImage); guard/pdf_test.go; guard/archive_test.go; server/pdf_test.go}
+\end{law}
+
+\begin{law}[Cloud-only files are never read]
+\label{law:dataless}
+For a file whose contents are stored only in the cloud, no endpoint reads it
+implicitly: the guard reports it as not downloaded before any read.
+\Tests{guard/dataless tests; e2e (hover peek)}
+\end{law}
+
+\begin{law}[Archive listing discloses names only]
+\label{law:archive-names}
+The archive listing contains, for each member, its name, size, type and date,
+and never any member data; names are displayed as text with control characters
+and invalid UTF-8 replaced, and are never used as paths.
+\Tests{guard/archive_test.go::TestListArchiveNamesAreDefanged; server/archive_test.go}
+\end{law}
+
+\begin{law}[Archive listing is bounded]
+\label{law:archive-bounded}
+For any file, listing scans at most $E$ tar entries and streams at most $D$
+decompressed bytes, refuses a zip whose directory claims more than $E$ entries,
+returns at most $S$ entries, and reports when a limit stopped it.
+\Tests{guard/archive_test.go::TestListArchiveIsBounded, TestListArchiveStopsAtTheDecompressionLimit}
+\end{law}
+
+\begin{law}[Inline PDF is framed only by the app]
+\label{law:pdf-frame}
+The PDF response carries \code{X-Frame-Options: SAMEORIGIN} and
+\code{frame-ancestors 'self'}, the app shell carries \code{DENY} and
+\code{frame-ancestors 'none'}, and the Markdown frame document carries its own
+policy that admits exactly its one script and one style by hash.
+\Tests{server/pdf_test.go; server/mdframe_test.go; web/mdframe_test.go; e2e PDF and Markdown tests}
+\end{law}
+
+\begin{boundary}[PDF sandboxing]
+A CSP \code{sandbox} cannot be applied to a PDF, because browsers then refuse to
+display it.  The protection is instead the byte check, the framing headers, and
+the browser's own isolated PDF viewer.
+\end{boundary}

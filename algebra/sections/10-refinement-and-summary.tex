@@ -1,0 +1,64 @@
+\section{Refinement and Summary}
+\label{sec:refinement}
+
+\subsection{From the model to the code}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.30\linewidth}p{0.62\linewidth}@{}}
+\toprule
+Abstract & Concrete \\
+\midrule
+$\Fold$ & \code{rules.Fold} (Go); \code{fold} in \code{web/src/lib/filter.ts} \\
+$\Match$, $\MatchBelow$ & \code{Set.Match}, \code{Set.MatchBelow} in \code{internal/rules} \\
+$\Deny$, $\Hide$ & the two \code{rules.Set} values held by \code{guard.Guard} \\
+$\Canon$, $\Real$ & \code{canonPath}, \code{filepath.EvalSymlinks} in \code{internal/guard} \\
+$\Ok$, $\Open$ & \code{Guard.open}, with \code{violation} and \code{deniedByAncestor} \\
+$\List$, $\Visible$ & \code{Guard.ListFunc}, \code{Guard.entry} \\
+$\Search$ & \code{Guard.Search} (uses \code{entry}) \\
+$\Sniff$ & \code{sniffImage}, \code{OpenPDF}, \code{ListArchive} \\
+$\Cmp$, $\Sort$ & \code{compareRows}, \code{sortRows} in \code{sort.ts} \\
+$\Filter$ & \code{matchesName} in \code{filter.ts} \\
+$\ToHash$, $\FromHash$ & \code{pathToHash}, \code{parseHash} in \code{format.ts} \\
+$\Goto$ & \code{resolveGoto} in \code{goto.ts} \\
+$\Link$ & \code{resolveLink} in \code{markdown.ts} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every HTTP-facing endpoint reaches the file system only through \code{Guard}; a
+test fails the build if an HTTP-facing package imports \code{os}, \code{io/fs},
+\code{syscall} or \code{path/filepath}.  This is what allows
+Laws~\ref{law:absent} and~\ref{law:indist} to be stated once for the guard rather
+than once per endpoint.
+
+\subsection{How to run the checks}
+
+\begin{lstlisting}[language=bash]
+go test -race ./...                 # rule, guard and server laws
+cd web && npm test                  # frontend laws
+node --test e2e/chrome.test.mjs     # end-to-end (Safari: e2e/safari.test.mjs)
+make -C algebra                     # build this document
+\end{lstlisting}
+
+\subsection{Summary}
+
+\begin{itemize}
+  \item The deny rules form a set of exclusions: monotone, order independent,
+        closed under descent, and invariant under every spelling that the file
+        system equates.
+  \item Every endpoint agrees with one access decision; listing implies
+        openable, search implies listed, and denied paths are absent and look
+        missing.
+  \item Content-typed endpoints decide from bytes, disclose names only, and are
+        bounded.
+  \item The frontend order is a total preorder independent of input order, and
+        the filter, hash and link functions are the exact counterparts of their
+        server-side definitions.
+  \item Six defects were found and fixed; the laws that hold are recorded with
+        the checks that establish them.
+\end{itemize}
+
+The document is intended to be read alongside \code{SECURITY.md} and the product
+requirements: those state what is promised, and this states, precisely, the
+properties from which the promise follows.

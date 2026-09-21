@@ -1,0 +1,37 @@
+\documentclass[11pt]{article}
+
+\input{preamble}
+\input{macros}
+
+\title{An Algebraic Specification of \texttt{fsb}}
+\author{}
+\date{September 21, 2026}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+This document specifies the security-relevant core of \texttt{fsb}, a local,
+read-only web view of a filesystem, as a small set of algebraic laws: the rule
+matcher that implements the two exclusion tiers (hide and deny), the access
+decision that every endpoint must agree with, the content-typed endpoints
+(images, PDFs, archives), the pure frontend functions (ordering, filtering,
+navigation, link resolution), and the preview state machine.  Each law is tied
+to an executable check.  Deriving the laws exposed six defects, one of them a
+bypass of the deny rules; they are recorded in Section~\ref{sec:findings}.
+\end{abstract}
+
+\tableofcontents
+
+\input{sections/01-purpose}
+\input{sections/02-sorts-and-notation}
+\input{sections/03-names-and-folding}
+\input{sections/04-rule-laws}
+\input{sections/05-access-decision}
+\input{sections/06-content-endpoints}
+\input{sections/07-frontend-laws}
+\input{sections/08-preview-state-machine}
+\input{sections/09-findings}
+\input{sections/10-refinement-and-summary}
+
+\end{document}

@@ -1,0 +1,42 @@
+\section{Purpose and Method}
+
+\subsection{Why an algebra}
+
+\texttt{fsb}'s central promise is negative: a path that the user has denied is
+never listed, searched, previewed, downloaded, or even confirmed to exist.  That
+promise is a statement about \emph{every} way of reaching a file, so it is
+threatened whenever two code paths answer the same question differently.  The
+defects found and fixed in the project so far had exactly that shape: a listing
+through a symlinked directory that leaked denied names, a trailing newline that
+defeated a rule, an unreadable file answering 403 instead of 404, and a macOS
+firmlink alias that bypassed a rule.
+
+An algebraic specification forces the question to be written down once, and
+then every operation to be compared with it.  This document does that for four
+parts of the system:
+
+\begin{enumerate}
+  \item the rule matcher (Section~\ref{sec:rules});
+  \item the access decision shared by all endpoints (Section~\ref{sec:access});
+  \item the content-typed endpoints and the pure frontend functions
+        (Sections~\ref{sec:content} and~\ref{sec:frontend}); and
+  \item the preview state machine (Section~\ref{sec:state}).
+\end{enumerate}
+
+\subsection{Method}
+
+Each law is stated in the form
+\emph{for all inputs of a stated kind, a stated equation or implication holds},
+then given an executable check: a randomized property test with a fixed seed, a
+test against a fixture that assembles the awkward cases together, or an
+end-to-end browser test.  Laws that failed when first checked are recorded in
+Section~\ref{sec:findings} together with the fix.  Laws that hold only under a
+stated assumption say so, and the assumptions that cannot be discharged inside
+the program are collected as \emph{boundaries}.
+
+\subsection{What is not covered}
+
+The document does not model layout, streaming, timing, or the browser's own
+behavior (except where the program relies on it).  It does not replace an
+independent review; it is intended to give a reviewer a precise statement of
+what the program claims.

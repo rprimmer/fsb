@@ -1,0 +1,119 @@
+\section{The Access Decision}
+\label{sec:access}
+
+\subsection{One question, asked once}
+
+Every endpoint asks the same question of the guard: may this path be read?  The
+answer is defined here and every operation is then compared with it.
+
+\begin{definition}[Access]
+\label{def:ok}
+Let $c=\Canon(\Clean(p))$ be the request path made absolute, cleaned, and
+reduced to one alias spelling, and let $\rho=\Real(c)$ be the real location of
+what is actually opened.  The type $t$ is the type of the opened object.  Then
+\[
+  \Ok(p)\;\iff\;
+  \InRoots(\rho)\ \land\ \neg\Match(\Deny,\rho,t)\ \land\ \neg\Match(\Deny,c,t).
+\]
+\end{definition}
+
+The check is made on the \emph{real} location (so a symbolic link cannot lead
+into a denied place), and also on the \emph{spelled} location (so a link
+\emph{named} like a denied file is refused even though its target is fine).  It
+is therefore conservative: a path is refused if either name is denied.
+
+\begin{definition}[Open, list, search]
+$\Open(p)$ returns the opened object, or $\NotFound$, exactly when $\Ok(p)$
+fails or the path does not exist, and otherwise a permission or type error that
+mentions nothing about denied paths.  $\List(d)$ is defined when $\Open(d)$ is;
+it contains an entry $e$ of $d$ exactly when $\Visible(d,e)$:
+\begin{align*}
+  \Visible(d,e)\iff{}& \neg\Match(\Deny,\rho_d\cdot e,t)\ \land\
+      \neg\MatchBelow(\Hide,\rho_d,\rho_d\cdot e,t)\\
+  &\land\ (e\text{ a symbolic link}\Rightarrow\Ok\text{-target}(e)),
+\end{align*}
+where $\rho_d=\Real(d)$: children are judged by where the directory really is,
+not by the link it was reached through.  $\Search(d,q)$ walks breadth-first from
+$d$, entering only visible unlinked directories, and reports the visible entries
+whose folded name contains $\fold{q}$.
+\end{definition}
+
+\subsection{Laws}
+
+\begin{law}[Denied is absent]
+\label{law:absent}
+If $\neg\Ok(p)$ because of a deny rule, then $p$ is not opened, not listed by
+$\List(\Parent(p))$, and not reported by any $\Search$.
+\Tests{guard/laws_test.go::TestLawDeniedIsAbsentEverywhere; guard/fuzz_test.go (independent inode and marker oracle)}
+\end{law}
+
+\begin{law}[Indistinguishable from missing]
+\label{law:indist}
+For every endpoint $f$, a denied path $p$ and a missing path $q$ receive the
+same status and body: $f(p)=f(q)$.  This includes unreadable files inside a
+denied folder, which must not answer 403.
+\Tests{guard/laws_test.go::TestLawDeniedIsAbsentEverywhere; server/m2_test.go; e2e ``answers 404, with no content, for denied paths on every endpoint''}
+\end{law}
+
+\begin{law}[Listed implies openable]
+\label{law:listed-open}
+If $e$ is listed in $\List(d)$ and is not a dangling link, then $\Open(d\cdot e)$
+succeeds.  (The converse is false by design: hidden entries are not listed but
+can be opened.)
+\Tests{guard/laws_test.go::TestLawListedImpliesOpenable}
+\end{law}
+
+\begin{law}[Found implies listed]
+\label{law:found-listed}
+If $\Search$ reports $m$, then $m$ is an entry of $\List(\Parent(m))$.  Search
+therefore cannot show what browsing would not.
+\Tests{guard/laws_test.go::TestLawSearchResultsAreListed}
+\end{law}
+
+\begin{law}[Hidden is reachable]
+\label{law:hidden-reachable}
+If $\Match(\Hide,p,t)$ but $\Ok(p)$ holds, then $\Open(p)$ succeeds.  Hide rules
+are cosmetic and never restrict direct access.
+\Tests{guard/guard_test.go (hidden entries); e2e ``lists the home folder without denied or ignored entries''}
+\end{law}
+
+\begin{law}[Containment]
+\label{law:containment}
+$\Ok(p)\Rightarrow\exists r\in\Roots:\ \Real(p)\text{ is }r\text{ or lies beneath }r$,
+comparing folded text (so root membership respects the same equivalence as the
+rules).
+\Tests{guard/guard_test.go; guard/firmlink_darwin_test.go}
+\end{law}
+
+\begin{law}[Canonical form is stable]
+\label{law:canon}
+$\Canon(\Canon(p))=\Canon(p)$.
+\Tests{guard/laws_test.go::TestLawCanonPathIsIdempotent}
+\end{law}
+
+\begin{law}[Bounded work]
+\label{law:bounded}
+$\Search$ visits at most $V$ directory entries and reports at most $M$ results,
+and reports truncation when a bound stopped it; it never follows symbolic links
+to directories, so it terminates on cyclic links.
+\Tests{guard/search_test.go; e2e (100,000-file directory, optional)}
+\end{law}
+
+\subsection{Boundaries}
+
+\begin{boundary}[Time of check]
+The file is opened first and its real path is then resolved and confirmed to
+name the same object (\code{SameFile}); the decision is taken on the object that
+is actually served.  A rename between opening and resolving is treated as a
+race and refused.
+\end{boundary}
+
+\begin{boundary}[Response timing]
+A denied path can be answered slightly faster than a missing one.  Status and
+body are identical; timing is not equalized.
+\end{boundary}
+
+\begin{boundary}[Other processes]
+Anything that runs as the user can read the same files.  \texttt{fsb} is not a
+sandbox against local malware.
+\end{boundary}
