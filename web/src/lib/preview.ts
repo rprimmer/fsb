@@ -58,7 +58,7 @@ export function languageFor(name: string): string {
   return LANG_BY_NAME[name.toLowerCase()] ?? LANG_BY_EXT[extOf(name)] ?? '';
 }
 
-export type PreviewFormat = 'csv' | 'tsv' | 'json' | 'code' | 'text';
+export type PreviewFormat = 'csv' | 'tsv' | 'json' | 'code' | 'text' | 'markdown';
 
 /** How the preview pane should present a text file. */
 export function formatFor(name: string): PreviewFormat {
@@ -66,6 +66,7 @@ export function formatFor(name: string): PreviewFormat {
   if (ext === 'csv') return 'csv';
   if (ext === 'tsv') return 'tsv';
   if (ext === 'json') return 'json';
+  if (ext === 'md' || ext === 'markdown') return 'markdown';
   return languageFor(name) ? 'code' : 'text';
 }
 

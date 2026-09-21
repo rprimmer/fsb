@@ -103,7 +103,14 @@ export function makeFixture({ big = false } = {}) {
   put(join(work, 'src', 'deep', 'er', 'Needle-Deep.txt'), 'needle deep\n');
   put(join(work, 'data.json'), '{"name":"fsb","tags":["a","b"],"nested":{"ok":true,"n":42}}');
   put(join(work, 'people.csv'), 'name,city,note\nAda,London,"likes, commas"\nGrace,New York,"said ""hi"""\n');
-  put(join(work, 'README.md'), '# Title\n\nSome *markdown*.\n');
+  put(join(work, 'README.md'), [
+    '# Title', '', 'Some *markdown* with `code`.', '',
+    'See [the main file](src/main.go) and [the site](https://example.com/docs).', '',
+    '![gradient](../pics/gradient.png)', '',
+    '![tracker](https://tracker.invalid/pixel.gif)', '',
+    '<script>document.title = "PWNED"</script>', '',
+    '[click me](javascript:alert(1))', '',
+  ].join('\n'));
   put(join(work, 'app.log'), 'plain log line 1\nplain log line 2\n');
   put(join(work, 'random.bin'), Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 131 + 7) % 256)));
   put(join(work, 'disguised.png'), '<html><script>alert(1)</script></html>');

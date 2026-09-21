@@ -63,6 +63,7 @@ func (s *Server) Handler(port int) http.Handler {
 	mux.HandleFunc("GET /api/meta", s.meta)
 	mux.HandleFunc("GET /api/preview", s.preview)
 	mux.HandleFunc("GET /api/search", s.search)
+	mux.HandleFunc("GET /api/mdframe", s.mdframe)
 	mux.Handle("GET /", web.Handler()) // embedded frontend; unknown paths 404
 
 	var h http.Handler = mux
@@ -202,6 +203,18 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Disposition", "inline")
 	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+}
+
+// mdframe serves the fixed page that renders sanitised Markdown inside a
+// sandboxed iframe. It is not user content: it is a constant document with its
+// own strict policy (see web.MDFrame). It may be framed by fsb's own pages only.
+func (s *Server) mdframe(w http.ResponseWriter, r *http.Request) {
+	doc, csp := web.MDFrame()
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Security-Policy", csp)
+	h.Set("X-Frame-Options", "SAMEORIGIN") // the app's default is DENY
+	w.Write(doc)
 }
 
 // search streams filename matches as NDJSON: a {"path","query"} line, then

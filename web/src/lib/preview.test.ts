@@ -39,7 +39,7 @@ test('formatFor', () => {
   assert.equal(formatFor('a.tsv'), 'tsv');
   assert.equal(formatFor('a.json'), 'json');
   assert.equal(formatFor('a.py'), 'code');
-  assert.equal(formatFor('README.md'), 'code');
+  assert.equal(formatFor('README.md'), 'markdown');
   assert.equal(formatFor('a.log'), 'text');
 });
 
@@ -93,4 +93,11 @@ test('plural', () => {
   assert.equal(plural(1, 'row'), '1 row');
   assert.equal(plural(2, 'row'), '2 rows');
   assert.equal(plural(1000, 'match', 'matches'), '1,000 matches');
+});
+
+test('formatFor: Markdown files get the rendered view', async () => {
+  const { formatFor } = await import('./preview.ts');
+  assert.equal(formatFor('README.md'), 'markdown');
+  assert.equal(formatFor('notes.MARKDOWN'), 'markdown');
+  assert.equal(formatFor('a.json'), 'json');
 });

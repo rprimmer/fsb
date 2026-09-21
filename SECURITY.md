@@ -27,6 +27,7 @@ secrets you have excluded stay excluded.
 | Read-only | Only `GET`/`HEAD` are served; the binary contains no write code |
 | Deny rules block every access | One chokepoint (`internal/guard`) used by list, download, preview, head, metadata and search; rules are matched against the *real* location, after symlinks and aliases are resolved, and again on the file descriptor that was actually opened |
 | A denied path looks like a missing one | Identical 404 status and body, including for unreadable files inside denied folders |
+| Rendering a Markdown file cannot run code, load anything remote or reach the app | Three layers, each assuming the one before failed: raw HTML is escaped and links carry no `href` (`web/src/lib/markdown.ts`); the result is sanitised with DOMPurify; and it is shown in an iframe with `sandbox="allow-scripts"` (an opaque origin, so no session and no API access) whose own policy is `default-src 'none'` with only its one fixed script and style admitted by hash, and images limited to `data:`. Local images are fetched through the guarded preview endpoint, and remote images are replaced by a placeholder, so opening a file makes no outside request |
 | Only the configured roots are reachable | Real-path check against the roots; symlinks that leave them are refused |
 
 Details are in [PRD/PRD.md](PRD/PRD.md), sections 8 and 9.

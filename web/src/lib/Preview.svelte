@@ -24,8 +24,11 @@
   import xml from 'highlight.js/lib/languages/xml';
   import yaml from 'highlight.js/lib/languages/yaml';
 
+  import DOMPurify from 'dompurify';
+
   import { ApiError, getHead, getMeta, previewURL, type Head, type Meta, type Row } from './api';
-  import { basename, formatDate, formatSize, kindOf, modeString } from './format';
+  import { basename, dirname, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
+  import { fillImages, renderMarkdown } from './markdown';
   import { formatFor, languageFor, looksLikeImage, parseDelimited, plural, prettyJSON } from './preview';
 
   const languages = {
@@ -137,12 +140,98 @@
     }
   });
 
+  // Rendered Markdown. The source is turned into HTML (raw HTML escaped, links
+  // and images defanged: see markdown.ts), sanitised, and handed to a sandboxed
+  // iframe that can run only its own fixed script and touch nothing (see
+  // web/mdframe.go). Local images are fetched here through the guarded preview
+  // endpoint and passed in as data: URLs; nothing remote is ever loaded.
+  const isMarkdown = $derived(mode === 'text' && format === 'markdown' && !!head?.text);
+  let view = $state<'rendered' | 'source'>('rendered');
+  const rendered = $derived(isMarkdown && view === 'rendered');
+  let frame = $state<HTMLIFrameElement | null>(null);
+  let frameLoaded = $state(false);
+  let frameInfo = $state('');
+
+  const PURIFY = {
+    ALLOWED_TAGS: [
+      'a', 'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+      'em', 'strong', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'span', 'input',
+    ],
+    ALLOWED_ATTR: ['data-fsb', 'data-href', 'tabindex', 'role', 'alt', 'src', 'class', 'align', 'start', 'type', 'checked', 'disabled'],
+  };
+
+  const MAX_IMAGES = 20;
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+  async function fetchImage(path: string, signal: AbortSignal): Promise<string | null> {
+    try {
+      const r = await fetch(previewURL(path), { signal });
+      if (!r.ok) return null;
+      const b = await r.blob();
+      if (b.size > MAX_IMAGE_BYTES || !/^image\/(png|jpeg|gif|webp)$/.test(b.type)) return null;
+      return await new Promise<string>((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result));
+        fr.onerror = () => rej(fr.error);
+        fr.readAsDataURL(b);
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  $effect(() => {
+    if (!rendered || !frame || !frameLoaded || !head?.text) return;
+    frameInfo = '';
+    const text = head.text;
+    const dir = dirname(fullPath);
+    const target = frame;
+    const ctrl = new AbortController();
+    (async () => {
+      const r = renderMarkdown(text, dir);
+      const urls = await Promise.all(r.images.slice(0, MAX_IMAGES).map((p) => fetchImage(p, ctrl.signal)));
+      if (ctrl.signal.aborted) return;
+      const clean = DOMPurify.sanitize(fillImages(r.html, urls), PURIFY);
+      target.contentWindow?.postMessage({ type: 'fsb-md-render', html: clean }, '*');
+    })();
+    return () => ctrl.abort();
+  });
+
+  $effect(() => {
+    if (!rendered) {
+      frameLoaded = false;
+      frameInfo = '';
+    }
+  });
+
+  function onMessage(e: MessageEvent) {
+    if (!frame || e.source !== frame.contentWindow) return;
+    const d = e.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.type === 'fsb-md-ready') {
+      frameInfo = JSON.stringify({ text: String(d.text ?? ''), links: Array.isArray(d.links) ? d.links : [], images: Number(d.images) || 0 });
+    } else if (d.type === 'fsb-md-link' && typeof d.href === 'string') {
+      if (d.kind === 'file' && d.href.startsWith('/')) {
+        location.hash = pathToHash(dirname(d.href), basename(d.href));
+      } else if (d.kind === 'external') {
+        try {
+          const u = new URL(d.href);
+          if (u.protocol === 'http:' || u.protocol === 'https:') window.open(u.href, '_blank', 'noopener,noreferrer');
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+
   const table = $derived(
     mode === 'text' && head?.text && (format === 'csv' || format === 'tsv')
       ? parseDelimited(head.text, format === 'csv' ? ',' : '\t', CSV_ROWS)
       : null,
   );
 </script>
+
+<svelte:window onmessage={onMessage} />
 
 <aside class="preview" aria-label="Preview">
   <header class="phead">
@@ -172,7 +261,24 @@
       {:else if mode === 'error'}
         <p class="hint error">{error || 'No preview available.'}</p>
       {:else if mode === 'text' && head}
-        {#if table}
+        {#if isMarkdown}
+          <div class="viewtoggle" role="group" aria-label="Markdown view">
+            <button class:on={view === 'rendered'} aria-pressed={view === 'rendered'} onclick={() => (view = 'rendered')}>Rendered</button>
+            <button class:on={view === 'source'} aria-pressed={view === 'source'} onclick={() => (view = 'source')}>Source</button>
+          </div>
+        {/if}
+        {#if rendered}
+          <iframe
+            class="mdframe"
+            title="Rendered Markdown"
+            src="/api/mdframe"
+            sandbox="allow-scripts"
+            referrerpolicy="no-referrer"
+            bind:this={frame}
+            onload={() => (frameLoaded = true)}
+            data-info={frameInfo}
+          ></iframe>
+        {:else if table}
           <div class="tablewrap">
             <table class="csv">
               <thead>

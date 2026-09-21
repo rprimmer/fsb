@@ -64,9 +64,11 @@ export function defineSuite({ label, launch }) {
         if (img && !(img.complete && img.naturalWidth > 0)) return { ready: false };
         const code = p.querySelector('pre.code');
         const csv = p.querySelector('table.csv');
+        const mdf = p.querySelector('iframe.mdframe');
+        if (mdf && !mdf.dataset.info) return { ready: false };
         return {
           ready: true,
-          view: p.querySelector('.pimg') ? 'image' : csv ? 'csv' : code ? (code.classList.contains('hljs') ? 'highlighted' : 'plain') : 'message',
+          view: mdf ? 'rendered' : p.querySelector('.pimg') ? 'image' : csv ? 'csv' : code ? (code.classList.contains('hljs') ? 'highlighted' : 'plain') : 'message',
           tokens: code ? code.querySelectorAll('[class^=hljs]').length : 0,
           csvRows: csv ? csv.querySelectorAll('tr').length : 0,
           text: (code ?? p.querySelector('.pbody > .hint') ?? { innerText: '' }).innerText.replace(/\\s+/g, ' ').trim(),
@@ -233,7 +235,7 @@ export function defineSuite({ label, launch }) {
       assert.match(log.text, /plain log line 1/);
 
       const md = await preview('README.md');
-      assert.equal(md.view, 'highlighted'); // Markdown source, highlighted (not rendered)
+      assert.equal(md.view, 'rendered'); // details in the Markdown tests below
 
       const bin = await preview('random.bin');
       assert.equal(bin.view, 'message');
@@ -249,6 +251,66 @@ export function defineSuite({ label, launch }) {
       const link = await preview('link-to-main');
       assert.equal(link.view, 'highlighted');
       assert.equal(link.linkTo, 'src/main.go');
+    });
+
+    // ---- rendered Markdown -------------------------------------------------
+    const mdInfo = () => d.eval(`const f = document.querySelector('.preview iframe.mdframe'); return f?.dataset.info ? JSON.parse(f.dataset.info) : null`);
+
+    test('renders Markdown in a sandboxed frame; raw HTML and scripts stay inert', async () => {
+      await open(fx.work);
+      await preview('README.md');
+      const info = await waitFor(mdInfo, { message: 'the Markdown to render' });
+      assert.match(info.text, /Title/);
+      assert.match(info.text, /Some markdown with code\./);
+      assert.match(info.text, /Remote image blocked: tracker/);
+      // Raw HTML is shown as text, not run.
+      assert.match(info.text, /<script>document\.title = "PWNED"<\/script>/);
+      assert.notEqual(await title(), 'PWNED');
+      // javascript: links are dropped to plain text; the other two survive.
+      assert.deepEqual(info.links.map((l) => l.kind + ':' + l.href), ['file:' + fx.work + '/src/main.go', 'external:https://example.com/docs']);
+      assert.match(info.text, /click me/);
+      assert.equal(info.images, 1, 'the local image was fetched through the guarded endpoint');
+      const f = await d.eval(`const f = document.querySelector('.preview iframe.mdframe');
+        let reach = 'blocked'; try { reach = f.contentDocument ? 'reachable' : 'blocked'; } catch { reach = 'blocked'; }
+        return { sandbox: f.getAttribute('sandbox'), reach };`);
+      assert.equal(f.sandbox, 'allow-scripts', 'no allow-same-origin');
+      assert.equal(f.reach, 'blocked', 'the app cannot reach into the frame, nor the frame into the app');
+      const h = await d.eval(`const r = await fetch('/api/mdframe'); return { csp: r.headers.get('content-security-policy'), xfo: r.headers.get('x-frame-options') };`);
+      assert.match(h.csp, /default-src 'none'/);
+      assert.doesNotMatch(h.csp, /unsafe/);
+      assert.equal(h.xfo, 'SAMEORIGIN');
+    });
+
+    test('a Markdown file link opens that file inside fsb; a web link opens a new tab', async () => {
+      await open(fx.work);
+      await preview('README.md');
+      const info = await waitFor(mdInfo, { message: 'the Markdown to render' });
+      const box = await d.eval(`const b = document.querySelector('.preview iframe.mdframe').getBoundingClientRect(); return { x: b.x, y: b.y }`);
+      const center = (l) => ({ x: box.x + l.x + l.w / 2, y: box.y + l.y + l.h / 2 });
+      // Record window.open rather than spawning a real tab.
+      await d.eval(`window.__opened = []; window.open = (...a) => { window.__opened.push(a); return null; }; return true`);
+      const web = center(info.links.find((l) => l.kind === 'external'));
+      await d.click(web.x, web.y);
+      const opened = await waitFor(() => d.eval(`return window.__opened.length ? window.__opened[0] : null`), { message: 'the web link to open' });
+      assert.equal(opened[0], 'https://example.com/docs');
+      assert.match(opened[2], /noopener/);
+      assert.match(opened[2], /noreferrer/);
+      const file = center(info.links.find((l) => l.kind === 'file'));
+      await d.click(file.x, file.y);
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'main.go', { message: 'main.go to be selected in its folder' });
+      assert.match(await d.eval(`return location.hash`), /src\?select=main\.go$/);
+    });
+
+    test('Markdown can be viewed as source, and back', async () => {
+      await open(fx.work);
+      await preview('README.md');
+      await waitFor(mdInfo, { message: 'the Markdown to render' });
+      const press = (label) => d.eval(`[...document.querySelectorAll('.viewtoggle button')].find((b) => b.textContent === ${JSON.stringify(label)}).click(); return true`);
+      await press('Source');
+      await waitFor(() => d.eval(`return !!document.querySelector('.preview pre.code') && !document.querySelector('.preview iframe.mdframe')`), { message: 'the source view' });
+      assert.match(await d.eval(`return document.querySelector('.preview pre.code').innerText`), /^# Title/);
+      await press('Rendered');
+      await waitFor(mdInfo, { message: 'the rendered view again' });
     });
 
     test('previews an image through the sandboxed endpoint', async () => {
