@@ -129,3 +129,18 @@ export function crumbsFor(path: string, roots: string[]): Crumb[] {
   }
   return crumbs;
 }
+
+// Characters that change what a name looks like without being visible: controls,
+// bidirectional overrides and isolates (which reverse the text that follows, so
+// "report\u202Etxt.exe" reads as "reportexe.txt"), line and paragraph separators,
+// the byte order mark, and the invisible "tag" characters.
+const DECEPTIVE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]/gu;
+
+/**
+ * A name as it should be shown: characters that would disguise it are replaced by
+ * a visible marker such as "‹U+202E›". Display only; the real name is what links
+ * and downloads use. Legitimate right-to-left text is untouched.
+ */
+export function displayName(name: string): string {
+  return name.replace(DECEPTIVE, (c) => `\u2039U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}\u203a`);
+}

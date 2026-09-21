@@ -20,6 +20,7 @@ A read-only, local-only web view of your filesystem. One Go binary serves a brow
 
 - **Preview pane:** raster images (PNG, JPEG, GIF, WebP), syntax-highlighted code, Markdown (rendered in a sandboxed frame, with a Source toggle; local images and links to other files work, remote images are never loaded), pretty-printed JSON, CSV/TSV as a table, and plain text, plus details and extended attributes. Images are served sandboxed and identified by their bytes, never their names; SVG and HTML are never rendered.
 - **Hover peek:** hover a readable file for a moment to see its first lines. Turn it off with the "Hover previews" checkbox. It never reads a file that is stored only in the cloud (see the PRD, SR-9).
+- **Names are shown as they are:** a name containing an invisible or reordering character (a right-to-left override, a newline, a control character) is shown with a visible marker such as `‹U+202E›`, so `invoice‮txt.exe` cannot pass for a `.txt` file. Real right-to-left text is untouched, and downloads keep the real name.
 - **Search:** filename search under the current folder, shallowest matches first. It never enters or reports denied or hidden folders and does not follow symlinked folders.
 - **Extended attributes:** shown in the preview pane, and as an optional last column (Columns menu), fetched only for the rows on screen.
 - **PDF:** shown in your browser's built-in viewer, and only when the file's bytes say it is a PDF.
@@ -73,7 +74,7 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 
 ## Algebraic specification
 
-[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found fifteen defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found sixteen defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
 
 ## Development
 

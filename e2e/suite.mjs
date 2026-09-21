@@ -143,6 +143,18 @@ export function defineSuite({ label, launch }) {
       assert.deepEqual(await rows(), fx.homeRows);
     });
 
+    test('names that would disguise themselves are shown with visible markers', async () => {
+      await open(`${fx.home}/spoof`);
+      const shown = await rows();
+      assert.ok(shown.some((r) => r === 'invoice\u2039U+202E\u203atxt.exe'), JSON.stringify(shown));
+      assert.ok(shown.some((r) => r === 'two\u2039U+000A\u203alines.txt'), JSON.stringify(shown));
+      assert.ok(shown.includes('שלום.txt'), 'right-to-left text must be untouched');
+      assert.ok(!shown.some((r) => /[\u202a-\u202e\u2066-\u2069\n]/.test(r)), 'no reordering character may reach the screen');
+      // The real name is still what a download uses.
+      const dl = await d.eval(`return [...document.querySelectorAll('.vrow a.name')].map((a) => a.getAttribute('download')).filter(Boolean)`);
+      assert.ok(dl.includes('invoice\u202Etxt.exe'), 'the link keeps the real name');
+    });
+
     test('never lists secret files, even with hidden files shown', async () => {
       await open(fx.work);
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);

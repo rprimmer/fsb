@@ -3,7 +3,7 @@
 
 Stating the laws and then checking them found six defects (1--6), and a
 subsequent audit of every place that compares names or paths, and of the
-environment assumptions behind the rules, found nine more (7--15).  Each was
+environment assumptions behind the rules, found ten more (7--16).  Each was
 reproduced by a failing test before it was fixed.  Findings 1, 7, 8 and 10 to 15 are
 security defects; the rest are consistency defects that fail closed
 or are cosmetic, but each is a place where two parts of the program disagreed.
@@ -106,6 +106,12 @@ say what is wrong, so fsb does not start. \\
 & \ref{law:credential-anywhere}
 & The names that identify such files are core rules at any depth (\code{.pub} files
 stay reachable). \\
+16 & \textbf{A name that shows as another name.}  A right-to-left override or a
+control character in a file name reordered or hid what the listing displayed, so
+\code{invoice}\textit{U+202E}\code{txt.exe} read as a text file.
+& \ref{law:display}
+& Deceptive characters are replaced, for display only, by a visible marker; real
+right-to-left text is untouched and downloads keep the real name. \\
 \bottomrule
 \end{longtable}
 

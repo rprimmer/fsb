@@ -79,6 +79,16 @@ outside.  The client check is advisory; the server's $\InRoots$ decides.
 \Tests{web/src/lib/laws.test.ts: withinRoots}
 \end{law}
 
+\begin{law}[A name is shown as what it is]
+\label{law:display}
+No character that reorders or hides text (controls, bidirectional overrides and
+isolates, line and paragraph separators, the byte order mark, tag characters) is
+sent to the screen inside a file name: each is replaced by a visible marker naming
+its code point.  Text that needs none of them, including right-to-left scripts, is
+unchanged, and links and downloads use the real name.
+\Tests{web/src/lib/laws.test.ts: displayName; e2e ``names that would disguise themselves are shown with visible markers''}
+\end{law}
+
 \subsection{Markdown links and images}
 
 \begin{law}[Links resolve to normalized absolute paths]

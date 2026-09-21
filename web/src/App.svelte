@@ -39,6 +39,7 @@
     basename,
     crumbsFor,
     dirname,
+    displayName,
     formatDate,
     formatSize,
     joinPath,
@@ -797,13 +798,13 @@
   {#if id === 'name'}
     <div role="gridcell" class="c-name" data-col="name">
       {#if e.broken}
-        <span class="name broken" title="Broken symlink">{e.rel ?? e.name}</span>
+        <span class="name broken" title="Broken symlink">{displayName(e.rel ?? e.name)}</span>
       {:else if e.isDir}
-        <a class="name dir" href={pathToHash(rowPath(e))}>{e.rel ?? e.name}/</a>
+        <a class="name dir" href={pathToHash(rowPath(e))}>{displayName(e.rel ?? e.name)}/</a>
       {:else if searchActive}
-        <a class="name" href={pathToHash(dirname(rowPath(e)), e.name)} title="Show in its folder">{e.rel ?? e.name}</a>
+        <a class="name" href={pathToHash(dirname(rowPath(e)), e.name)} title="Show in its folder">{displayName(e.rel ?? e.name)}</a>
       {:else}
-        <a class="name" href={fileURL(rowPath(e))} download={e.name}>{e.name}</a>
+        <a class="name" href={fileURL(rowPath(e))} download={e.name}>{displayName(e.name)}</a>
       {/if}
       {#if e.isSymlink}<span class="link" title="Symbolic link">→</span>{/if}
     </div>
@@ -832,7 +833,7 @@
     {#each crumbs as c, i (c.path)}
       {#if i > 0}<span class="sep" aria-hidden="true">/</span>{/if}
       {#if i === crumbs.length - 1 && !searchActive}
-        <span class="crumb current" aria-current="page">{c.label}</span>
+        <span class="crumb current" aria-current="page">{displayName(c.label)}</span>
       {:else}
         <!-- While search results are shown, the current folder's crumb is a way back to its listing. -->
         <a
@@ -845,7 +846,7 @@
               ev.preventDefault();
               clearSearch();
             }
-          }}>{c.label}</a
+          }}>{displayName(c.label)}</a
         >
       {/if}
     {/each}

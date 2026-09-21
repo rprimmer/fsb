@@ -27,7 +27,7 @@
   import DOMPurify from 'dompurify';
 
   import { ApiError, apiPath, getArchive, getHead, getMeta, pdfURL, previewURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
-  import { basename, dirname, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
+  import { basename, dirname, displayName, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
   import { fillImages, renderMarkdown } from './markdown';
   import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, parseDelimited, plural, prettyJSON } from './preview';
 
@@ -275,7 +275,7 @@
 
 <aside class="preview" aria-label="Preview">
   <header class="phead">
-    <strong class="ptitle" title={fullPath}>{entry?.rel ?? entry?.name ?? 'Preview'}</strong>
+    <strong class="ptitle" title={fullPath}>{displayName(entry?.rel ?? entry?.name ?? 'Preview')}</strong>
     <span class="pactions">
       {#if entry}<button onclick={() => oncopy(fullPath)} title="Copy the full path (c)">Copy path</button>{/if}
       <button onclick={onclose} aria-label="Close preview" title="Close (Space)">✕</button>
@@ -300,7 +300,7 @@
             <thead><tr><th>Name</th><th class="num">Size</th></tr></thead>
             <tbody>
               {#each archive.entries as a, i (i)}
-                <tr><td class="mono wrap">{a.name}</td><td class="num">{a.isDir ? '' : formatSize(a.size)}</td></tr>
+                <tr><td class="mono wrap">{displayName(a.name)}</td><td class="num">{a.isDir ? '' : formatSize(a.size)}</td></tr>
               {/each}
             </tbody>
           </table>

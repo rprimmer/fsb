@@ -174,3 +174,20 @@ test('law: apiBase keeps the launch prefix', async () => {
   assert.equal(apiBase('/abc_DEF-123/index.html'), '/abc_DEF-123/');
   assert.equal(apiBase('/'), '/');
 });
+
+// Law: a name is never shown in a form that disguises it.
+test('law: displayName makes deceptive characters visible and leaves real text alone', async () => {
+  const { displayName } = await import('./format.ts');
+  assert.equal(displayName('report\u202Etxt.exe'), 'report\u2039U+202E\u203atxt.exe');
+  assert.equal(displayName('a\nb'), 'a\u2039U+000A\u203ab');
+  assert.equal(displayName('x\u2066y\u2069'), 'x\u2039U+2066\u203ay\u2039U+2069\u203a');
+  assert.equal(displayName('\ufeffname'), '\u2039U+FEFF\u203aname');
+  assert.equal(displayName('tag\u{e0041}'), 'tag\u2039U+E0041\u203a');
+  for (const ok of ['Straße.txt', 'café', '日本語', 'שלום', 'مرحبا', 'a b', 'e\u0301', 'zero\u200dwidth joiner in Persian', '😀', 'plain']) {
+    assert.equal(displayName(ok), ok, ok);
+  }
+  // No character of the result can reorder or hide anything.
+  for (const bad of ['\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069', '\u2028', '\u0000', '\u007f', '\u0085']) {
+    assert.doesNotMatch(displayName('x' + bad + 'y'), /[\u202a-\u202e\u2066-\u2069\u2028\u0000\u007f\u0085]/);
+  }
+});

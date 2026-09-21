@@ -156,6 +156,10 @@ export function makeFixture({ big = false } = {}) {
   // Names that differ only in case (they must be different names: APFS is case-insensitive).
   put(join(home, 'casetest', 'Report-final.txt'), 'x');
   put(join(home, 'casetest', 'report-draft.txt'), 'x');
+  // Names that read as something else: a right-to-left override and a newline.
+  put(join(home, 'spoof', 'invoice\u202Etxt.exe'), 'x');
+  put(join(home, 'spoof', 'two\nlines.txt'), 'x');
+  put(join(home, 'spoof', 'שלום.txt'), 'x'); // real right-to-left text is left alone
 
   put(join(work, 'src', 'main.go'), 'package main\n\nimport "fmt"\n\n// greet prints a greeting.\nfunc greet(name string) string { return fmt.Sprintf("hello, %s", name) }\n\nfunc main() { fmt.Println(greet("fsb")) }\n');
   put(join(work, 'src', 'deep', 'er', 'Needle-Deep.txt'), 'needle deep\n');
@@ -196,6 +200,6 @@ export function makeFixture({ big = false } = {}) {
     for (let i = 1; i <= 100_000; i++) writeFileSync(join(home, 'big', `file-${i}`), '');
   }
   // What the home folder lists: .ssh and .aws are denied, node_modules is hidden.
-  const homeRows = [...(big ? ['big/'] : []), 'casetest/', 'pics/', 'work/'];
+  const homeRows = [...(big ? ['big/'] : []), 'casetest/', 'pics/', 'spoof/', 'work/'];
   return { root, home, work, xattrs, xattrsHex, homeRows };
 }
