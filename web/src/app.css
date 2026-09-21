@@ -356,7 +356,8 @@ code,
 /* ---- preview pane ---- */
 .preview {
   flex: none;
-  width: 380px;
+  width: var(--pw, 380px);
+  max-width: calc(100vw - 320px); /* always leave room for the list */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -502,9 +503,39 @@ pre.xval {
   overflow: auto;
 }
 
+.psplit {
+  flex: none;
+  position: relative;
+  width: 7px;
+  margin: 0 -4px 0 -3px; /* straddle the pane's border so the grab area is wider than the line */
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+}
+.psplit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+}
+.psplit:hover::after,
+.psplit:focus-visible::after {
+  background: var(--accent);
+}
+.psplit:focus-visible {
+  outline: none;
+}
+
 /* On narrow windows the preview becomes an overlay instead of squeezing the table. */
 @media (max-width: 899px) {
+  .psplit {
+    display: none;
+  }
   .preview {
+    max-width: none;
     position: fixed;
     top: 0;
     right: 0;

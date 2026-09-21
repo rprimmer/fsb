@@ -129,6 +129,11 @@ export async function launchSafari({ width = 1280, height = 900 } = {}) {
       await pointer([at(x, y)]);
     },
 
+    /** A real double click. */
+    async doubleClick(x, y) {
+      await pointer([at(x, y), { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }, { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }]);
+    },
+
     /** A real left click. */
     async click(x, y) {
       await pointer([at(x, y), { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }]);

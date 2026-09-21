@@ -147,6 +147,15 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
       await S('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     },
 
+    /** A real double click. */
+    async doubleClick(x, y) {
+      await driver.mouseMove(x, y);
+      for (const clickCount of [1, 2]) {
+        await S('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
+        await S('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
+      }
+    },
+
     /** A real left click. */
     async click(x, y) {
       await driver.mouseMove(x, y);

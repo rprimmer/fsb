@@ -48,6 +48,7 @@
     pathToHash,
   } from './lib/format';
   import { keyOf } from './lib/keys';
+  import { DEFAULT_PANE_WIDTH, MAX_PANE_WIDTH, MIN_PANE_WIDTH, clampPaneWidth, parsePrefs } from './lib/prefs';
   import { firstLines, plural } from './lib/preview';
 
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -70,27 +71,59 @@
   let list: { reset(): void; scrollToIndex(i: number): void } | undefined;
 
   // ---- preferences kept in this browser (localStorage may be unavailable) ---
-  function loadPrefs(): { preview: boolean; hover: boolean } {
-    const prefs = { preview: window.innerWidth >= 900, hover: true };
+  function loadPrefs() {
     try {
-      const raw = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
-      if (raw && typeof raw.preview === 'boolean') prefs.preview = raw.preview;
-      if (raw && typeof raw.hover === 'boolean') prefs.hover = raw.hover;
+      return parsePrefs(localStorage.getItem(PREFS_KEY), window.innerWidth);
     } catch {
-      /* use defaults */
+      return parsePrefs(null, window.innerWidth);
     }
-    return prefs;
   }
   const initial = loadPrefs();
   let showPreview = $state(initial.preview);
   let hoverPeek = $state(initial.hover);
+  let previewWidth = $state(initial.previewWidth);
 
   function savePrefs() {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ preview: showPreview, hover: hoverPeek, previewWidth }));
     } catch {
       /* the choice just will not persist */
     }
+  }
+
+  // ---- preview pane width: drag its left edge, or use the keyboard ----------
+  let paneDrag: { startX: number; startW: number } | null = null;
+
+  function startPaneResize(ev: PointerEvent) {
+    ev.preventDefault();
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    paneDrag = { startX: ev.clientX, startW: previewWidth };
+  }
+
+  function movePaneResize(ev: PointerEvent) {
+    // The pane is on the right, so dragging left makes it wider.
+    if (paneDrag) previewWidth = clampPaneWidth(paneDrag.startW + (paneDrag.startX - ev.clientX));
+  }
+
+  function endPaneResize() {
+    if (!paneDrag) return;
+    paneDrag = null;
+    savePrefs();
+  }
+
+  function paneResizeKey(ev: KeyboardEvent) {
+    const step = ev.shiftKey ? 50 : 10;
+    const key = keyOf(ev);
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      ev.preventDefault();
+      previewWidth = clampPaneWidth(previewWidth + (key === 'ArrowLeft' ? step : -step));
+      savePrefs();
+    }
+  }
+
+  function resetPaneWidth() {
+    previewWidth = DEFAULT_PANE_WIDTH;
+    savePrefs();
   }
 
   // ---- column layout ---------------------------------------------------------
@@ -841,7 +874,7 @@
   </details>
 </div>
 
-<div class="main">
+<div class="main" style:--pw="{previewWidth}px">
   <div class="table">
     <div
       class="grid"
@@ -942,6 +975,25 @@
   </div>
 
   {#if showPreview}
+    <!-- A focusable separator with aria-valuenow is the ARIA "window splitter" widget; the lint rules treat it as static. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div
+      class="psplit"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize preview pane"
+      aria-valuenow={previewWidth}
+      aria-valuemin={MIN_PANE_WIDTH}
+      aria-valuemax={MAX_PANE_WIDTH}
+      title="Drag to resize; double-click to reset. Keyboard: Left/Right"
+      tabindex="0"
+      onpointerdown={startPaneResize}
+      onpointermove={movePaneResize}
+      onpointerup={endPaneResize}
+      onpointercancel={endPaneResize}
+      onkeydown={paneResizeKey}
+      ondblclick={resetPaneWidth}
+    ></div>
     <Preview
       entry={selectedRow}
       fullPath={selectedRow ? rowPath(selectedRow) : ''}

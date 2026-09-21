@@ -516,6 +516,42 @@ export function defineSuite({ label, launch }) {
       assert.equal(r.trailingNote, false, 'nothing may follow the digits');
     });
 
+
+    test('the preview pane can be resized by dragging its edge or with the keyboard, and remembers its width', async () => {
+      await open(fx.work);
+      if (!(await previewOpen())) await d.key(' ');
+      const width = () => d.eval(`return Math.round(document.querySelector('.preview').getBoundingClientRect().width)`);
+      const saved = () => d.eval(`return JSON.parse(localStorage.getItem('fsb.prefs.v1') ?? 'null')?.previewWidth ?? null`);
+      const start = await width();
+      assert.equal(start, 380, 'the default width');
+
+      // Drag the edge to the left: the pane grows.
+      const edge = await pointOf('.psplit');
+      await d.drag(edge, { x: edge.x - 100, y: edge.y });
+      await waitFor(async () => (await width()) === start + 100, { message: 'the drag to widen the pane' });
+      assert.equal(await saved(), start + 100);
+
+      // Keyboard: Left widens by 10, Shift+Right narrows by 50.
+      await d.eval(`document.querySelector('.psplit').focus()`);
+      await pressTimes('ArrowLeft', 3);
+      await waitFor(async () => (await width()) === start + 130, { message: 'the keyboard to widen the pane' });
+      await d.key('ArrowRight', { shift: true });
+      await waitFor(async () => (await width()) === start + 80, { message: 'Shift+Right to narrow the pane' });
+
+      // Limits: never below the minimum.
+      await d.eval(`const h = document.querySelector('.psplit'); for (let i = 0; i < 60; i++) h.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }))`);
+      await waitFor(async () => (await width()) === 240, { message: 'the minimum width' });
+
+      // It survives a reload, and a double click restores the default.
+      await d.goto('about:blank');
+      await d.goto(`${base}/${hashFor(fx.work)}`);
+      await waitFor(async () => (await previewOpen()) && (await width()) === 240, { message: 'the saved width to be restored' });
+      const again = await pointOf('.psplit');
+      await d.doubleClick(again.x, again.y);
+      await waitFor(async () => (await width()) === 380, { message: 'a double click to reset the width' });
+      assert.equal(await saved(), 380);
+    });
+
     // ---- attacks from other websites --------------------------------------------
     // The visitor's browser holds a valid fsb session cookie. A malicious page on
     // another site must not be able to use it. The "attacker" is a real second
