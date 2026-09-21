@@ -38,6 +38,18 @@ go build -o fsb ./cmd/fsb
 ./fsb               # serve $HOME read-only, print a single-use URL
 ```
 
+To install the program and its manual page:
+
+```sh
+make install                                   # /usr/local/bin/fsb and /usr/local/share/man/man1/fsb.1
+make install PREFIX=/opt/homebrew              # a different prefix
+make install MANDIR=$HOME/.local/share/man BINDIR=$HOME/bin
+make install-man                               # only the manual page
+make uninstall
+```
+
+`PREFIX`, `BINDIR`, `MANDIR` (the folder that holds `man1`) and `DESTDIR` (a staging root for packaging) can each be overridden; `make help` shows the values in effect.
+
 `fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`.
 
 ## Security model

@@ -52,6 +52,13 @@ Releases shall provide binaries for macOS on Apple silicon and Intel, with check
 signed and notarized where practical, and installation with \code{go install}.
 \end{req}
 
+\begin{req}{DST-5}
+The source shall provide \code{make install}, which installs the program and its manual
+page; the installation locations (\code{PREFIX}, \code{BINDIR}, \code{MANDIR}) shall be
+variables that the user can override, and \code{DESTDIR} shall stage the installation for
+packaging.  The manual page goes in the \code{man1} folder of \code{MANDIR}.
+\end{req}
+
 \begin{req}{DST-3}
 A Homebrew formula shall follow once the walk stage is stable.
 \end{req}
