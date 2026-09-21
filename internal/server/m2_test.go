@@ -254,7 +254,7 @@ func TestSecretFilesAreDeniedEverywhereByDefault(t *testing.T) {
 func TestDebugNamesTheRuleOnNewEndpointsToo(t *testing.T) {
 	e := newEnv(t, true, nil)
 	for _, endpoint := range []string{"/api/head", "/api/meta", "/api/preview"} {
-		if code, body := e.get(t, endpoint, filepath.Join(e.home, ".ssh", "id_ed25519")); code != 404 || !strings.Contains(body, "~/.ssh/") {
+		if code, body := e.get(t, endpoint, filepath.Join(e.home, ".ssh", "id_ed25519")); code != 404 || !strings.Contains(body, ".ssh/") {
 			t.Errorf("%s in debug mode: %d %q", endpoint, code, body)
 		}
 	}

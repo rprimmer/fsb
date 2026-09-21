@@ -280,7 +280,7 @@ func TestLoadDeny(t *testing.T) {
 
 	t.Run("file is authoritative and weakening is reported", func(t *testing.T) {
 		p := filepath.Join(dir, "deny")
-		os.WriteFile(p, []byte("~/.aws/\n# ~/.ssh/\n"), 0o600)
+		os.WriteFile(p, []byte(".aws/\n# .ssh/\n"), 0o600)
 		s, missing, err := LoadDeny(p, home)
 		if err != nil {
 			t.Fatal(err)
@@ -290,12 +290,12 @@ func TestLoadDeny(t *testing.T) {
 		}
 		found := false
 		for _, m := range missing {
-			if m == "~/.ssh/" {
+			if m == ".ssh/" {
 				found = true
 			}
 		}
 		if !found {
-			t.Errorf("missing = %v, should include ~/.ssh/", missing)
+			t.Errorf("missing = %v, should include .ssh/", missing)
 		}
 	})
 

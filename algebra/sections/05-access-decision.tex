@@ -47,6 +47,18 @@ $\List(\Parent(p))$, and not reported by any $\Search$.
 \Tests{guard/laws_test.go::TestLawDeniedIsAbsentEverywhere; guard/fuzz_test.go (independent inode and marker oracle)}
 \end{law}
 
+\begin{law}[Every spelling the OS resolves is refused]
+\label{law:differential}
+For every secret $s$ and every spelling $p$ such that the operating system
+resolves $p$ to the same object as $s$ (case, folding aliases, decomposed accents,
+doubled separators, dot segments, trailing separators, the data-volume and
+symbolic-link aliases, named forks), every operation refuses $p$.  The premise is
+decided by the OS (same inode), not by \texttt{fsb}, so the law does not depend on
+\texttt{fsb}'s own idea of a name.  Dually, every such spelling of an ordinary file
+inside the root is served.
+\Tests{guard/differential\_test.go (both directions; fails 1,536 times if the folding fix is reverted)}
+\end{law}
+
 \begin{law}[Indistinguishable from missing]
 \label{law:indist}
 For every endpoint $f$, a denied path $p$ and a missing path $q$ receive the

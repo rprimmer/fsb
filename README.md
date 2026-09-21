@@ -58,7 +58,7 @@ go build -o fsb ./cmd/fsb
 
 Deny always wins. A denied path answers the same 404 as a missing one (add `--debug` to see which rule matched). Deny rules load only from the global file.
 
-**Core deny rules are on by default**, even with no deny file: `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`, `~/.kube`, Keychains, Chrome/Firefox/Safari data, and secret files anywhere: `.env`, `.env.*`, `*.pem` and `*.key`. Situational rules (`~/.docker/config.json`, `~/.npmrc`, Mail and Messages) are in the generated deny file, commented out. If you remove a core rule from the file, fsb warns at startup.
+**Core deny rules are on by default**, even with no deny file: `.ssh`, `.aws`, `.gnupg`, `.config/gh`, `.netrc`, `.kube`, Keychains, and Chrome/Firefox/Safari data, all matched wherever they appear (so a backup or clone of your home folder, or another account's, is covered too), and secret files anywhere: `.env`, `.env.*`, `*.pem` and `*.key`. Situational rules (`~/.docker/config.json`, `~/.npmrc`, Mail and Messages) are in the generated deny file, commented out. If you remove a core rule from the file, fsb warns at startup.
 
 The secret-file patterns are deliberately broad, so they have costs: **`*.key` also matches Keynote presentations**, `.env` also matches a directory named `.env` (such as a Python virtualenv), and `.env.*` also matches templates like `.env.example`. If that gets in your way, remove the pattern from `~/.config/fsb/deny` (run `fsb --init` first to create it) and accept the startup warning.
 
@@ -72,7 +72,7 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 
 ## Algebraic specification
 
-[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found nine defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found ten defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
 
 ## Development
 

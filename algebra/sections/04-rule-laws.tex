@@ -87,6 +87,17 @@ negated class excludes it, and a \code{/} inside a class is a pattern error
 \Tests{rules/laws_test.go::TestLawSlashlessPatternsStayWithinOneComponent; TestSlashInsideAClassIsAParseError}
 \end{law}
 
+\begin{law}[Credential folders match wherever they are]
+\label{law:credential-anywhere}
+The core rules for credential folders (\code{.ssh}, \code{.aws}, \code{.gnupg},
+\code{.kube}, \code{.config/gh}, Keychains, and the browser profiles) and files
+(\code{.netrc}) are not anchored to the current home directory: a path that
+contains one of them at any depth is excluded.  The same secrets exist in a
+backup or clone of the home folder, in another account's home, and under a wrong
+\code{\$HOME}, where an anchored rule protects nothing.
+\Tests{guard/differential\_test.go::TestCredentialFoldersAreDeniedWhereverTheyAre}
+\end{law}
+
 \begin{law}[Trailing whitespace is not significant]
 \label{law:tail}
 For every rule $r$ and path $q$, $\Hit(r,q\cdot\!\!\text{``}n\text{''},t)=

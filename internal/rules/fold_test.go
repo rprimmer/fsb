@@ -67,8 +67,8 @@ func TestCoreMissingComparesRulesAsNamesAreCompared(t *testing.T) {
 	if m := CoreMissing(upper); len(m) != 0 {
 		t.Errorf("case-changed core rules reported missing: %v", m)
 	}
-	// Weakening a rule to directories only is not the core rule.
-	weak, _ := Parse(strings.NewReader(strings.Replace(all, "~/.aws", "~/.aws/", 1)), ParseOptions{Home: "/Users/me"})
+	// A different rule (here: also matching a file) is not the core rule.
+	weak, _ := Parse(strings.NewReader(strings.Replace(all, ".aws/", ".aws", 1)), ParseOptions{Home: "/Users/me"})
 	if m := CoreMissing(weak); len(m) != 1 {
 		t.Errorf("weakened rule: missing = %v, want exactly one", m)
 	}

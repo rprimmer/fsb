@@ -15,6 +15,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"sync"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -37,8 +38,15 @@ func Fold(s string) string {
 	if ascii {
 		return strings.ToLower(s)
 	}
-	return norm.NFC.String(cases.Fold().String(norm.NFC.String(s)))
+	c := folders.Get().(cases.Caser)
+	defer folders.Put(c)
+	c.Reset()
+	return norm.NFC.String(c.String(norm.NFC.String(s)))
 }
+
+// A Caser is stateful and not safe for concurrent use, and building one is not
+// free; listings fold every name, so they are pooled.
+var folders = sync.Pool{New: func() any { return cases.Fold() }}
 
 // ParseOptions controls how rule text is interpreted.
 type ParseOptions struct {

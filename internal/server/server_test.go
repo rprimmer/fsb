@@ -246,7 +246,7 @@ func TestDeniedIsIndistinguishableFromMissing(t *testing.T) {
 func TestDebugRevealsRuleOnlyForDeniedPaths(t *testing.T) {
 	e := newEnv(t, true, nil)
 	code, body := e.get(t, "/api/file", filepath.Join(e.home, ".ssh", "id_ed25519"))
-	if code != 404 || !strings.Contains(body, "~/.ssh/") {
+	if code != 404 || !strings.Contains(body, ".ssh/") {
 		t.Fatalf("debug denied: %d %q, want 404 naming the rule", code, body)
 	}
 	code, body = e.get(t, "/api/file", filepath.Join(e.home, "proj", "does-not-exist"))

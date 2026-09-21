@@ -2,9 +2,10 @@
 \label{sec:findings}
 
 Stating the laws and then checking them found six defects (1--6), and a
-subsequent audit of every place that compares names or paths found three more
-(7--9).  Each was reproduced by a failing test before it was fixed.  Findings 1,
-7 and 8 are security defects; the rest are consistency defects that fail closed
+subsequent audit of every place that compares names or paths, and of the
+environment assumptions behind the rules, found four more (7--10).  Each was
+reproduced by a failing test before it was fixed.  Findings 1, 7, 8 and 10 are
+security defects; the rest are consistency defects that fail closed
 or are cosmetic, but each is a place where two parts of the program disagreed.
 
 \begin{longtable}{@{}p{0.03\linewidth}p{0.30\linewidth}p{0.24\linewidth}p{0.36\linewidth}@{}}
@@ -66,6 +67,12 @@ case-sensitively; a link or hash naming a file with another case or accent
 selected nothing; the core-rule warning compared rule text exactly.
 & \ref{law:roots-prefix}
 & All use the same name equality; breadcrumbs split by components. \\
+10 & \textbf{Credential rules anchored to one home directory.}  The rules for
+\code{\~{}/.ssh}, \code{\~{}/.aws} and the others named the current home only, so
+the same folders in a backup or clone of the home folder, in another account's
+home, or under a wrong \code{\$HOME} were served.
+& \ref{law:credential-anywhere}
+& The credential rules match at any depth, like the secret-file patterns. \\
 \bottomrule
 \end{longtable}
 
