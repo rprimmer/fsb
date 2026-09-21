@@ -29,7 +29,10 @@ type Config struct {
 	// CoreDenyMissing lists core deny rules the user has weakened; the UI shows
 	// a banner while it is non-empty.
 	CoreDenyMissing []string
-	Logger          *log.Logger
+	// Home is the user's real home directory, so the UI can expand "~" in the
+	// Go to path box.
+	Home   string
+	Logger *log.Logger
 }
 
 // Server serves the API.
@@ -83,6 +86,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"readOnly":        true,
 		"coreDenyMissing": missing,
 		"roots":           s.cfg.Guard.Roots(),
+		"home":            s.cfg.Home,
 	})
 }
 

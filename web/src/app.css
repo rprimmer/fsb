@@ -118,7 +118,8 @@ code,
   padding: 8px 16px;
   border-bottom: 1px solid var(--line);
 }
-.tools input[type='search'] {
+.tools input[type='search'],
+.tools input.goto {
   flex: 1 1 200px;
   max-width: 340px;
   padding: 5px 8px;
@@ -645,4 +646,25 @@ pre.xval {
   color: var(--muted);
   font-size: 11px;
   vertical-align: 1px;
+}
+
+.rootsel {
+  max-width: 260px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.goerr {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The Columns menu sits at the right of the top bar, so its dropdown always has room. */
+.barright {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }

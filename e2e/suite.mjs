@@ -610,6 +610,51 @@ export function defineSuite({ label, launch }) {
       await waitFor(async () => JSON.stringify(await rows()) === JSON.stringify(['casetest/Report-final.txt']), { message: 'the search to re-run with Match case' });
     });
 
+
+    test('Go to path jumps to any folder inside the served roots, with helpful messages', async () => {
+      await open(fx.home);
+      const goTo = async (text) => {
+        await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+        await d.key('g');
+        await waitFor(async () => (await d.eval(`return document.activeElement?.getAttribute('aria-label')`)) === 'Go to path', { message: 'g to focus the box' });
+        await d.type(text);
+        await d.key('Enter');
+      };
+      // An absolute path.
+      await goTo(`${fx.work}/src`);
+      await waitFor(async () => (await title()) === 'src - fsb', { message: 'to open src' });
+      assert.deepEqual(await rows(), ['deep/', 'main.go']);
+      // ~ expands to the home folder.
+      await goTo('~/pics');
+      await waitFor(async () => (await title()) === 'pics - fsb', { message: '~/pics to open' });
+      // Messy input is cleaned.
+      await goTo(`${fx.work}//src/../src/./deep/`);
+      await waitFor(async () => (await title()) === 'deep - fsb', { message: 'a messy path to be cleaned' });
+      // A relative path is refused with an explanation, and nothing moves.
+      await goTo('work');
+      const msg = await waitFor(() => d.eval(`return document.querySelector('.goerr')?.textContent ?? null`), { message: 'a message for a relative path' });
+      assert.match(msg, /absolute path/);
+      assert.equal(await title(), 'deep - fsb');
+      // A path outside the served roots says so and lists what is served.
+      await goTo('/etc');
+      const outside = await waitFor(() => d.eval(`return document.querySelector('.msg.error:not(.goerr)')?.textContent ?? null`), { message: 'a message for a path outside the roots' });
+      assert.match(outside, /outside the folders fsb serves/);
+      assert.ok(outside.includes(fx.home), 'the message lists the served folders');
+      // A denied folder inside the roots looks like any missing one: no "outside" hint, no other difference.
+      // (Wait for the NEW message: the previous one is still on screen until the next request fails.)
+      const errorFor = (name) =>
+        waitFor(async () => {
+          if ((await d.eval(`return document.title`)) !== `${name} - fsb`) return null;
+          const m = await d.eval(`return document.querySelector('.msg.error:not(.goerr)')?.textContent ?? null`);
+          return m && !/outside the folders/.test(m) ? m : null;
+        }, { message: `the error for ${name}` });
+      await goTo(`${fx.home}/.ssh`);
+      const denied = await errorFor('.ssh');
+      await goTo(`${fx.home}/nope`);
+      const missing = await errorFor('nope');
+      assert.equal(denied, missing, 'a denied folder must look exactly like a missing one');
+    });
+
     // ---- attacks from other websites --------------------------------------------
     // The visitor's browser holds a valid fsb session cookie. A malicious page on
     // another site must not be able to use it. The "attacker" is a real second

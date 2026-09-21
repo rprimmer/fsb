@@ -117,7 +117,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if *debug {
 		logger = log.New(stderr, "fsb: ", log.LstdFlags)
 	}
-	srv, err := server.New(server.Config{Guard: g, Debug: *debug, CoreDenyMissing: coreMissing, Logger: logger})
+	srv, err := server.New(server.Config{Guard: g, Debug: *debug, CoreDenyMissing: coreMissing, Home: home, Logger: logger})
 	if err != nil {
 		return err
 	}

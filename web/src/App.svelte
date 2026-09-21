@@ -48,6 +48,7 @@
     pathToHash,
   } from './lib/format';
   import { matchesName } from './lib/filter';
+  import { resolveGoto, withinRoots } from './lib/goto';
   import { keyOf } from './lib/keys';
   import { DEFAULT_PANE_WIDTH, MAX_PANE_WIDTH, MIN_PANE_WIDTH, clampPaneWidth, parsePrefs } from './lib/prefs';
   import { firstLines, plural } from './lib/preview';
@@ -69,6 +70,9 @@
   let filterInput: HTMLInputElement | undefined;
   let colMenu: HTMLDetailsElement | undefined;
   let searchEl: HTMLInputElement | undefined;
+  let goEl: HTMLInputElement | undefined;
+  let goInput = $state('');
+  let goError = $state('');
   let list: { reset(): void; scrollToIndex(i: number): void } | undefined;
 
   // ---- preferences kept in this browser (localStorage may be unavailable) ---
@@ -282,9 +286,14 @@
   const selectedIdx = $derived(selectedKey ? visible.findIndex((r) => rowPath(r) === selectedKey) : -1);
   const selectedRow = $derived(selectedIdx >= 0 ? visible[selectedIdx] : null);
 
-  function describe(e: unknown): string {
+  function describe(e: unknown, forPath = ''): string {
     if (e instanceof ApiError) {
-      if (e.status === 404) return 'Not found. The folder does not exist or is not available.';
+      if (e.status === 404) {
+        if (forPath && status && !withinRoots(forPath, status.roots)) {
+          return `Not found. This path is outside the folders fsb serves (${status.roots.join(', ')}). Start fsb with a different path, or add --root, to include it.`;
+        }
+        return 'Not found. The folder does not exist or is not available.';
+      }
       if (e.status === 403 && /permission/i.test(e.message)) {
         return 'Permission denied by the operating system or security software. On macOS, check System Settings > Privacy & Security, and any security tool that guards this folder.';
       }
@@ -292,6 +301,19 @@
       return `Server error (${e.status}).`;
     }
     return e instanceof Error ? e.message : String(e);
+  }
+
+  // ---- go to a path anywhere inside the folders fsb serves -------------------
+  function goTo() {
+    const r = resolveGoto(goInput, status?.home ?? '');
+    if ('error' in r) {
+      goError = r.error;
+      return;
+    }
+    goError = '';
+    goInput = '';
+    goEl?.blur();
+    location.hash = pathToHash(r.path);
   }
 
   function sortBy(key: SortKey) {
@@ -552,9 +574,15 @@
       if (ev.key === 'Escape') {
         if (t === filterInput) filter = '';
         if (t === searchEl) clearSearch();
+        if (t === goEl) {
+          goInput = '';
+          goError = '';
+        }
         (t as HTMLElement).blur();
       } else if (ev.key === 'Enter' && t === searchEl) {
         runSearch();
+      } else if (ev.key === 'Enter' && t === goEl) {
+        goTo();
       } else if (ev.key === 'ArrowDown' && (t === filterInput || t === searchEl)) {
         ev.preventDefault();
         (t as HTMLElement).blur();
@@ -573,6 +601,11 @@
       case 's':
         ev.preventDefault();
         searchEl?.focus();
+        break;
+      case 'g':
+        ev.preventDefault();
+        goEl?.focus();
+        goEl?.select(); // typing replaces the previous attempt
         break;
       case 'ArrowDown':
         ev.preventDefault();
@@ -738,7 +771,7 @@
         clearTimeout(timer);
         flush();
         loading = false;
-        error = describe(e);
+        error = describe(e, p);
       });
 
     return () => {
@@ -812,10 +845,47 @@
       <button class="textbtn small" onclick={() => copyText(path)} title="Copy this folder's path">Copy path</button>
     {/if}
   </nav>
-  <span class="badge" title="fsb never writes to your filesystem">read-only</span>
+  <span class="barright">
+    <details class="colmenu" bind:this={colMenu}>
+      <summary>Columns</summary>
+      <div class="menu">
+        {#each COLUMN_IDS as id (id)}
+          <label>
+            <input type="checkbox" checked={!isHidden(layout, id)} disabled={id === 'name'} onchange={() => toggleCol(id)} />
+            {COLUMNS[id].label}
+          </label>
+        {/each}
+        <button class="textbtn" onclick={resetLayout}>Reset columns</button>
+      </div>
+    </details>
+    <span class="badge" title="fsb never writes to your filesystem">read-only</span>
+  </span>
 </header>
 
 <div class="tools">
+  {#if status && status.roots.length > 1}
+    <select
+      class="rootsel"
+      aria-label="Switch root"
+      title="Switch between the folders fsb serves"
+      onchange={(ev) => (location.hash = pathToHash((ev.currentTarget as HTMLSelectElement).value))}
+    >
+      {#each status.roots as r (r)}
+        <option value={r} selected={crumbs[0]?.path === r}>{r}</option>
+      {/each}
+    </select>
+  {/if}
+  <input
+    bind:this={goEl}
+    bind:value={goInput}
+    class="goto"
+    type="text"
+    placeholder="Go to path   ( g )"
+    aria-label="Go to path"
+    autocomplete="off"
+    spellcheck="false"
+    oninput={() => (goError = '')}
+  />
   <input
     bind:this={filterInput}
     bind:value={filter}
@@ -854,19 +924,11 @@
   <label class="toggle" title="Show or hide the preview pane (Space)">
     <input type="checkbox" bind:checked={showPreview} onchange={savePrefs} /> Preview pane
   </label>
-  <details class="colmenu" bind:this={colMenu}>
-    <summary>Columns</summary>
-    <div class="menu">
-      {#each COLUMN_IDS as id (id)}
-        <label>
-          <input type="checkbox" checked={!isHidden(layout, id)} disabled={id === 'name'} onchange={() => toggleCol(id)} />
-          {COLUMNS[id].label}
-        </label>
-      {/each}
-      <button class="textbtn" onclick={resetLayout}>Reset columns</button>
-    </div>
-  </details>
 </div>
+
+{#if goError}
+  <p class="msg error goerr" role="alert">{goError}</p>
+{/if}
 
 <div class="main" style:--pw="{previewWidth}px">
   <div class="table">
@@ -1015,5 +1077,5 @@
   {:else}
     {visible.length.toLocaleString()} of {entries.length.toLocaleString()} items
   {/if}
-  <span class="keys">↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · s search · c copy path</span>
+  <span class="keys">↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · s search · g go to path · c copy path</span>
 </footer>

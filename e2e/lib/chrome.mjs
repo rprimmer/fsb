@@ -32,6 +32,7 @@ const KEYS = {
   Backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
   c: { key: 'c', code: 'KeyC', vk: 67, text: 'c' },
   s: { key: 's', code: 'KeyS', vk: 83, text: 's' },
+  g: { key: 'g', code: 'KeyG', vk: 71, text: 'g' },
   '/': { key: '/', code: 'Slash', vk: 191, text: '/' },
 };
 

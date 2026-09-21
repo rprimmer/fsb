@@ -19,6 +19,8 @@ export interface Status {
   readOnly: boolean;
   coreDenyMissing: string[];
   roots: string[];
+  /** The user's real home directory, for expanding ~. */
+  home: string;
 }
 
 export interface XAttr {

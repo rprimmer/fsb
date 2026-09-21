@@ -64,7 +64,7 @@ func newEnv(t testing.TB, debug bool, coreMissing []string) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(Config{Guard: g, Debug: debug, CoreDenyMissing: coreMissing})
+	srv, err := New(Config{Guard: g, Debug: debug, CoreDenyMissing: coreMissing, Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,11 +401,12 @@ func TestStatusReportsWeakenedCoreRules(t *testing.T) {
 		ReadOnly        bool     `json:"readOnly"`
 		CoreDenyMissing []string `json:"coreDenyMissing"`
 		Roots           []string `json:"roots"`
+		Home            string   `json:"home"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
 		t.Fatal(err)
 	}
-	if !st.ReadOnly || len(st.CoreDenyMissing) != 2 || len(st.Roots) != 1 || st.Roots[0] != e.home {
+	if !st.ReadOnly || len(st.CoreDenyMissing) != 2 || len(st.Roots) != 1 || st.Roots[0] != e.home || st.Home != e.home {
 		t.Fatalf("status = %+v (want 2 missing core rules and roots [%s])", st, e.home)
 	}
 
