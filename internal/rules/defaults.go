@@ -83,13 +83,18 @@ func IgnoreTemplate() string {
 
 // CoreMissing returns core rules that are not present in s.
 func CoreMissing(s *Set) []string {
+	// Compared as names are compared (Fold), so "~/.SSH" is recognised as the
+	// core rule "~/.ssh". Equal text always denies the same things, so this never
+	// reports a rule as present that is not ("~/.aws/" is a different rule from
+	// "~/.aws": it applies to directories only).
+	norm := Fold
 	have := map[string]bool{}
 	for _, t := range s.Texts() {
-		have[t] = true
+		have[norm(t)] = true
 	}
 	var missing []string
 	for _, c := range CoreDeny {
-		if !have[c] {
+		if !have[norm(c)] {
 			missing = append(missing, c)
 		}
 	}

@@ -52,3 +52,24 @@ func TestRulesCannotBeDodgedWithFoldingAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestCoreMissingComparesRulesAsNamesAreCompared(t *testing.T) {
+	all := strings.Join(CoreDeny, "\n")
+	s, err := Parse(strings.NewReader(all), ParseOptions{Home: "/Users/me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := CoreMissing(s); len(m) != 0 {
+		t.Fatalf("missing with the full set: %v", m)
+	}
+	// The same rules spelled with other case are still the core rules.
+	upper, _ := Parse(strings.NewReader(strings.ToUpper(all)), ParseOptions{Home: "/Users/me"})
+	if m := CoreMissing(upper); len(m) != 0 {
+		t.Errorf("case-changed core rules reported missing: %v", m)
+	}
+	// Weakening a rule to directories only is not the core rule.
+	weak, _ := Parse(strings.NewReader(strings.Replace(all, "~/.aws", "~/.aws/", 1)), ParseOptions{Home: "/Users/me"})
+	if m := CoreMissing(weak); len(m) != 1 {
+		t.Errorf("weakened rule: missing = %v, want exactly one", m)
+	}
+}

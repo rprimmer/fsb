@@ -1,4 +1,5 @@
 import type { Entry } from './api';
+import { fold } from './filter.ts';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
@@ -111,13 +112,18 @@ export interface Crumb {
  * full path), since nothing above a root is reachable.
  */
 export function crumbsFor(path: string, roots: string[]): Crumb[] {
+  // Compared as the file system compares names, so a path typed in another case
+  // still finds its root.
+  const fp = fold(path);
   const root = roots
-    .filter((r) => path === r || path.startsWith(r === '/' ? '/' : r + '/'))
+    .filter((r) => fp === fold(r) || fp.startsWith(r === '/' ? '/' : fold(r) + '/'))
     .sort((a, b) => b.length - a.length)[0];
   if (!root) return [{ label: path, path }];
   const crumbs: Crumb[] = [{ label: root, path: root }];
   let cur = root;
-  for (const part of path.slice(root.length).split('/').filter(Boolean)) {
+  // By components, not characters: a folded spelling can differ in length from the root's.
+  const skip = root.split('/').filter(Boolean).length;
+  for (const part of path.split('/').filter(Boolean).slice(skip)) {
     cur = joinPath(cur, part);
     crumbs.push({ label: part, path: cur });
   }

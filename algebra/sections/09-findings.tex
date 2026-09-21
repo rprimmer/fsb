@@ -1,10 +1,11 @@
 \section{Findings}
 \label{sec:findings}
 
-Stating the laws and then checking them found six defects.  Each was reproduced
-by a failing test before it was fixed.  Only the first is a security defect; the
-rest are consistency defects that fail closed or are cosmetic, but each is a
-place where two parts of the program disagreed.
+Stating the laws and then checking them found six defects (1--6), and a
+subsequent audit of every place that compares names or paths found three more
+(7--9).  Each was reproduced by a failing test before it was fixed.  Findings 1,
+7 and 8 are security defects; the rest are consistency defects that fail closed
+or are cosmetic, but each is a place where two parts of the program disagreed.
 
 \begin{longtable}{@{}p{0.03\linewidth}p{0.30\linewidth}p{0.24\linewidth}p{0.36\linewidth}@{}}
 \toprule
@@ -46,6 +47,25 @@ had its own cancellation handle, so a slow answer could replace the preview of a
 newer selection.  \label{find:stale}
 & \ref{law:fresh}
 & One handle per selection is shared by every request started for it. \\
+7 & \textbf{Firmlink prefix matched by byte length.}  The data-volume prefix and
+the firmlink directories were recognised by slicing the path to the prefix's
+length, so a folded spelling (\code{/S}long-s\code{ystem}, or \code{Data} with
+the \code{st} ligature) was cut mid-character and not reduced.  Under
+\code{--root /} the unreduced path was inside the root and matched no rule.
+& \ref{law:alias-fold}, \ref{law:absent}
+& Components are compared one at a time with \code{Fold}. \\
+8 & \textbf{Root containment by spelling.}  Containment folded names, so on a
+case-sensitive volume a root \code{Public} also served the different folder
+\code{public}.  Folding is safe for deny rules but not for an allow check.
+& \ref{law:root-identity}, \ref{law:containment}
+& Containment is decided by identity: the corresponding leading directory must be
+the root itself. \\
+9 & \textbf{Client and CLI comparisons.}  Breadcrumbs sliced the path by the
+root's character count (wrong when folding changes length) and compared roots
+case-sensitively; a link or hash naming a file with another case or accent
+selected nothing; the core-rule warning compared rule text exactly.
+& \ref{law:roots-prefix}
+& All use the same name equality; breadcrumbs split by components. \\
 \bottomrule
 \end{longtable}
 
@@ -68,7 +88,12 @@ newer selection.  \label{find:stale}
 
 Findings 1 to 3 come from the rule and access laws and are about names: two
 spellings, two types, two segments treated as one.  Findings 4 to 6 come from
-the frontend laws.  The laws that held on first check (monotonicity, order
+the frontend laws.  Findings 7 to 9 came from asking of every comparison in the
+code whether it assumes that the same name means the same bytes, and from
+checking each answer against the real file system (including a case-sensitive
+volume).  Findings 1, 7 and 8 share one lesson: name equality is a property of
+the volume, so deny checks may over-match but allow checks must decide by
+identity.  The laws that held on first check (monotonicity, order
 independence, ancestor closure, narrowing, search implies listed, denied is
 absent, the round trips) are as informative as the failures, since they turn
 long-standing assumptions into checked statements.

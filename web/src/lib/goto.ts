@@ -1,5 +1,7 @@
 // Parsing of the "Go to path" box. Pure, so it can be tested without a browser.
 
+import { fold } from './filter.ts';
+
 export type GotoResult = { path: string } | { error: string };
 
 const ABSOLUTE_HINT = 'Enter an absolute path such as /Users/you/Documents, or start with ~/ for your home folder.';
@@ -31,11 +33,11 @@ export function resolveGoto(input: string, home: string): GotoResult {
   return { path: '/' + out.join('/') };
 }
 
-/** Whether path is a root or lies inside one (lexically, ignoring case as APFS does). */
+/** Whether path is a root or lies inside one (lexically, comparing names as APFS does). */
 export function withinRoots(path: string, roots: string[]): boolean {
-  const p = path.toLowerCase();
+  const p = fold(path);
   return roots.some((r) => {
-    const root = r.toLowerCase().replace(/\/+$/, '');
+    const root = fold(r).replace(/\/+$/, '');
     return root === '' || p === root || p.startsWith(root + '/');
   });
 }

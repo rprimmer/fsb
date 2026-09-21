@@ -47,7 +47,7 @@
     parseHash,
     pathToHash,
   } from './lib/format';
-  import { matchesName } from './lib/filter';
+  import { fold, matchesName } from './lib/filter';
   import { resolveGoto, withinRoots } from './lib/goto';
   import { keyOf } from './lib/keys';
   import { DEFAULT_PANE_WIDTH, MAX_PANE_WIDTH, MIN_PANE_WIDTH, clampPaneWidth, parsePrefs } from './lib/prefs';
@@ -283,7 +283,15 @@
     return sortRows(rows, { key: sortKey, asc: sortAsc, foldersFirst });
   });
 
-  const selectedIdx = $derived(selectedKey ? visible.findIndex((r) => rowPath(r) === selectedKey) : -1);
+  // The exact spelling first (the common case), then the same name as the file system
+  // sees it: a link or a hash written with different case or accents still selects the row.
+  const selectedIdx = $derived.by(() => {
+    if (!selectedKey) return -1;
+    const exact = visible.findIndex((r) => rowPath(r) === selectedKey);
+    if (exact >= 0) return exact;
+    const want = fold(selectedKey);
+    return visible.findIndex((r) => fold(rowPath(r)) === want);
+  });
   const selectedRow = $derived(selectedIdx >= 0 ? visible[selectedIdx] : null);
 
   function describe(e: unknown, forPath = ''): string {

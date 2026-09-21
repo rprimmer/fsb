@@ -55,26 +55,42 @@ func loadFirmlinks() {
 	sort.Slice(firmlinks, func(i, j int) bool { return len(firmlinks[i].data) > len(firmlinks[j].data) })
 }
 
-// hasPathPrefix reports whether p is prefix or lies beneath it, ignoring case
-// (APFS is case-insensitive by default).
-func hasPathPrefix(p, prefix string) bool {
-	if len(p) < len(prefix) || !strings.EqualFold(p[:len(prefix)], prefix) {
-		return false
+// stripPathPrefix reports whether p is prefix or lies beneath it and, if so,
+// returns what remains of p ("" or "/x/y"). Components are compared as APFS
+// compares names (Fold), one at a time, so spelling "System" with a long s or
+// "Users" with a ligature still names the same place; slicing by byte length
+// would cut such a spelling in the middle of a character.
+func stripPathPrefix(p, prefix string) (string, bool) {
+	rest := p
+	for _, want := range strings.Split(strings.Trim(prefix, "/"), "/") {
+		if want == "" {
+			continue
+		}
+		rest = strings.TrimPrefix(rest, "/")
+		comp, tail, _ := strings.Cut(rest, "/")
+		if comp == "" || fold(comp) != fold(want) {
+			return "", false
+		}
+		if tail == "" && !strings.Contains(rest, "/") {
+			rest = ""
+		} else {
+			rest = "/" + tail
+		}
 	}
-	return len(p) == len(prefix) || p[len(prefix)] == '/'
+	return rest, true
 }
 
 // canonPath maps a path under the data volume to the ordinary path it is a
 // firmlink for. Any other path is returned unchanged.
 func canonPath(p string) string {
-	if !hasPathPrefix(p, dataVolume) {
+	rest, ok := stripPathPrefix(p, dataVolume)
+	if !ok {
 		return p
 	}
 	firmlinksOnce.Do(loadFirmlinks)
-	rest := p[len(dataVolume):] // "" or "/Users/me/..."
 	for _, fl := range firmlinks {
-		if hasPathPrefix(rest, fl.data) {
-			return fl.system + rest[len(fl.data):]
+		if r, ok := stripPathPrefix(rest, fl.data); ok {
+			return fl.system + r
 		}
 	}
 	return p

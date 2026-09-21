@@ -85,6 +85,26 @@ rules).
 \Tests{guard/guard_test.go; guard/firmlink_darwin_test.go}
 \end{law}
 
+\begin{law}[Containment is by identity]
+\label{law:root-identity}
+$\InRoots(\rho)$ holds iff the leading components of $\rho$ that correspond to a
+root name \emph{the same directory} as that root (same device and inode).
+Comparing spellings would be right on a case-insensitive volume, but on a
+case-sensitive one it would admit a sibling folder that differs from the root
+only in case.  This is an \emph{allow} decision, so unlike the deny rules it must
+not over-match.
+\Tests{guard/casesens\_test.go (needs FSB\_CASE\_SENSITIVE\_VOLUME); guard/guard\_test.go::TestInRoots}
+\end{law}
+
+\begin{law}[Alias reduction is by name equality]
+\label{law:alias-fold}
+$\Canon$ recognises the data-volume prefix and the firmlink directories
+component by component, comparing components with $\Fold$, so no spelling of
+\code{/System/Volumes/Data/Users} escapes reduction.  Slicing by byte length
+does not have this property, because a folded spelling can be longer or shorter.
+\Tests{guard/foldalias\_test.go::TestRootOfSlashHonoursDenyRulesThroughFoldedFirmlinkSpellings; guard/firmlink\_darwin\_test.go}
+\end{law}
+
 \begin{law}[Canonical form is stable]
 \label{law:canon}
 $\Canon(\Canon(p))=\Canon(p)$.

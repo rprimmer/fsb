@@ -435,20 +435,39 @@ func TestSymlinkSwapRaceNeverLeaksSecret(t *testing.T) {
 }
 
 func TestInRoots(t *testing.T) {
-	g := &Guard{roots: []string{"/Users/u", "/Volumes/Data"}}
-	for p, want := range map[string]bool{
-		"/Users/u":            true,
-		"/Users/u/a/b":        true,
-		"/users/U/A":          true, // case-insensitive
-		"/Users/ux":           false,
-		"/Users":              false,
-		"/Volumes/Data/x":     true,
-		"/Volumes/DataMore/x": false,
-		"/etc/passwd":         false,
-	} {
-		if got := g.inRoots(p); got != want {
-			t.Errorf("inRoots(%q) = %v, want %v", p, got, want)
+	base, _ := filepath.EvalSymlinks(t.TempDir())
+	for _, d := range []string{"u/a/b", "ux", "Data/x", "DataMore/x", "etc"} {
+		if err := os.MkdirAll(filepath.Join(base, d), 0o755); err != nil {
+			t.Fatal(err)
 		}
+	}
+	g, err := New([]string{filepath.Join(base, "u"), filepath.Join(base, "Data")}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]bool{
+		"u":          true,
+		"u/a/b":      true,
+		"ux":         false, // shares a prefix with the root
+		"":           false, // the parent of the roots
+		"Data/x":     true,
+		"DataMore/x": false,
+		"etc":        false,
+	} {
+		full := filepath.Join(base, p)
+		if got := g.inRoots(full); got != want {
+			t.Errorf("inRoots(%q) = %v, want %v", full, got, want)
+		}
+	}
+	// On a case-insensitive volume another spelling of the same folder is the
+	// same folder (identity, not spelling, decides).
+	if _, err := os.Stat(filepath.Join(base, "U")); err == nil {
+		if !g.inRoots(filepath.Join(base, "U", "A", "B")) {
+			t.Error("a different spelling of the same folder must be inside the root")
+		}
+	}
+	if g.inRoots("/nonexistent/place") {
+		t.Error("a path that does not exist cannot be inside a root")
 	}
 	root := &Guard{roots: []string{"/"}}
 	if !root.inRoots("/anything/at/all") {

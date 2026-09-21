@@ -145,3 +145,23 @@ test('law: withinRoots is prefix-closed and case-insensitive', () => {
   assert.equal(withinRoots('/Users/mex', ['/Users/me']), false, 'a sibling that shares a prefix is outside');
   assert.equal(withinRoots('/anything', ['/']), true);
 });
+
+// Law: names are compared as the file system compares them wherever the client
+// compares paths: roots, breadcrumbs and the go-to check.
+test('law: roots and breadcrumbs treat names that APFS equates as equal', async () => {
+  const { crumbsFor } = await import('./format.ts');
+  assert.equal(withinRoots('/USERS/Me/Straße', ['/Users/me']), true);
+  assert.equal(withinRoots('/Users/me/x', ['/Users/ME']), true);
+  assert.equal(withinRoots('/Users/mé', ['/Users/me']), false);
+  assert.equal(withinRoots('/users/meK', ['/Users/mek']), true, 'the Kelvin sign is a k');
+  const c = crumbsFor('/users/ME/Docs', ['/Users/me']);
+  assert.equal(c[0].path, '/Users/me');
+  assert.deepEqual(c.map((x) => x.label), ['/Users/me', 'Docs']);
+});
+
+test('law: breadcrumbs split by components when a folded spelling has another length', async () => {
+  const { crumbsFor } = await import('./format.ts');
+  const c = crumbsFor('/Users/STRASSE/a/b', ['/Users/Straße']);
+  assert.deepEqual(c.map((x) => x.label), ['/Users/Straße', 'a', 'b']);
+  assert.deepEqual(crumbsFor('/x/y', ['/']).map((x) => x.label), ['/', 'x', 'y']);
+});

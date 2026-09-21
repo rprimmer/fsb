@@ -17,8 +17,8 @@ matcher that implements the two exclusion tiers (hide and deny), the access
 decision that every endpoint must agree with, the content-typed endpoints
 (images, PDFs, archives), the pure frontend functions (ordering, filtering,
 navigation, link resolution), and the preview state machine.  Each law is tied
-to an executable check.  Deriving the laws exposed six defects, one of them a
-bypass of the deny rules; they are recorded in Section~\ref{sec:findings}.
+to an executable check.  Deriving the laws, and then auditing every place that compares names,
+exposed nine defects, two of them bypasses of the deny rules; they are recorded in Section~\ref{sec:findings}.
 \end{abstract}
 
 \tableofcontents

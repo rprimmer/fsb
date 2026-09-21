@@ -60,9 +60,10 @@ type Entry struct {
 
 // Guard enforces roots and rules.
 type Guard struct {
-	roots []string // real paths
-	deny  *rules.Set
-	hide  *rules.Set
+	roots    []string      // real paths
+	rootInfo []fs.FileInfo // the same roots, for comparing by identity
+	deny     *rules.Set
+	hide     *rules.Set
 }
 
 // New creates a Guard. Each root must exist and is resolved to its real path.
@@ -87,6 +88,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 			return nil, fmt.Errorf("root %q is not a directory", r)
 		}
 		g.roots = append(g.roots, canonPath(real))
+		g.rootInfo = append(g.rootInfo, fi)
 	}
 	return g, nil
 }
@@ -97,12 +99,27 @@ func (g *Guard) Roots() []string { return append([]string(nil), g.roots...) }
 // fold normalizes a path for case- and normalization-insensitive comparison.
 func fold(s string) string { return rules.Fold(s) }
 
-// inRoots reports whether real is a root or lies beneath one.
+// inRoots reports whether real is a root or lies beneath one. It is an allow
+// decision, so it is made by identity and not by comparing spellings: the
+// leading components of real that correspond to the root must be the very
+// directory the root is. Comparing folded text would be right on a
+// case-insensitive volume but would admit a different sibling folder on a
+// case-sensitive one ("Public" for a root of "public").
 func (g *Guard) inRoots(real string) bool {
-	p := fold(real)
-	for _, r := range g.roots {
-		r = fold(r)
-		if r == "/" || p == r || strings.HasPrefix(p, strings.TrimRight(r, "/")+"/") {
+	comps := strings.Split(strings.Trim(real, "/"), "/")
+	if real == "/" {
+		comps = nil
+	}
+	for i, r := range g.roots {
+		if r == "/" {
+			return true
+		}
+		k := len(strings.Split(strings.Trim(r, "/"), "/"))
+		if len(comps) < k {
+			continue
+		}
+		fi, err := os.Stat("/" + strings.Join(comps[:k], "/"))
+		if err == nil && os.SameFile(fi, g.rootInfo[i]) {
 			return true
 		}
 	}
