@@ -184,3 +184,30 @@ func TestSlashInsideAClassIsAParseError(t *testing.T) {
 		t.Error("a class containing / was accepted")
 	}
 }
+
+// Law "the quick test never changes an answer": the combined expressions and the
+// last-component shortcut are optimizations only. For every set and path the result
+// equals that of consulting the rules one by one against the whole path.
+func TestLawFastPathEqualsTheRulesOneByOne(t *testing.T) {
+	r := rand.New(rand.NewSource(5))
+	extra := []string{"id_rsa", "*.p12", ".pgpass", "**/Library/Safari/", "x/y", "/tmp/a*", "a[bc]d", "cache/", "?ile", "**", "d?*/"}
+	paths := append(append([]string{}, lawPaths...),
+		"/Users/me/p/id_rsa", "/Users/me/p/ID_RSA", "/Users/me/x.P12", "/Users/me/a/.pgpass", "/tmp/abc", "/Users/me/x/y", "/Users/me/abd",
+		"/Users/me/dir/file", "/Users/me/dx/", "/Users/me/Library/Safari/History.db")
+	for i := 0; i < 80; i++ {
+		lines := append(pick(r, lawRules), pick(r, extra)...)
+		fast := mustSet(t, lines, false)
+		slow := mustSet(t, lines, false)
+		slow.fast = false
+		for _, p := range paths {
+			for _, dir := range []bool{false, true} {
+				if a, b := fast.Match(p, dir), slow.Match(p, dir); a != b {
+					t.Fatalf("rules %v: Match(%q,%v) = %+v fast, %+v one by one", lines, p, dir, a, b)
+				}
+				if a, b := fast.MatchBelow("/Users", p, dir), slow.MatchBelow("/Users", p, dir); a != b {
+					t.Fatalf("rules %v: MatchBelow(%q,%v) = %+v fast, %+v one by one", lines, p, dir, a, b)
+				}
+			}
+		}
+	}
+}

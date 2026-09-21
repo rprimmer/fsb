@@ -296,3 +296,43 @@ func TestCredentialFoldersAreDeniedWhereverTheyAre(t *testing.T) {
 		}
 	}
 }
+
+// Secrets are also copied out of their folders and stored under other names: a
+// private key saved next to the notes it belongs to, a certificate bundle, a
+// password database. The names that identify them are denied wherever they are.
+func TestCommonSecretFileNamesAreDeniedAnywhere(t *testing.T) {
+	base, _ := filepath.EvalSymlinks(t.TempDir())
+	home := filepath.Join(base, "home")
+	secrets := []string{
+		"Desktop/id_rsa", "Desktop/id_ed25519", "Desktop/id_ecdsa", "Desktop/id_dsa", "Desktop/ID_RSA", "Desktop/id_ed25519_sk",
+		"work/cert.p12", "work/cert.pfx", "work/PuTTY.ppk", "work/release.jks", "work/app.keystore", "docs/passwords.kdbx",
+		"Backups/login.keychain", "Backups/login.keychain-db", "proj/.git-credentials", "proj/.pgpass",
+	}
+	notSecret := []string{"Desktop/id_rsa.pub", "Desktop/id_ed25519.pub", "Desktop/idea.txt", "work/certificate.txt", "docs/keys.md", "proj/pgpass-notes.txt", "docs/id_rsa_notes.txt"}
+	for _, s := range append(append([]string{}, secrets...), notSecret...) {
+		write(t, filepath.Join(home, s), "CONTENT")
+	}
+	deny, err := rules.Parse(strings.NewReader(strings.Join(rules.CoreDeny, "\n")), rules.ParseOptions{Home: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hide, _ := rules.Parse(strings.NewReader(""), rules.ParseOptions{Home: home, AllowNegation: true})
+	g, err := New([]string{home}, deny, hide)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range secrets {
+		if f, _, err := g.Open(filepath.Join(home, s)); err == nil {
+			f.Close()
+			t.Errorf("%s is served", s)
+		}
+	}
+	for _, s := range notSecret {
+		f, _, err := g.Open(filepath.Join(home, s))
+		if err != nil {
+			t.Errorf("%s must stay reachable: %v", s, err)
+			continue
+		}
+		f.Close()
+	}
+}

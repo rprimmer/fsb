@@ -98,6 +98,26 @@ backup or clone of the home folder, in another account's home, and under a wrong
 \Tests{guard/differential\_test.go::TestCredentialFoldersAreDeniedWhereverTheyAre}
 \end{law}
 
+\begin{law}[A rule file works as written or fails loudly]
+\label{law:rule-file}
+For every rule file, either parsing fails with a message, or each rule line means
+what a reader would take it to mean.  In particular no accepted line is a rule that
+can never match: a leading byte order mark and any line ending are normalized, and
+an inline comment, \code{\~{}user/}, a quoted pattern, an invisible character or a
+lookalike of the slash are refused.
+\Tests{rules/parse\_audit\_test.go}
+\end{law}
+
+\begin{law}[The quick test never changes an answer]
+\label{law:fast-path}
+Matching first asks whether any rule could match, using one combined expression
+per kind of rule, and tests slash-free patterns against the last path component
+only.  These are optimizations: for every rule set without negation and every
+path, the result is that of consulting the rules one by one against the whole
+path.
+\Tests{rules/laws\_test.go::TestLawFastPathEqualsTheRulesOneByOne}
+\end{law}
+
 \begin{law}[Trailing whitespace is not significant]
 \label{law:tail}
 For every rule $r$ and path $q$, $\Hit(r,q\cdot\!\!\text{``}n\text{''},t)=

@@ -64,11 +64,23 @@ type rule struct {
 	negate  bool
 	dirOnly bool
 	re      *regexp.Regexp
+	expr    string // the expression without flags, for merging
+
+	// A rule whose pattern has no slash can only match the last path component,
+	// so it is tested against that alone, anchored and short, instead of against
+	// the whole path.
+	base     bool
+	baseRe   *regexp.Regexp
+	baseExpr string
 }
 
 // Set is an ordered list of rules.
 type Set struct {
 	rules []rule
+
+	// Combined expressions for a set without negation (see merge).
+	fast                               bool
+	baseAny, baseDir, pathAny, pathDir *regexp.Regexp
 }
 
 // Result reports whether a path is excluded and by which rule.
@@ -107,6 +119,7 @@ func Parse(r io.Reader, o ParseOptions) (*Set, error) {
 		}
 		s.rules = append(s.rules, rl)
 	}
+	s.merge()
 	return s, nil
 }
 
@@ -178,16 +191,72 @@ func (s *Set) MatchBelow(from, path string, isDir bool) Result {
 
 // eval applies every rule to one path; the last matching rule wins.
 func (s *Set) eval(path string, isDir bool) Result {
+	comp := path[strings.LastIndexByte(path, '/')+1:]
+	if s.fast && !s.mayMatch(path, comp, isDir) {
+		return Result{}
+	}
 	var res Result
 	for _, r := range s.rules {
 		if r.dirOnly && !isDir {
 			continue
 		}
-		if r.re.MatchString(path) {
+		var hit bool
+		if r.base {
+			hit = r.baseRe.MatchString(comp)
+		} else {
+			hit = r.re.MatchString(path)
+		}
+		if hit {
 			res = Result{Matched: !r.negate, Rule: r.text}
 		}
 	}
 	return res
+}
+
+// mayMatch is a quick test, from the combined expressions, of whether any rule
+// could match; false is final.
+func (s *Set) mayMatch(path, comp string, isDir bool) bool {
+	return (s.baseAny != nil && s.baseAny.MatchString(comp)) ||
+		(isDir && s.baseDir != nil && s.baseDir.MatchString(comp)) ||
+		(s.pathAny != nil && s.pathAny.MatchString(path)) ||
+		(isDir && s.pathDir != nil && s.pathDir.MatchString(path))
+}
+
+// merge builds the combined expressions. It applies only to a set without
+// negation, which is a plain union of rules (a deny set): most paths match
+// nothing and there are many rules, so ruling them out in one pass is what keeps
+// listing a large folder fast. The rules are still consulted one by one on a hit,
+// to say which rule it was.
+func (s *Set) merge() {
+	var baseAny, baseDir, pathAny, pathDir []string
+	for _, r := range s.rules {
+		if r.negate {
+			return
+		}
+		switch {
+		case r.base && r.dirOnly:
+			baseDir = append(baseDir, "(?:"+r.baseExpr+")")
+		case r.base:
+			baseAny = append(baseAny, "(?:"+r.baseExpr+")")
+		case r.dirOnly:
+			pathDir = append(pathDir, "(?:"+r.expr+")")
+		default:
+			pathAny = append(pathAny, "(?:"+r.expr+")")
+		}
+	}
+	comp := func(parts []string) (*regexp.Regexp, bool) {
+		if len(parts) == 0 {
+			return nil, true
+		}
+		re, err := regexp.Compile("(?is)" + strings.Join(parts, "|"))
+		return re, err == nil
+	}
+	var ok [4]bool
+	s.baseAny, ok[0] = comp(baseAny)
+	s.baseDir, ok[1] = comp(baseDir)
+	s.pathAny, ok[2] = comp(pathAny)
+	s.pathDir, ok[3] = comp(pathDir)
+	s.fast = ok[0] && ok[1] && ok[2] && ok[3]
 }
 
 func split(path string) []string {
@@ -262,7 +331,13 @@ func compile(text string, o ParseOptions) (rule, error) {
 	if err != nil {
 		return rl, fmt.Errorf("invalid pattern: %w", err)
 	}
-	rl.re = re
+	rl.re, rl.expr = re, expr
+	if !anchored && !strings.Contains(p, "/") {
+		rl.baseExpr = "^" + glob + tail
+		if bre, err := regexp.Compile("(?is)" + rl.baseExpr); err == nil {
+			rl.base, rl.baseRe = true, bre
+		}
+	}
 	return rl, nil
 }
 

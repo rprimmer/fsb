@@ -14,7 +14,7 @@ import (
 // The list is versioned with the release; additions are called out in release
 // notes.
 //
-// The last four are patterns that match at any depth. They are deliberately
+// The rules from ".env" on are patterns that match at any depth. They are deliberately
 // broad: ".env"/".env.*" also match a directory named .env (such as a Python
 // virtualenv) and committed templates like .env.example, and "*.key" is also
 // the extension of Keynote presentations. Anyone who needs those can edit their
@@ -35,6 +35,23 @@ var CoreDeny = []string{
 	".env.*",
 	"*.pem",
 	"*.key",
+	// Secrets copied out of their folders keep the names that identify them.
+	"id_rsa",
+	"id_dsa",
+	"id_ecdsa",
+	"id_ed25519",
+	"id_ecdsa_sk",
+	"id_ed25519_sk",
+	"*.p12",
+	"*.pfx",
+	"*.ppk",
+	"*.jks",
+	"*.keystore",
+	"*.kdbx",
+	"*.keychain",
+	"*.keychain-db",
+	".git-credentials",
+	".pgpass",
 }
 
 // CredentialLocations returns the credential folders and files under each home

@@ -3,8 +3,8 @@
 
 Stating the laws and then checking them found six defects (1--6), and a
 subsequent audit of every place that compares names or paths, and of the
-environment assumptions behind the rules, found seven more (7--13).  Each was
-reproduced by a failing test before it was fixed.  Findings 1, 7, 8 and 10 to 13 are
+environment assumptions behind the rules, found nine more (7--15).  Each was
+reproduced by a failing test before it was fixed.  Findings 1, 7, 8 and 10 to 15 are
 security defects; the rest are consistency defects that fail closed
 or are cosmetic, but each is a place where two parts of the program disagreed.
 
@@ -93,6 +93,19 @@ served.
 & The check covers every denied name under the roots and protected locations, using
 a background index of multi-name files; multi-name files are refused until the
 index is ready. \\
+14 & \textbf{Rule files that load and do nothing.}  A byte order mark broke the
+first rule; bare carriage returns joined lines; an inline comment, \code{\~{}user/},
+quotes, an invisible character or a lookalike slash produced a rule that never
+matched.  All loaded without an error.
+& \ref{law:rule-file}
+& The byte order mark and line endings are normalized; the rest are errors that
+say what is wrong, so fsb does not start. \\
+15 & \textbf{Secrets under other names.}  Only known folders and the extensions
+\code{.pem} and \code{.key} were denied, so a private key copied out of
+\code{.ssh} (\code{id\_rsa}), a certificate store or a password database was served.
+& \ref{law:credential-anywhere}
+& The names that identify such files are core rules at any depth (\code{.pub} files
+stay reachable). \\
 \bottomrule
 \end{longtable}
 
