@@ -45,6 +45,21 @@ export interface Head {
   truncated?: boolean;
 }
 
+export interface ArchiveEntry {
+  name: string;
+  size: number;
+  isDir: boolean;
+  modTime?: string;
+}
+
+export interface ArchiveListing {
+  format: string;
+  entries: ArchiveEntry[];
+  total: number;
+  truncated?: boolean;
+  incomplete?: boolean;
+}
+
 export interface SearchDone {
   visited: number;
   truncated: boolean;
@@ -79,6 +94,11 @@ export function getStatus(): Promise<Status> {
 /** A bounded, classified look at the start of a file. Binary and cloud-only files never return content. */
 export function getHead(path: string, bytes: number, signal?: AbortSignal): Promise<Head> {
   return getJSON(`/api/head?path=${q(path)}&bytes=${bytes}`, signal);
+}
+
+/** The table of contents of a zip, tar or tar.gz file. Nothing is extracted. */
+export function getArchive(path: string, signal?: AbortSignal): Promise<ArchiveListing> {
+  return getJSON(`/api/archive?path=${q(path)}`, signal);
 }
 
 /** Details and extended attributes. With values=false only attribute names are returned. */

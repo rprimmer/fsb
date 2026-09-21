@@ -65,6 +65,7 @@ func (s *Server) Handler(port int) http.Handler {
 	mux.HandleFunc("GET /api/search", s.search)
 	mux.HandleFunc("GET /api/mdframe", s.mdframe)
 	mux.HandleFunc("GET /api/pdf", s.pdf)
+	mux.HandleFunc("GET /api/archive", s.archive)
 	mux.Handle("GET /", web.Handler()) // embedded frontend; unknown paths 404
 
 	var h http.Handler = mux
@@ -227,6 +228,17 @@ func (s *Server) pdf(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Security-Policy", "frame-ancestors 'self'; script-src 'none'")
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+}
+
+// archive lists the members of a zip, tar or tar.gz file. Nothing is extracted.
+func (s *Server) archive(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	l, err := s.cfg.Guard.ListArchive(p)
+	if err != nil {
+		s.fail(w, p, err)
+		return
+	}
+	writeJSON(w, l)
 }
 
 // mdframe serves the fixed page that renders sanitised Markdown inside a

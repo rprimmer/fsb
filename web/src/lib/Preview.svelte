@@ -26,10 +26,10 @@
 
   import DOMPurify from 'dompurify';
 
-  import { ApiError, getHead, getMeta, pdfURL, previewURL, type Head, type Meta, type Row } from './api';
+  import { ApiError, getArchive, getHead, getMeta, pdfURL, previewURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
   import { basename, dirname, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
   import { fillImages, renderMarkdown } from './markdown';
-  import { formatFor, languageFor, looksLikeImage, looksLikePdf, parseDelimited, plural, prettyJSON } from './preview';
+  import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, parseDelimited, plural, prettyJSON } from './preview';
 
   const languages = {
     bash, c, cpp, css, diff, dockerfile, go, ini, java, javascript, json, kotlin, makefile,
@@ -53,11 +53,12 @@
   const HEAD_BYTES = 64 * 1024;
   const CSV_ROWS = 200;
 
-  type Mode = 'idle' | 'loading' | 'folder' | 'image' | 'pdf' | 'text' | 'binary' | 'empty' | 'dataless' | 'error';
+  type Mode = 'idle' | 'loading' | 'folder' | 'image' | 'pdf' | 'archive' | 'text' | 'binary' | 'empty' | 'dataless' | 'error';
 
   let mode = $state<Mode>('idle');
   let meta = $state<Meta | null>(null);
   let head = $state<Head | null>(null);
+  let archive = $state<ArchiveListing | null>(null);
   let error = $state('');
 
   // Load meta and content for the selected entry. A short debounce keeps
@@ -67,6 +68,7 @@
     const p = fullPath;
     meta = null;
     head = null;
+    archive = null;
     error = '';
     if (!e || !p) {
       mode = 'idle';
@@ -84,6 +86,7 @@
       else if (e.broken) mode = 'error';
       else if (looksLikeImage(e.name)) mode = 'image';
       else if (looksLikePdf(e.name)) checkPdf(p, ctrl);
+      else if (looksLikeArchive(e.name)) loadArchive(p, ctrl);
       else loadHead(p, ctrl);
     }, 120);
     return () => {
@@ -104,6 +107,21 @@
       })
       .catch(() => {
         if (!ctrl.signal.aborted) loadHead(p, ctrl);
+      });
+  }
+
+  // Try the table of contents first; anything the server does not recognise as
+  // an archive by its bytes (a plain .gz, a renamed file) is shown as an ordinary file.
+  function loadArchive(p: string, ctrl: AbortController) {
+    getArchive(p, ctrl.signal)
+      .then((a) => {
+        archive = a;
+        mode = 'archive';
+      })
+      .catch((err) => {
+        if (ctrl.signal.aborted) return;
+        if (err instanceof ApiError && err.status === 409) mode = 'dataless';
+        else loadHead(p, ctrl);
       });
   }
 
@@ -270,6 +288,20 @@
         <img class="pimg" src={previewURL(fullPath)} alt={entry.name} onerror={imageFailed} />
       {:else if mode === 'pdf'}
         <iframe class="pdfframe" title="PDF preview" src={pdfURL(fullPath)} referrerpolicy="no-referrer"></iframe>
+      {:else if mode === 'archive' && archive}
+        <div class="tablewrap">
+          <table class="csv archive" aria-label="Archive contents">
+            <thead><tr><th>Name</th><th class="num">Size</th></tr></thead>
+            <tbody>
+              {#each archive.entries as a, i (i)}
+                <tr><td class="mono wrap">{a.name}</td><td class="num">{a.isDir ? '' : formatSize(a.size)}</td></tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          {archive.format}: {plural(archive.total, 'entry', 'entries')}{archive.incomplete ? ' or more (listing stopped at a safety limit)' : ''}{archive.truncated ? `, first ${archive.entries.length} shown` : ''}. Nothing is extracted.
+        </p>
       {:else if mode === 'binary'}
         <p class="hint">Binary file: no preview.</p>
       {:else if mode === 'empty'}

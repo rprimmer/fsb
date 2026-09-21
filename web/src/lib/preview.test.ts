@@ -108,3 +108,9 @@ test('looksLikePdf goes by extension only as a hint', async () => {
   assert.equal(looksLikePdf('a.pdf.txt'), false);
   assert.equal(looksLikePdf('pdf'), false);
 });
+
+test('looksLikeArchive is only a hint from the extension', async () => {
+  const { looksLikeArchive } = await import('./preview.ts');
+  for (const n of ['a.zip', 'a.TAR', 'a.tgz', 'a.tar.gz', 'a.jar']) assert.equal(looksLikeArchive(n), true, n);
+  for (const n of ['a.txt', 'zip', 'a.zip.txt']) assert.equal(looksLikeArchive(n), false, n);
+});

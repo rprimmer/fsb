@@ -23,6 +23,13 @@ export function looksLikePdf(name: string): boolean {
   return extOf(name) === 'pdf';
 }
 
+const ARCHIVE_EXT = new Set(['zip', 'jar', 'tar', 'tgz', 'gz']);
+
+/** Whether to try listing this as an archive. Only a hint: the server decides from the file's bytes. */
+export function looksLikeArchive(name: string): boolean {
+  return ARCHIVE_EXT.has(extOf(name));
+}
+
 const LANG_BY_EXT: Record<string, string> = {
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
   ts: 'typescript', tsx: 'typescript',

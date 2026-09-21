@@ -63,12 +63,12 @@ export function defineSuite({ label, launch }) {
         const img = p.querySelector('.pimg');
         if (img && !(img.complete && img.naturalWidth > 0)) return { ready: false };
         const code = p.querySelector('pre.code');
-        const csv = p.querySelector('table.csv');
+        const csv = p.querySelector('table.csv:not(.archive)');
         const mdf = p.querySelector('iframe.mdframe');
         if (mdf && !mdf.dataset.info) return { ready: false };
         return {
           ready: true,
-          view: mdf ? 'rendered' : p.querySelector('.pimg') ? 'image' : csv ? 'csv' : code ? (code.classList.contains('hljs') ? 'highlighted' : 'plain') : 'message',
+          view: mdf ? 'rendered' : p.querySelector('table.archive') ? 'archive' : p.querySelector('.pimg') ? 'image' : csv ? 'csv' : code ? (code.classList.contains('hljs') ? 'highlighted' : 'plain') : 'message',
           tokens: code ? code.querySelectorAll('[class^=hljs]').length : 0,
           csvRows: csv ? csv.querySelectorAll('tr').length : 0,
           text: (code ?? p.querySelector('.pbody > .hint') ?? { innerText: '' }).innerText.replace(/\\s+/g, ' ').trim(),
@@ -251,6 +251,21 @@ export function defineSuite({ label, launch }) {
       const link = await preview('link-to-main');
       assert.equal(link.view, 'highlighted');
       assert.equal(link.linkTo, 'src/main.go');
+    });
+
+    // ---- archives ------------------------------------------------------------
+    test('lists zip and tar contents without extracting; a fake archive is just text', async () => {
+      await open(fx.work);
+      for (const [name, wanted, format] of [['bundle.zip', ['pkg/readme.txt', 'pkg/lib/a.go'], 'zip'], ['bundle.tar', ['top.txt', 'sub/inner.txt'], 'tar']]) {
+        await preview(name);
+        const got = await waitFor(() => d.eval(`const t = document.querySelector('.preview table.archive'); return t ? { names: [...t.querySelectorAll('tbody tr td:first-child')].map((c) => c.textContent), note: document.querySelector('.preview .note').textContent } : null`), { message: `${name} to list` });
+        assert.deepEqual(got.names, wanted);
+        assert.match(got.note, new RegExp('^' + format + ':'));
+        assert.doesNotMatch(await d.eval(`return document.querySelector('.preview').innerText`), /SECRET-INSIDE/, 'file contents must not be shown');
+      }
+      const fake = await preview('fake.zip');
+      assert.equal(fake.view, 'plain');
+      assert.match(fake.text, /alert\(1\)/);
     });
 
     // ---- PDF -----------------------------------------------------------------
@@ -642,7 +657,7 @@ export function defineSuite({ label, launch }) {
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await rows()).includes('.envrc'), { message: 'dotfiles to appear' });
       // Case-insensitive, dotfiles first, folders NOT grouped (src/ sits among the files by name).
-      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
+      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'bundle.tar', 'bundle.zip', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'fake.zip', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
 
       const foldersFirst = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Folders first')).querySelector('input')`;
       const box = await d.eval(`const b = ${foldersFirst}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);

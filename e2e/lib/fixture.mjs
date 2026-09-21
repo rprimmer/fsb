@@ -2,7 +2,47 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateSync } from 'node:zlib';
+import zlib, { deflateSync } from 'node:zlib';
+
+/** A tar archive holding the given files (ustar headers, computed checksums). */
+export function makeTar(files) {
+  const blocks = [];
+  for (const [name, body] of Object.entries(files)) {
+    const h = Buffer.alloc(512);
+    h.write(name, 0, 100, 'utf8');
+    h.write('0000644\0', 100); h.write('0000000\0', 108); h.write('0000000\0', 116);
+    h.write(body.length.toString(8).padStart(11, '0') + '\0', 124);
+    h.write('00000000000\0', 136);
+    h.write('        ', 148); h.write('0', 156); h.write('ustar\0' + '00', 257);
+    let sum = 0; for (const b of h) sum += b;
+    h.write(sum.toString(8).padStart(6, '0') + '\0 ', 148);
+    blocks.push(h, Buffer.from(body), Buffer.alloc((512 - (body.length % 512)) % 512));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return Buffer.concat(blocks);
+}
+
+/** A zip with stored (uncompressed) entries. */
+export function makeZip(files) {
+  const parts = [], central = [];
+  let off = 0;
+  for (const [name, body] of Object.entries(files)) {
+    const nm = Buffer.from(name), data = Buffer.from(body), crc = zlib.crc32(data);
+    const lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26);
+    const ch = Buffer.alloc(46);
+    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt32LE(crc, 16);
+    ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(nm.length, 28); ch.writeUInt32LE(off, 42);
+    parts.push(lh, nm, data); central.push(ch, nm);
+    off += 30 + nm.length + data.length;
+  }
+  const cd = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(Object.keys(files).length, 8); end.writeUInt16LE(Object.keys(files).length, 10);
+  end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(off, 16);
+  return Buffer.concat([...parts, cd, end]);
+}
 
 /** A one-page PDF saying "Hello fsb PDF", with a correct cross-reference table. */
 export function makePdf() {
@@ -130,6 +170,9 @@ export function makeFixture({ big = false } = {}) {
     '[click me](javascript:alert(1))', '',
   ].join('\n'));
   put(join(work, 'doc.pdf'), makePdf());
+  put(join(work, 'bundle.zip'), makeZip({ 'pkg/readme.txt': 'SECRET-INSIDE-ZIP', 'pkg/lib/a.go': 'package a\n' }));
+  put(join(work, 'bundle.tar'), makeTar({ 'top.txt': 'hello', 'sub/inner.txt': 'SECRET-INSIDE-TAR' }));
+  put(join(work, 'fake.zip'), '<html><script>alert(1)</script></html>');
   put(join(work, 'fake.pdf'), '<html><script>alert(1)</script></html>');
   put(join(work, 'app.log'), 'plain log line 1\nplain log line 2\n');
   put(join(work, 'random.bin'), Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 131 + 7) % 256)));
