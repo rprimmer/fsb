@@ -245,7 +245,7 @@ func (s *Server) archive(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, l)
 }
 
-// mdframe serves the fixed page that renders sanitised Markdown inside a
+// mdframe serves the fixed page that renders sanitized Markdown inside a
 // sandboxed iframe. It is not user content: it is a constant document with its
 // own strict policy (see web.MDFrame). It may be framed by fsb's own pages only.
 func (s *Server) mdframe(w http.ResponseWriter, r *http.Request) {

@@ -39,7 +39,7 @@ var CoreDeny = []string{
 
 // CredentialLocations returns the credential folders and files under each home
 // directory that fsb knows of: the given home and every folder in /Users. They
-// mirror the credential entries of CoreDeny for code that must recognise the
+// mirror the credential entries of CoreDeny for code that must recognize the
 // same files by identity (hard links).
 func CredentialLocations(home string) []string {
 	rel := []string{
@@ -112,7 +112,7 @@ func IgnoreTemplate() string {
 
 // CoreMissing returns core rules that are not present in s.
 func CoreMissing(s *Set) []string {
-	// Compared as names are compared (Fold), so "~/.SSH" is recognised as the
+	// Compared as names are compared (Fold), so "~/.SSH" is recognized as the
 	// core rule "~/.ssh". Equal text always denies the same things, so this never
 	// reports a rule as present that is not ("~/.aws/" is a different rule from
 	// "~/.aws": it applies to directories only).

@@ -106,7 +106,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	// Path rules cannot see a hard link, so files in the credential locations are
-	// also recognised by identity. Every home directory on the machine is
+	// also recognized by identity. Every home directory on the machine is
 	// covered, not only $HOME (which may be wrong or overridden).
 	g.Protect(rules.CredentialLocations(home)...)
 

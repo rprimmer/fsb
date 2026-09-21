@@ -1,7 +1,7 @@
 // Markdown to HTML for the preview pane. Pure (no DOM), so it can be tested
 // with `node --test`.
 //
-// This is the first of three layers. The HTML it produces is then sanitised
+// This is the first of three layers. The HTML it produces is then sanitized
 // with DOMPurify (Preview.svelte) and finally shown in a sandboxed iframe whose
 // policy forbids scripts of its own and all network access (see web/mdframe.go).
 // Each layer assumes the one before it failed.

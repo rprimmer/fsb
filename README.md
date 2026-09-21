@@ -23,7 +23,7 @@ A read-only, local-only web view of your filesystem. One Go binary serves a brow
 - **Search:** filename search under the current folder, shallowest matches first. It never enters or reports denied or hidden folders and does not follow symlinked folders.
 - **Extended attributes:** shown in the preview pane, and as an optional last column (Columns menu), fetched only for the rows on screen.
 - **PDF:** shown in your browser's built-in viewer, and only when the file's bytes say it is a PDF.
-- **Archives:** zip, tar and tar.gz files show their table of contents (never extracted), recognised by content and bounded against zip bombs.
+- **Archives:** zip, tar and tar.gz files show their table of contents (never extracted), recognized by content and bounded against zip bombs.
 
 Columns can be resized (drag the edge; double-click to fit) and reordered (drag a header, or Alt+Left/Right); the layout is remembered in your browser, and "Reset columns" restores the defaults.
 
@@ -67,7 +67,7 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 
 ### Known limitations
 
-- Rules are path-based. A hard link to a credential file (in the `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains or browser-profile folders of any home directory) is recognised by identity and refused, but a hard link to some other denied file, such as a `.env` or `.pem` elsewhere, is not detected.
+- Rules are path-based. A hard link to a credential file (in the `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains or browser-profile folders of any home directory) is recognized by identity and refused, but a hard link to some other denied file, such as a `.env` or `.pem` elsewhere, is not detected.
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 

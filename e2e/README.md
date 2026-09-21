@@ -28,7 +28,7 @@ they do for a user with no config), and opens the app in a fresh browser
 profile. Nothing outside a temporary directory is touched. Screenshots of
 failed tests are written to `e2e/artifacts/`.
 
-## How it is organised
+## How it is organized
 
 - `suite.mjs` holds the tests, written once against a small driver interface.
 - `lib/chrome.mjs` is a driver over the Chrome DevTools protocol.

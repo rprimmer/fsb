@@ -130,8 +130,8 @@ test('law: resolveGoto is clean and idempotent', () => {
   }
 });
 
-// Law: a Markdown link can only ever name an absolute, normalised path.
-test('law: resolveLink yields normalised absolute file paths or nothing', () => {
+// Law: a Markdown link can only ever name an absolute, normalized path.
+test('law: resolveLink yields normalized absolute file paths or nothing', () => {
   const hrefs = ['a.md', '../a.md', '../../../../a', './x/./y/../z', '/abs/../up', 'a%2F..%2F..%2Fb', 'sub/', '%2e%2e/%2e%2e/x', 'a b', 'ü.md'];
   for (const h of hrefs) {
     const t = resolveLink('/Users/me/docs', h);

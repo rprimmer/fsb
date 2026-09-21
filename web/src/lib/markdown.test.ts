@@ -5,7 +5,7 @@ import { fillImages, renderMarkdown, resolveLink } from './markdown.ts';
 
 const base = '/Users/me/docs';
 
-test('resolveLink: relative paths are resolved and normalised', () => {
+test('resolveLink: relative paths are resolved and normalized', () => {
   assert.deepEqual(resolveLink(base, 'a.md'), { kind: 'file', path: '/Users/me/docs/a.md' });
   assert.deepEqual(resolveLink(base, './sub/b.md#top'), { kind: 'file', path: '/Users/me/docs/sub/b.md' });
   assert.deepEqual(resolveLink(base, '../x.md?y=1'), { kind: 'file', path: '/Users/me/x.md' });

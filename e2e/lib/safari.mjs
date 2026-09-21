@@ -8,7 +8,7 @@ import { createServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { sleep } from './util.mjs';
 
-// W3C "normalised key" code points (private-use characters, written as numbers
+// W3C "normalized key" code points (private-use characters, written as numbers
 // so they stay visible in the source).
 const wdKey = (codePoint) => String.fromCharCode(codePoint);
 const KEYS = {

@@ -13,7 +13,7 @@ var mdFrameHTML []byte
 
 var mdFrameCSP = mustFrameCSP(mdFrameHTML)
 
-// MDFrame returns the fixed document that renders sanitised Markdown, and the
+// MDFrame returns the fixed document that renders sanitized Markdown, and the
 // Content-Security-Policy to serve it with.
 //
 // The document has exactly one inline script and one inline style, and the

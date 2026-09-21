@@ -116,7 +116,7 @@
       });
   }
 
-  // Try the table of contents first; anything the server does not recognise as
+  // Try the table of contents first; anything the server does not recognize as
   // an archive by its bytes (a plain .gz, a renamed file) is shown as an ordinary file.
   function loadArchive(p: string, ctrl: AbortController) {
     getArchive(p, ctrl.signal)
@@ -181,7 +181,7 @@
   });
 
   // Rendered Markdown. The source is turned into HTML (raw HTML escaped, links
-  // and images defanged: see markdown.ts), sanitised, and handed to a sandboxed
+  // and images defanged: see markdown.ts), sanitized, and handed to a sandboxed
   // iframe that can run only its own fixed script and touch nothing (see
   // web/mdframe.go). Local images are fetched here through the guarded preview
   // endpoint and passed in as data: URLs; nothing remote is ever loaded.

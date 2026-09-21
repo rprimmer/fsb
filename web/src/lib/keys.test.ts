@@ -9,7 +9,7 @@ test('a normal key event maps to itself', () => {
   assert.equal(keyOf({ key: 'Backspace', code: 'Backspace' }), 'Backspace');
 });
 
-test('navigation keys are recognised by code when a modifier changes key (Safari under WebDriver)', () => {
+test('navigation keys are recognized by code when a modifier changes key (Safari under WebDriver)', () => {
   // Captured from Safari 27: Alt+ArrowLeft arrived as key "" with the right code.
   assert.equal(keyOf({ key: '', code: 'ArrowLeft' }), 'ArrowLeft');
   assert.equal(keyOf({ key: '', code: 'ArrowRight' }), 'ArrowRight');
@@ -19,7 +19,7 @@ test('navigation keys are recognised by code when a modifier changes key (Safari
   assert.equal(keyOf({ key: 'x', code: 'PageDown' }), 'PageDown');
 });
 
-test('Space is recognised by code, since some layers report an empty key', () => {
+test('Space is recognized by code, since some layers report an empty key', () => {
   assert.equal(keyOf({ key: ' ', code: 'Space' }), ' ');
   assert.equal(keyOf({ key: '', code: 'Space' }), ' ');
 });

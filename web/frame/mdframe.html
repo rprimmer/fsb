@@ -34,7 +34,7 @@ body { font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sa
 (function () {
   var root = document.getElementById('md');
   // Only the app that framed us may send content, and it sends HTML it has already
-  // sanitised. This page's policy still forbids scripts, handlers and any network
+  // sanitized. This page's policy still forbids scripts, handlers and any network
   // access, so even markup that slipped through could not do anything.
   window.addEventListener('message', function (e) {
     if (e.source !== parent) return;

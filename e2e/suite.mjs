@@ -756,7 +756,7 @@ export function defineSuite({ label, launch }) {
     // ---- attacks from other websites --------------------------------------------
     // The visitor's browser holds a valid fsb session cookie. A malicious page on
     // another site must not be able to use it. The "attacker" is a real second
-    // origin (see lib/attacker.mjs), so these exercise real browser behaviour:
+    // origin (see lib/attacker.mjs), so these exercise real browser behavior:
     // SameSite cookies, Sec-Fetch-Site, CORS and frame protections.
     const loadsImage = (url) =>
       `return await new Promise((resolve) => { const i = new Image(); i.onload = () => resolve('loaded'); i.onerror = () => resolve('error'); i.src = ${JSON.stringify(url)}; setTimeout(() => resolve('timeout'), 6000); })`;

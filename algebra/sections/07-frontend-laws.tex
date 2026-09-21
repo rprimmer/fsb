@@ -81,12 +81,12 @@ outside.  The client check is advisory; the server's $\InRoots$ decides.
 
 \subsection{Markdown links and images}
 
-\begin{law}[Links resolve to normalised absolute paths]
+\begin{law}[Links resolve to normalized absolute paths]
 \label{law:link-path}
 If $\Link(b,h)$ names a file, the path is absolute and contains no \code{.},
 \code{..} or empty component; relative targets are resolved against the
 directory $b$ of the Markdown file and cannot climb above the root.
-\Tests{web/src/lib/laws.test.ts: resolveLink yields normalised absolute file paths; markdown.test.ts}
+\Tests{web/src/lib/laws.test.ts: resolveLink yields normalized absolute file paths; markdown.test.ts}
 \end{law}
 
 \begin{law}[Links and images carry no address]

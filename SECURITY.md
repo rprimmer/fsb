@@ -27,7 +27,7 @@ secrets you have excluded stay excluded.
 | Read-only | Only `GET`/`HEAD` are served; the binary contains no write code |
 | Deny rules block every access | One chokepoint (`internal/guard`) used by list, download, preview, head, metadata and search; rules are matched against the *real* location, after symlinks and aliases are resolved, and again on the file descriptor that was actually opened |
 | A denied path looks like a missing one | Identical 404 status and body, including for unreadable files inside denied folders |
-| Rendering a Markdown file cannot run code, load anything remote or reach the app | Three layers, each assuming the one before failed: raw HTML is escaped and links carry no `href` (`web/src/lib/markdown.ts`); the result is sanitised with DOMPurify; and it is shown in an iframe with `sandbox="allow-scripts"` (an opaque origin, so no session and no API access) whose own policy is `default-src 'none'` with only its one fixed script and style admitted by hash, and images limited to `data:`. Local images are fetched through the guarded preview endpoint, and remote images are replaced by a placeholder, so opening a file makes no outside request |
+| Rendering a Markdown file cannot run code, load anything remote or reach the app | Three layers, each assuming the one before failed: raw HTML is escaped and links carry no `href` (`web/src/lib/markdown.ts`); the result is sanitized with DOMPurify; and it is shown in an iframe with `sandbox="allow-scripts"` (an opaque origin, so no session and no API access) whose own policy is `default-src 'none'` with only its one fixed script and style admitted by hash, and images limited to `data:`. Local images are fetched through the guarded preview endpoint, and remote images are replaced by a placeholder, so opening a file makes no outside request |
 | A PDF preview is served only for real PDFs and cannot be framed by other sites | `/api/pdf` requires the `%PDF-` signature (never the name), is subject to the same guard and deny rules, refuses cloud-only files, and is sent with `nosniff`, `X-Frame-Options: SAMEORIGIN` and `frame-ancestors 'self'`. A CSP `sandbox` is not used here because browsers then refuse to display PDFs; rendering is left to the browser's own viewer |
 | Listing an archive cannot extract, write or exhaust memory | `/api/archive` returns names and sizes only, never member data, through the same guard and deny rules. Format is decided from bytes; a zip claiming more than 200,000 entries is refused; tar scanning stops after 200,000 entries or 512 MiB of decompressed stream; member names are shown as text with control characters replaced |
 | Only the configured roots are reachable | Real-path check against the roots; symlinks that leave them are refused |
@@ -36,12 +36,12 @@ Details are in [PRD/PRD.md](PRD/PRD.md), sections 8 and 9.
 
 ## Known limitations
 
-- **Hard links.** Rules are path-based. A hard link to a credential file in a known credential location (any home's `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains, browser profiles) is recognised by file identity and refused. A hard link to any other denied file, such as a `.env` or `.pem` placed elsewhere, is not detected.
+- **Hard links.** Rules are path-based. A hard link to a credential file in a known credential location (any home's `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains, browser profiles) is recognized by file identity and refused. A hard link to any other denied file, such as a `.env` or `.pem` placed elsewhere, is not detected.
 - **Broad patterns have costs.** `*.key` also matches Keynote files, `.env` also matches a folder called `.env`, and `.env.*` also matches `.env.example`. You can remove a pattern from your deny file; fsb then warns at startup and in the UI.
 - **`--root /` widens what is exposed.** Deny rules still apply, but only to what they name.
 - **Explicit downloads of cloud-only files.** Clicking a file name downloads it, and for an iCloud file that is not stored locally that starts the download. Hover, preview and metadata never do.
 - **Rules are read at startup.** Restart to apply changes.
-- **Response timing is not equalised.** A denied path can answer slightly faster than a missing one; the status and body are identical.
+- **Response timing is not equalized.** A denied path can answer slightly faster than a missing one; the status and body are identical.
 
 ## How it is tested
 

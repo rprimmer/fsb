@@ -114,7 +114,7 @@ func TestUnreadableFilesInDeniedDirectoriesLookMissing(t *testing.T) {
 }
 
 // Finding 4, harder form: the denied directory itself is not searchable, so its
-// children cannot be resolved; the deny must still be recognised from the
+// children cannot be resolved; the deny must still be recognized from the
 // directory that can be.
 func TestUnsearchableDeniedDirectoryThroughASymlinkLooksMissing(t *testing.T) {
 	fx := newFixture(t)

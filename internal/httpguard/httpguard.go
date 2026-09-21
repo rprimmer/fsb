@@ -138,7 +138,7 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 
 // sameOrigin rejects requests that a cross-site page could have triggered.
 func sameOrigin(r *http.Request, hosts map[string]bool) bool {
-	// A browser serialises Origin as exactly scheme://host[:port]. Anything
+	// A browser serializes Origin as exactly scheme://host[:port]. Anything
 	// else (userinfo, path, query, fragment, an opaque form) is not something a
 	// browser sends, so it is refused rather than interpreted.
 	if o := r.Header.Get("Origin"); o != "" {
