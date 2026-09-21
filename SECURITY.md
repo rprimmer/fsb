@@ -36,7 +36,8 @@ Details are in [PRD/PRD.md](PRD/PRD.md), sections 8 and 9.
 
 ## Known limitations
 
-- **Hard links.** Rules are path-based. A hard link to a denied file, placed somewhere that is not denied, is not detected.
+- **Hard links.** Rules are path-based. A hard link to a credential file in a known credential location (any home's `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains, browser profiles) is recognised by file identity and refused. A hard link to any other denied file, such as a `.env` or `.pem` placed elsewhere, is not detected.
+- **The session cookie is not port-scoped.** Browsers scope cookies by host, so the `HttpOnly` session cookie is also sent to any other web server on `127.0.0.1` that the same browser visits, and a server that sees it could replay it. Use a separate browser profile for fsb if you run local web servers you do not trust.
 - **Broad patterns have costs.** `*.key` also matches Keynote files, `.env` also matches a folder called `.env`, and `.env.*` also matches `.env.example`. You can remove a pattern from your deny file; fsb then warns at startup and in the UI.
 - **`--root /` widens what is exposed.** Deny rules still apply, but only to what they name.
 - **Explicit downloads of cloud-only files.** Clicking a file name downloads it, and for an iCloud file that is not stored locally that starts the download. Hover, preview and metadata never do.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -34,6 +35,34 @@ var CoreDeny = []string{
 	".env.*",
 	"*.pem",
 	"*.key",
+}
+
+// CredentialLocations returns the credential folders and files under each home
+// directory that fsb knows of: the given home and every folder in /Users. They
+// mirror the credential entries of CoreDeny for code that must recognise the
+// same files by identity (hard links).
+func CredentialLocations(home string) []string {
+	rel := []string{
+		".ssh", ".aws", ".gnupg", ".kube", ".netrc", ".config/gh", "Library/Keychains",
+		"Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
+		"Library/Safari", "Library/Cookies",
+	}
+	homes := map[string]bool{home: true}
+	if es, err := os.ReadDir("/Users"); err == nil {
+		for _, e := range es {
+			if e.IsDir() {
+				homes["/Users/"+e.Name()] = true
+			}
+		}
+	}
+	var out []string
+	for h := range homes {
+		for _, r := range rel {
+			out = append(out, h+"/"+r)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // OptionalDeny lists situational rules shipped commented out.

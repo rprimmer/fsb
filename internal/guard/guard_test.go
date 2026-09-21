@@ -119,8 +119,8 @@ func TestOpenDenied(t *testing.T) {
 	fx := newFixture(t)
 	_, err := readAll(t, fx.g, filepath.Join(fx.home, ".ssh", "id_ed25519"))
 	var de *DeniedError
-	if !errors.As(err, &de) || de.Rule != "~/.ssh/" {
-		t.Fatalf("err = %v, want DeniedError for ~/.ssh/", err)
+	if !errors.As(err, &de) || de.Rule != ".ssh/" {
+		t.Fatalf("err = %v, want DeniedError for .ssh/", err)
 	}
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatal("a denied error must also satisfy ErrNotFound")

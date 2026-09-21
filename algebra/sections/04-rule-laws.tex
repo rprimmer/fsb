@@ -111,7 +111,12 @@ not slip past a rule for \code{*.pem}.
 
 \begin{boundary}[Hard links]
 Rules are path-based, so a hard link to a denied file, placed where no rule
-names it, is not detected.  This is a stated limitation of the design.
+names it, is invisible to them.  The guard closes this for the credential
+locations only: a regular file with more than one name is compared by identity
+with the files under those locations (any home directory) and refused if it is
+one of them, in \code{Open} and in listings alike.  A hard link to any other denied
+file, for example a \code{.pem} placed elsewhere, is not detected.
+\Tests{guard/hardlink\_test.go}
 \end{boundary}
 
 \begin{boundary}[Case classes in ranges]

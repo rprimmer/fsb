@@ -3,8 +3,8 @@
 
 Stating the laws and then checking them found six defects (1--6), and a
 subsequent audit of every place that compares names or paths, and of the
-environment assumptions behind the rules, found four more (7--10).  Each was
-reproduced by a failing test before it was fixed.  Findings 1, 7, 8 and 10 are
+environment assumptions behind the rules, found five more (7--11).  Each was
+reproduced by a failing test before it was fixed.  Findings 1, 7, 8, 10 and 11 are
 security defects; the rest are consistency defects that fail closed
 or are cosmetic, but each is a place where two parts of the program disagreed.
 
@@ -73,6 +73,12 @@ the same folders in a backup or clone of the home folder, in another account's
 home, or under a wrong \code{\$HOME} were served.
 & \ref{law:credential-anywhere}
 & The credential rules match at any depth, like the secret-file patterns. \\
+11 & \textbf{A path is not a file (hard links).}  Rules name paths, so a hard link
+to a credential file placed anywhere else was served under its innocent name; this
+had been recorded only as a limitation.
+& \ref{law:absent}
+& For the credential locations of every home, a file with several names is
+compared by identity with the files there, in \code{Open} and in listings. \\
 \bottomrule
 \end{longtable}
 

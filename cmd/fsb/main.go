@@ -105,6 +105,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// Path rules cannot see a hard link, so files in the credential locations are
+	// also recognised by identity. Every home directory on the machine is
+	// covered, not only $HOME (which may be wrong or overridden).
+	g.Protect(rules.CredentialLocations(home)...)
 
 	// Loopback only. This address is deliberately not configurable.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

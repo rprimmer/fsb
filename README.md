@@ -66,13 +66,14 @@ See [SECURITY.md](SECURITY.md) for the threat model, what is and is not guarante
 
 ### Known limitations
 
-- Rules are path-based: a hard link to a denied file elsewhere is not detected.
+- Rules are path-based. A hard link to a credential file (in the `.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gh`, Keychains or browser-profile folders of any home directory) is recognised by identity and refused, but a hard link to some other denied file, such as a `.env` or `.pem` elsewhere, is not detected.
+- The session cookie is scoped to the host, not the port, so your browser also sends it to any other web server you visit on `127.0.0.1` (or a forwarded port). Use a separate browser profile for fsb if you run untrusted local web servers.
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 
 ## Algebraic specification
 
-[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found ten defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
+[`algebra/`](algebra/) holds a LaTeX specification of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, and the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found eleven defects, all fixed (see its Findings section). Build it with `make -C algebra` (needs a TeX installation; the PDF is written to `algebra/build/`).
 
 ## Development
 

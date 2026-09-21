@@ -145,6 +145,13 @@ A denied path can be answered slightly faster than a missing one.  Status and
 body are identical; timing is not equalized.
 \end{boundary}
 
+\begin{boundary}[Cookie scope]
+Cookies are scoped by host and not by port.  The session cookie is therefore
+also sent to any other web server on the loopback address that the same browser
+visits.  It cannot be read by scripts (\code{HttpOnly}) or sent cross-site
+(\code{SameSite=Strict}), but a server that receives it could replay it.
+\end{boundary}
+
 \begin{boundary}[Other processes]
 Anything that runs as the user can read the same files.  \texttt{fsb} is not a
 sandbox against local malware.
