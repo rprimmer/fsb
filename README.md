@@ -88,7 +88,7 @@ See [specs/SECURITY.md](specs/SECURITY.md) for the threat model, what is and is 
 
 - **Manual page:** `man ./man/fsb.1` (hand-written roff; check with `mandoc -Tlint man/fsb.1`). Install it as `fsb.1` in a `man1` folder on your `MANPATH`.
 - **[Functional specification](specs/functional/fsb-functional.pdf):** what `fsb` does, as an outside observer sees it. Every requirement has a stable identifier (`RUL-4`, `SEC-7`, ...) that the other documents and the tests cite.
-- **[Design specification](specs/design/fsb-design.pdf):** how it is built and why, the alternatives rejected, how it is tested, and its limits.
+- **[Design specification](specs/design/fsb-design.pdf):** how it is built and why, the alternatives rejected, how it is tested, and its limits. It also states, exhaustively, the exact machine and tool versions everything was tested with; traces every functional requirement to the tests that check it (and says plainly which have none); and lists, up front, what has not been tested (other platforms and browsers, opt-in and skipped tests, real cloud placeholders, CI, an independent review).
 - **[Algebraic specification](specs/algebra/fsb-algebra.pdf):** a formal statement of the security core (rule matcher, the access decision every endpoint must agree with, content-typed endpoints, frontend order/filter/navigation, the preview state machine) as laws, each tied to an executable check. Deriving it, and auditing every name comparison, found sixteen defects, all fixed (see its Findings section).
 - **[Security policy](specs/SECURITY.md):** the threat model, what is and is not guaranteed, and how it was tested.
 
