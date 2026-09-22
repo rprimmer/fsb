@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/rprimmer/fsb/internal/rules"
 )
@@ -87,4 +90,62 @@ func openCommand(browser, url string) (string, []string) {
 		return "open", []string{url}
 	}
 	return "open", []string{"-a", browser, url}
+}
+
+const lastPortFile = "lastport"
+
+// readLastPort returns the port remembered from a previous successful start,
+// or 0 if there is none or it cannot be used. A missing or malformed file is
+// never an error: it just means there is nothing to remember yet.
+func readLastPort(cfgDir string) int {
+	data, err := os.ReadFile(filepath.Join(cfgDir, lastPortFile))
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || n < 1 || n > 65535 {
+		return 0
+	}
+	return n
+}
+
+// writeLastPort records port for next time, best effort: a failure here must
+// never stop fsb from serving, so it is not reported to the caller.
+func writeLastPort(cfgDir string, port int) {
+	if os.MkdirAll(cfgDir, 0o700) != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(cfgDir, lastPortFile), []byte(strconv.Itoa(port)+"\n"), 0o600)
+}
+
+// choosePort binds the loopback listener and decides which port it uses.
+//
+// If explicit is true (the user passed --port), port is used exactly as
+// given (0 meaning "let the OS choose"), for this run only: it is not
+// remembered, so a one-off choice, such as working around another program
+// that happens to hold the usual port today, cannot silently become the
+// standing default and drift the user away from it.
+//
+// Otherwise, the port remembered from a previous successful start (if any) is
+// tried first, so that the browser's stored preferences, which are scoped to
+// the page's full address including the port, survive a restart; the first
+// time there is nothing remembered yet, a free port is chosen and then
+// remembered. If a remembered port is now held by something else, this fails
+// rather than silently falling back to a different port: a silent change
+// would look like fsb had simply lost the user's preferences, with nothing
+// to explain why.
+func choosePort(cfgDir string, port int, explicit bool) (net.Listener, error) {
+	if explicit {
+		return net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	}
+	remembered := readLastPort(cfgDir)
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", remembered))
+	if err != nil {
+		if remembered != 0 && errors.Is(err, syscall.EADDRINUSE) {
+			return nil, fmt.Errorf("port %d (used last time) is already in use by another program; run again with --port N to use a different one", remembered)
+		}
+		return nil, err
+	}
+	writeLastPort(cfgDir, ln.Addr().(*net.TCPAddr).Port)
+	return ln, nil
 }

@@ -58,7 +58,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		browser    = fs.String("browser", "", `macOS application to open the URL in, e.g. "Google Chrome" (default: your default browser)`)
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
 		sysRoot    = fs.Bool("allow-system-root", false, "allow / as a root")
-		portFlag   = fs.Int("port", 0, "listen on this port instead of a random one each start; 0 (the default) picks a free port")
+		portFlag   = fs.Int("port", 0, "use exactly this port for this run only (0 lets the OS choose); without this flag, fsb reuses the port it last used successfully, so the browser's stored preferences (column widths, the preview pane's width) survive a restart, and falls back to a free port the first time there is nothing to reuse yet")
 	)
 	fs.Var(&extraRoots, "root", "additional root directory (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -76,6 +76,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if *portFlag < 0 || *portFlag > 65535 {
 		return fmt.Errorf("invalid --port value %d: must be 0-65535", *portFlag)
 	}
+	portExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "port" {
+			portExplicit = true
+		}
+	})
 
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -115,14 +121,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	g.Protect(rules.CredentialLocations(home)...)
 	g.StartLinkIndex() // in the background; files with several names are refused until it is ready
 
-	// Loopback only. The interface is deliberately not configurable; --port only
-	// chooses which port on it to use, defaulting to 0 (a free port the OS
-	// picks). Browser-stored preferences (column widths, the preview pane's
-	// width and so on) are scoped by the page's origin, which includes the
-	// port, so a random port each start means a fresh, empty preference store
-	// each time; a fixed --port keeps the same origin, and so the same
-	// preferences, across restarts.
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *portFlag))
+	// Loopback only. The interface is deliberately not configurable; choosePort
+	// only decides which port on it to use (see its own comment).
+	ln, err := choosePort(cfgDir, *portFlag, portExplicit)
 	if err != nil {
 		return err
 	}

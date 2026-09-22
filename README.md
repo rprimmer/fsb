@@ -52,11 +52,11 @@ make uninstall
 
 `fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`.
 
-By default the port is different every time you start `fsb`, and since the browser keeps your preferences (column widths, the preview pane's width) per address including the port, they don't carry over between runs. Pass `--port N` (any fixed number, e.g. `fsb --port 4488`) to keep the same address, and your preferences, across restarts.
+The browser keeps preferences such as column widths and the preview pane's width per address, including the port, so `fsb` remembers the port it last used successfully (in `~/.config/fsb/lastport`) and reuses it, rather than picking a new one every time; the first run, with nothing to reuse yet, picks a free port as before. If that remembered port is ever taken by something else, `fsb` says so and asks you to pick another with `--port N` for that run, rather than silently moving to a different port and losing the address your preferences are keyed to. `--port N` also works any time you want a specific port; a value chosen this way is used just for that run and is not remembered.
 
 ## Security model
 
-- **Loopback only.** Binds `127.0.0.1` on a random port; not configurable.
+- **Loopback only.** Binds `127.0.0.1`; the interface is not configurable. The port is remembered across restarts by default (see above) or fixed with `--port`, but it is always loopback-only.
 - **Rebinding and cross-site defenses.** Requests must carry an allowed `Host`, must not have a foreign `Origin`/`Referer`, and must not be cross-site per `Sec-Fetch-Site`.
 - **Single-use launch token.** The URL printed at startup carries a token that is exchanged once for an `HttpOnly`, `SameSite=Strict` session cookie. The token is never logged.
 - **Cookie scoped to a random path.** Browsers scope cookies by host and never by port, so a plain cookie would be sent to every other web server on `127.0.0.1` that you visit. fsb therefore serves everything under a random per-launch prefix (`http://127.0.0.1:PORT/<random>/`) and sets the cookie's `Path` to it: the browser sends it only for URLs under that prefix, which no other server has. Any URL outside the prefix is refused. Open the printed URL (bookmarks do not survive a restart).

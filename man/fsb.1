@@ -70,14 +70,22 @@ May be repeated.
 When there are several roots the interface offers a way to switch between them.
 .TP
 .BI \-\-port " N"
-Listen on port
+Use port
 .I N
-instead of a random free port picked at each start.
-The browser keeps preferences such as column widths and the preview pane's
-width per address, including the port, so a random port each start means a
-fresh, empty preference store every time; a fixed port keeps them across
-restarts.
-Must be 0\-65535; 0 (the default) picks a free port.
+for this run only (not remembered for next time); 0 lets the OS choose.
+Without this flag,
+.B fsb
+reuses the port it last used successfully (see
+.B ~/.config/fsb/lastport
+below), so the browser's stored preferences, which are kept per address
+including the port, survive a restart; the first time there is nothing to
+reuse yet, a free port is chosen and then remembered.
+If the remembered port is now held by another program,
+.B fsb
+refuses to start rather than silently choosing a different one, and says to
+retry with
+.BR \-\-port .
+Must be 0\-65535.
 .TP
 .B \-\-allow\-system\-root
 Permit
@@ -135,7 +143,14 @@ fsb: open this single-use URL: http://127.0.0.1:53349/AaGF.../?token=...
 .fi
 .RE
 .PP
-The port is chosen at random at each start and is not configurable.
+The port is the one remembered from your last successful start, or a free one
+the first time; see
+.B ~/.config/fsb/lastport
+under
+.B FILES
+and
+.B \-\-port
+above.
 The URL works once: the first request that uses it sets a session cookie in your
 browser and the token is then useless, so a copy left in your shell history or
 browser
@@ -200,8 +215,18 @@ shows the first lines of a file when you hold the pointer over it.
 .B Preview pane
 shows or hides the pane.
 Column widths, order and visibility, and these choices, are remembered by the
-browser,
-never on the server or on disk.
+browser itself, not sent to or stored by
+.BR fsb .
+The one thing
+.B fsb
+does keep on disk is the port it last used (see
+.B \-\-port
+and
+.B ~/.config/fsb/lastport
+under
+.BR FILES ),
+so that the browser is looking at the same address, and so the same stored
+preferences, each time.
 .SS Names
 Two names are the same name when the file system says so: on the default
 case-insensitive macOS volume, when they are equal after Unicode normalization
@@ -236,6 +261,21 @@ files.
 A file that cannot be parsed stops
 .B fsb
 from starting.
+.TP
+.I ~/.config/fsb/lastport
+The port used at the last successful start.
+Written automatically; not created by
+.BR \-\-init .
+A number on its own line, safe to edit or delete by hand: deleting it, or
+changing the number, just changes which port is tried next time.
+Ignored, and never written to, when
+.B \-\-port
+is given.
+Unlike the rule files, a
+.I lastport
+that cannot be parsed does not stop
+.BR fsb :
+it is treated as if the file were absent, and a free port is chosen as usual.
 .SH RULE SYNTAX
 The syntax is that of
 .BR gitignore (5).
@@ -444,7 +484,8 @@ Serve two folders and paste the URL yourself:
 .B fsb \-\-no\-open \-\-root /Volumes/Data ~/src
 .RE
 .PP
-Use the same port every time, so the browser remembers your preferences:
+Preferences already survive a restart on their own; use a specific port just
+this once, perhaps to work around another program that is using the usual one:
 .PP
 .RS
 .B fsb \-\-port 4488
@@ -468,6 +509,18 @@ A rule file could not be parsed, and
 .B fsb
 did not start.
 Fix the line named.
+.TP
+.B fsb: port N (used last time) is already in use by another program; run again with \-\-port N to use a different one
+Something else is now using the port
+.B fsb
+remembered from before.
+Run again with
+.B \-\-port
+and a different number.
+The remembered port itself is left unchanged, so plain
+.B fsb
+tries it again next time, and works again once the other program is done
+with it.
 .TP
 .B fsb: could not open the browser
 The application named by
