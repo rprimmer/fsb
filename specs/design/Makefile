@@ -1,7 +1,7 @@
 DOC = fsb-design
 LATEXMK ?= latexmk
 
-.PHONY: all pdf clean distclean overleaf help
+.PHONY: all pdf clean distclean help
 
 all: pdf
 
@@ -17,13 +17,9 @@ clean:
 
 distclean:
 	$(LATEXMK) -C $(DOC).tex
-	$(RM) -r dist
-
-overleaf:
-	python3 ../tools/package-overleaf.py .
 
 help:
 	@echo 'make            Build and refresh $(DOC).pdf with pdfLaTeX'
 	@echo 'make clean      Remove build intermediates; keep the PDF'
-	@echo 'make distclean  Remove build outputs and dist/; keep the top-level PDF'
-	@echo 'make overleaf   Package editable sources in dist/$(DOC)-overleaf.zip'
+	@echo 'make distclean  Remove build outputs; keep the top-level PDF'
+	@echo '(make overleaf lives one level up: see ../OVERLEAF.md)'

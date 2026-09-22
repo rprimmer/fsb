@@ -1,41 +1,42 @@
 #!/usr/bin/env python3
-"""Create a source-only Overleaf ZIP for one specification.
+"""Create one source-only Overleaf ZIP for all three specifications.
 
-usage: package-overleaf.py DOCDIR      (run from the specs folder or a document folder)
+usage: package-overleaf.py   (run from the specs folder)
 
-The documents share ../common/. Overleaf takes one project, so the shared files are
-copied into the ZIP as common/ and the includes are rewritten from ../common/ to
-common/. Build output and PDFs are not included; Overleaf builds its own.
+The three documents (functional, design, algebra) share ../common/. Rather than
+copy that folder into a separate ZIP per document (and rewrite every include to
+match, which then has to be kept in sync with the real sources by hand), this
+packages the whole specs/ source tree as one Overleaf project: common/,
+functional/, design/ and algebra/ as siblings, exactly as they are in the repo.
+No path is rewritten, so nothing here can drift from the checked-in sources.
+
+Overleaf is a single-document editor: opening the project shows the file tree,
+and you pick which .tex file is the project's "main document" (Menu > "Set
+Main Document"). This one project therefore holds all three papers, and
+switching which one compiles is a menu click, not a re-upload.
+
+Excluded: build/ and dist/ (Overleaf builds its own output) and the committed
+PDFs (Overleaf regenerates them; keeping a stale one out avoids confusion
+about which is current).
 """
-import re
-import sys
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 SPECS = Path(__file__).resolve().parents[1]
-doc = Path(sys.argv[1]).resolve()
-name = doc.name                                   # functional, design or algebra
-main = f"fsb-{name}.tex"
-if not (doc / main).exists():
-    sys.exit(f"{doc / main} not found")
+DOCS = ("functional", "design", "algebra")
 
-def flatten(text: str) -> str:
-    return text.replace("../common/", "common/")
+files = [SPECS / "OVERLEAF.md"]
+for doc in DOCS:
+    d = SPECS / doc
+    files += [d / f"fsb-{doc}.tex", d / "preamble.tex"]
+    if (d / "macros.tex").exists():
+        files.append(d / "macros.tex")
+    files += sorted((d / "sections").glob("*.tex"))
+files += sorted((SPECS / "common").glob("*.tex"))
 
-files = [main, "preamble.tex"]
-if (doc / "macros.tex").exists():
-    files.append("macros.tex")
-files += sorted(str(p.relative_to(doc)) for p in (doc / "sections").glob("*.tex"))
-
-dest = doc / "dist" / f"fsb-{name}-overleaf.zip"
+dest = SPECS / "dist" / "fsb-specs-overleaf.zip"
 dest.parent.mkdir(exist_ok=True)
 with ZipFile(dest, "w", ZIP_DEFLATED) as z:
-    for rel in files:
-        z.writestr(rel, flatten((doc / rel).read_text(encoding="utf-8")))
-    for p in sorted((SPECS / "common").glob("*.tex")):
-        z.writestr(f"common/{p.name}", flatten(p.read_text(encoding="utf-8")))
-    guide = (SPECS / "OVERLEAF.md").read_text(encoding="utf-8").replace("MAINFILE", main).replace("DOCNAME", name)
-    z.writestr("OVERLEAF.md", guide)
-    # Overleaf manages its own output directory: do not copy the local .latexmkrc.
-    z.writestr("latexmkrc", "$pdf_mode = 1;\n")
+    for f in files:
+        z.write(f, f.relative_to(SPECS))
 print(dest)

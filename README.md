@@ -99,7 +99,7 @@ make -C specs            # all three; or run make in one folder
 make -C specs overleaf   # source-only zips in specs/*/dist/ for Overleaf
 ```
 
-To edit on [Overleaf](https://www.overleaf.com) instead of installing TeX, upload `specs/<document>/dist/fsb-<document>-overleaf.zip` as a new project and set the main document to `fsb-<document>.tex` with pdfLaTeX; see [specs/OVERLEAF.md](specs/OVERLEAF.md).
+To edit on [Overleaf](https://www.overleaf.com) instead of installing TeX, upload `specs/dist/fsb-specs-overleaf.zip` as a new project (pdfLaTeX): it holds all three documents in one project, since they share `specs/common/`, and you pick which one compiles from Overleaf's file list. See [specs/OVERLEAF.md](specs/OVERLEAF.md).
 
 ## Development
 

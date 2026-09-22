@@ -4,4 +4,4 @@
 /dist/
 *.test
 specs/*/build/
-specs/*/dist/
+specs/dist/
