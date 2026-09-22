@@ -707,6 +707,37 @@ export function defineSuite({ label, launch }) {
     });
 
 
+    test('the preview pane grows with the window instead of stopping at a fixed width', async () => {
+      await open(fx.work);
+      const width = () => d.eval(`return Math.round(document.querySelector('.preview').getBoundingClientRect().width)`);
+      if (!(await previewOpen())) await d.key(' ');
+      try {
+        // A wide, maximized-style window: the old fixed ceiling was 900px regardless.
+        await d.resize(2000, 900);
+        await waitFor(async () => (await d.eval(`return window.innerWidth`)) >= 1900, { message: 'the window to actually widen' });
+
+        // A modest, safely on-screen drag already clears the old fixed cap.
+        const edge = await pointOf('.psplit');
+        await d.drag(edge, { x: edge.x - 600, y: edge.y });
+        await waitFor(async () => (await width()) > 900, { message: 'the pane to exceed the old 900px ceiling' });
+
+        // The keyboard has no on-screen bounds to hit: push well past the true
+        // ceiling (however far the drag got) and confirm it saturates there,
+        // the same way the minimum-width case below saturates at 240.
+        await d.eval(`document.querySelector('.psplit').focus()`);
+        await d.eval(`const h = document.querySelector('.psplit'); for (let i = 0; i < 40; i++) h.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', shiftKey: true, bubbles: true }))`);
+        await waitFor(async () => (await width()) === 2000 - 320, { message: 'the pane to reach a ceiling that tracks the window, not a fixed cap' });
+        const wide = await width();
+
+        // Shrinking the window clamps the pane live, without needing a reload.
+        await d.resize(900, 900);
+        await waitFor(async () => (await width()) < wide, { message: 'the pane to shrink when the window does' });
+        assert.equal(await width(), 900 - 320, 'bounded by the new, narrower window');
+      } finally {
+        await d.resize(1280, 900); // restore for the tests that follow
+      }
+    });
+
     test('sorts like eza by default, and Folders first is an option that applies to every column', async () => {
       await open(fx.work);
       // Show dotfiles so the leading-dot rule is visible.

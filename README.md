@@ -1,6 +1,6 @@
 # fsb
 
-A read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
+`fsb` (filesystem browser): a read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
 
 > **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See the [functional specification](specs/functional/) and the [design specification](specs/design/).
 
@@ -51,6 +51,8 @@ make uninstall
 `PREFIX`, `BINDIR`, `MANDIR` (the folder that holds `man1`) and `DESTDIR` (a staging root for packaging) can each be overridden; `make help` shows the values in effect.
 
 `fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`.
+
+By default the port is different every time you start `fsb`, and since the browser keeps your preferences (column widths, the preview pane's width) per address including the port, they don't carry over between runs. Pass `--port N` (any fixed number, e.g. `fsb --port 4488`) to keep the same address, and your preferences, across restarts.
 
 ## Security model
 

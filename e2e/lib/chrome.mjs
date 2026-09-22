@@ -106,6 +106,10 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
     name: 'chrome',
     caps: { nativeDrag: true, clipboardRead: true, consoleLog: true, hostMapping: true },
 
+    async resize(w, h) {
+      await S('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    },
+
     async goto(url) {
       const origin = url.startsWith('http') ? new URL(url).origin : '';
       if (origin && origin !== grantedOrigin) {

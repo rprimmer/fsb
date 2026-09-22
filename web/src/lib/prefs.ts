@@ -3,7 +3,23 @@
 
 export const DEFAULT_PANE_WIDTH = 380;
 export const MIN_PANE_WIDTH = 240;
-export const MAX_PANE_WIDTH = 900;
+/** Space always left for the listing side when the pane's width is bounded by
+ * the window, so the list never gets squeezed away. Matches the CSS safety
+ * net (`max-width: calc(100vw - 320px)` on `.preview`); keep the two in sync. */
+export const RESERVED_FOR_LIST = 320;
+/**
+ * A defensive absolute ceiling, used only when no window width is known (a
+ * caller that has not measured one yet). In the browser the real ceiling
+ * is the window's own width minus RESERVED_FOR_LIST (see clampPaneWidth), so
+ * the pane can grow with the window rather than stopping at a fixed number.
+ */
+export const MAX_PANE_WIDTH = 4000;
+
+export function clampPaneWidth(w: number, windowWidth?: number): number {
+  if (!Number.isFinite(w)) return DEFAULT_PANE_WIDTH;
+  const max = windowWidth !== undefined && Number.isFinite(windowWidth) ? Math.max(MIN_PANE_WIDTH, windowWidth - RESERVED_FOR_LIST) : MAX_PANE_WIDTH;
+  return Math.min(max, Math.max(MIN_PANE_WIDTH, Math.round(w)));
+}
 
 export interface Prefs {
   preview: boolean;
@@ -13,11 +29,6 @@ export interface Prefs {
   foldersFirst: boolean;
   /** Case-sensitive filter and search. Off by default. */
   matchCase: boolean;
-}
-
-export function clampPaneWidth(w: number): number {
-  if (!Number.isFinite(w)) return DEFAULT_PANE_WIDTH;
-  return Math.min(MAX_PANE_WIDTH, Math.max(MIN_PANE_WIDTH, Math.round(w)));
 }
 
 /**
@@ -40,6 +51,6 @@ export function parsePrefs(json: string | null, windowWidth: number): Prefs {
   if (typeof r.hover === 'boolean') prefs.hover = r.hover;
   if (typeof r.foldersFirst === 'boolean') prefs.foldersFirst = r.foldersFirst;
   if (typeof r.matchCase === 'boolean') prefs.matchCase = r.matchCase;
-  if (typeof r.previewWidth === 'number' && Number.isFinite(r.previewWidth)) prefs.previewWidth = clampPaneWidth(r.previewWidth);
+  if (typeof r.previewWidth === 'number' && Number.isFinite(r.previewWidth)) prefs.previewWidth = clampPaneWidth(r.previewWidth, windowWidth);
   return prefs;
 }

@@ -2,7 +2,7 @@
 .\" Check with:  mandoc -Tlint man/fsb.1   and   man ./man/fsb.1
 .TH FSB 1 "September 21, 2026" "fsb 0.1" "User Commands"
 .SH NAME
-fsb \- a read-only, local-only web view of your files
+fsb \- filesystem browser: a read-only, local-only web view of your files
 .SH SYNOPSIS
 .B fsb
 .RB [ \-\-debug ]
@@ -68,6 +68,16 @@ Serve an additional root, such as
 .BR /Volumes/Data .
 May be repeated.
 When there are several roots the interface offers a way to switch between them.
+.TP
+.BI \-\-port " N"
+Listen on port
+.I N
+instead of a random free port picked at each start.
+The browser keeps preferences such as column widths and the preview pane's
+width per address, including the port, so a random port each start means a
+fresh, empty preference store every time; a fixed port keeps them across
+restarts.
+Must be 0\-65535; 0 (the default) picks a free port.
 .TP
 .B \-\-allow\-system\-root
 Permit
@@ -432,6 +442,12 @@ Serve two folders and paste the URL yourself:
 .PP
 .RS
 .B fsb \-\-no\-open \-\-root /Volumes/Data ~/src
+.RE
+.PP
+Use the same port every time, so the browser remembers your preferences:
+.PP
+.RS
+.B fsb \-\-port 4488
 .RE
 .PP
 Write the rule files, then edit them:

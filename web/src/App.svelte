@@ -51,7 +51,7 @@
   import { fold, matchesName } from './lib/filter';
   import { resolveGoto, withinRoots } from './lib/goto';
   import { keyOf } from './lib/keys';
-  import { DEFAULT_PANE_WIDTH, MAX_PANE_WIDTH, MIN_PANE_WIDTH, clampPaneWidth, parsePrefs } from './lib/prefs';
+  import { DEFAULT_PANE_WIDTH, MIN_PANE_WIDTH, RESERVED_FOR_LIST, clampPaneWidth, parsePrefs } from './lib/prefs';
   import { firstLines, plural } from './lib/preview';
   import { sortRows } from './lib/sort';
 
@@ -90,6 +90,11 @@
   let previewWidth = $state(initial.previewWidth);
   let foldersFirst = $state(initial.foldersFirst);
   let matchCase = $state(initial.matchCase);
+  // Tracked live (not just read once at load) so the pane's ceiling grows with
+  // the window instead of stopping at a fixed number: maximizing the browser,
+  // or moving to a wider display, raises the limit immediately.
+  let windowWidth = $state(typeof window === 'undefined' ? 1200 : window.innerWidth);
+  const maxPaneWidth = $derived(Math.max(MIN_PANE_WIDTH, windowWidth - RESERVED_FOR_LIST));
 
   function savePrefs() {
     try {
@@ -110,7 +115,7 @@
 
   function movePaneResize(ev: PointerEvent) {
     // The pane is on the right, so dragging left makes it wider.
-    if (paneDrag) previewWidth = clampPaneWidth(paneDrag.startW + (paneDrag.startX - ev.clientX));
+    if (paneDrag) previewWidth = clampPaneWidth(paneDrag.startW + (paneDrag.startX - ev.clientX), windowWidth);
   }
 
   function endPaneResize() {
@@ -124,7 +129,7 @@
     const key = keyOf(ev);
     if (key === 'ArrowLeft' || key === 'ArrowRight') {
       ev.preventDefault();
-      previewWidth = clampPaneWidth(previewWidth + (key === 'ArrowLeft' ? step : -step));
+      previewWidth = clampPaneWidth(previewWidth + (key === 'ArrowLeft' ? step : -step), windowWidth);
       savePrefs();
     }
   }
@@ -700,11 +705,16 @@
     const onOutside = (ev: PointerEvent) => {
       if (colMenu?.open && !colMenu.contains(ev.target as Node)) colMenu.open = false;
     };
+    const onResize = () => {
+      windowWidth = window.innerWidth;
+      if (previewWidth > maxPaneWidth) previewWidth = maxPaneWidth; // shrinking the window can only narrow the pane, never widen it
+    };
     window.addEventListener('hashchange', onHash);
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onOutside, true);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('wheel', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
     getStatus()
       .then((s) => {
         status = s;
@@ -720,6 +730,7 @@
       window.removeEventListener('pointerdown', onOutside, true);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('wheel', onScroll);
+      window.removeEventListener('resize', onResize);
     };
   });
 
@@ -1050,7 +1061,7 @@
       aria-label="Resize preview pane"
       aria-valuenow={previewWidth}
       aria-valuemin={MIN_PANE_WIDTH}
-      aria-valuemax={MAX_PANE_WIDTH}
+      aria-valuemax={maxPaneWidth}
       title="Drag to resize; double-click to reset. Keyboard: Left/Right"
       tabindex="0"
       onpointerdown={startPaneResize}

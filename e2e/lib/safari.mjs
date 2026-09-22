@@ -97,6 +97,10 @@ export async function launchSafari({ width = 1280, height = 900 } = {}) {
     // console log API.
     caps: { nativeDrag: 'try', clipboardRead: false, consoleLog: false, hostMapping: false },
 
+    async resize(w, h) {
+      await S('POST', '/window/rect', { width: w, height: h }).catch(() => {});
+    },
+
     async goto(url) {
       await S('POST', '/url', { url });
     },

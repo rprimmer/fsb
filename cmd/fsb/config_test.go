@@ -110,3 +110,16 @@ func TestRunRejectsABadBrowserNameEarly(t *testing.T) {
 		t.Errorf("nothing may be started or printed for a bad value, got %q", out.String())
 	}
 }
+
+func TestRunRejectsAnOutOfRangePortEarly(t *testing.T) {
+	for _, bad := range []string{"-1", "65536", "999999"} {
+		var out, errb bytes.Buffer
+		err := run([]string{"--port", bad, "--no-open"}, &out, &errb)
+		if err == nil || !strings.Contains(err.Error(), "--port") {
+			t.Errorf("--port %s: err = %v, want a --port error", bad, err)
+		}
+		if out.Len() != 0 {
+			t.Errorf("--port %s: nothing may be started or printed for a bad value, got %q", bad, out.String())
+		}
+	}
+}
