@@ -328,7 +328,7 @@ func (s *Server) fail(w http.ResponseWriter, path string, err error) {
 	case errors.Is(err, guard.ErrNotFound), errors.Is(err, guard.ErrNotRegular), errors.Is(err, guard.ErrNotDir), errors.Is(err, guard.ErrIsDir):
 		notFound(w)
 	case errors.Is(err, guard.ErrDataless):
-		http.Error(w, "file is stored in the cloud and not downloaded; fsb will not trigger a download", http.StatusConflict)
+		http.Error(w, "stored in the cloud and not downloaded; fsb will not trigger a download", http.StatusConflict)
 	case errors.Is(err, guard.ErrUnsupported):
 		http.Error(w, "unsupported file type", http.StatusUnsupportedMediaType)
 	case errors.Is(err, guard.ErrPermission):

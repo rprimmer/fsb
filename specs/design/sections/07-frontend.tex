@@ -50,6 +50,14 @@ preview's.  An earlier version used one shared variable for both: whichever requ
 settled last silently overwrote the other's message, and the panel's own error was
 suppressed whenever the main preview had already failed, which could leave it reading
 ``Loading…'' forever even though its own request had already come back (Finding~18).
+
+The folder listing has its own, separate error mapping (\code{describe} in
+\code{App.svelte}), independent of the preview pane's, and it had never been given a case
+for status 409: a cloud-only folder (Finding~19) fell through to the generic ``Server
+error (\emph{n}).'' instead of the same cloud message the preview pane already shows for
+a cloud-only \emph{file} (Finding~20).  Two error mappings for the same status code, one
+of them incomplete, is the same shape of gap as Findings 4 through 6: a case a status code
+can take that nothing had exercised.
 Two independent outcomes need two independent variables.
 
 \subsection{Hover peek}

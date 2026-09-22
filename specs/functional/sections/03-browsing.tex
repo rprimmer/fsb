@@ -127,6 +127,12 @@ Denied entries never appear in a listing (\rid{RUL-1}), whatever options are set
 The interface shows a badge saying that it is read-only.
 \end{req}
 
+\begin{req}{LST-13}
+Opening a folder that is itself stored only in the cloud (not downloaded) reports that
+plainly and reads nothing, rather than listing it as empty or answering with an error
+that does not say why (\rid{SEC-13}).
+\end{req}
+
 \subsection{Search}
 
 \begin{req}{SRC-1}
@@ -147,10 +153,10 @@ named with the sharp s.
 \end{req}
 
 \begin{req}{SRC-4}
-Search never enters or reports a denied or hidden folder, never reports a denied or
-hidden entry, and does not follow symbolic links to folders (so it always
-terminates).  Anything a search reports is also shown when the folder that contains
-it is listed.
+Search never enters or reports a denied, hidden or cloud-only folder, never reports a
+denied or hidden entry, and does not follow symbolic links to folders (so it always
+terminates).  A cloud-only folder is skipped rather than failing the whole search.
+Anything a search reports is also shown when the folder that contains it is listed.
 \end{req}
 
 \begin{req}{SRC-5}

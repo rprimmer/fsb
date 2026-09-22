@@ -63,6 +63,9 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 	if !fi.IsDir() {
 		return 0, false, ErrNotDir
 	}
+	if err := refuseDataless(fi); err != nil {
+		return 0, false, err
+	}
 	root = realRoot
 	if q == "" {
 		return 0, false, nil
@@ -78,8 +81,14 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 		queue = queue[1:]
 
 		d, di, err := g.Open(dir)
-		if err != nil || !di.IsDir() {
+		if err != nil {
 			continue // unreadable, vanished, or denied since listing: skip it
+		}
+		if !di.IsDir() || refuseDataless(di) != nil {
+			// TOCTOU (no longer a directory) or dataless since listing: skip it,
+			// but Open did succeed this time, so there is a descriptor to close.
+			d.Close()
+			continue
 		}
 		for {
 			des, rerr := d.ReadDir(512)

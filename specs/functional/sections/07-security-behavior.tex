@@ -100,11 +100,13 @@ update itself.  Previewing a file never loads anything remote (\rid{PRV-7}).
 \end{req}
 
 \begin{req}{SEC-13}
-\texttt{fsb} never causes a cloud-only file to be downloaded.  The details, the
-hover peek, every preview, and the archive listing check whether the file is stored
-only in the cloud and, if so, report that it is not downloaded (status 409) instead of
-reading it.  The one exception is an explicit download by the user of that file
-(\rid{API-4}), which is the user's request for it.
+\texttt{fsb} never causes a cloud-only file or folder to be downloaded.  The details, the
+hover peek, every preview, and the archive listing check whether a \emph{file} is stored
+only in the cloud, and listing and search check whether a \emph{folder} is (a folder can be
+a cloud-only placeholder in its own right, not only the files inside it); each reports
+``not downloaded'' (status 409) instead of reading it.  The one exception is an explicit
+download by the user of a cloud-only file (\rid{API-4}), which is the user's request for
+it; there is no equivalent for a folder, since fsb never downloads or extracts one.
 \end{req}
 
 \begin{req}{SEC-14}

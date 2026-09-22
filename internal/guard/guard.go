@@ -339,6 +339,9 @@ func (g *Guard) ListFunc(p string, batch int, fn func([]Entry) error) error {
 	if !fi.IsDir() {
 		return ErrNotDir
 	}
+	if err := refuseDataless(fi); err != nil {
+		return err
+	}
 	// dir is the real location: children are judged by where they really are,
 	// not by the symlink (or alias) the directory was reached through.
 	for {

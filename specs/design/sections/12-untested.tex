@@ -44,12 +44,21 @@ document; they are gathered here so a reader does not have to hunt for them.
         names a folder on a case-sensitive volume.  It was run once, manually, against a
         disk image created for that purpose (\code{hdiutil create -fs "Case-sensitive
         APFS"}), and is skipped in every other run, including in CI.
-  \item \textbf{Real cloud-only (``dataless'') files.}  \fq{PRV-10} and \fq{SEC-13}
-        are tested against a synthetic dataless flag set on an ordinary local file
-        (\code{TestIsDataless} and its callers), because a real iCloud Drive
-        placeholder cannot be created to order in a test fixture or a CI runner.  The
-        behavior has not been checked against an actual iCloud folder whose files have
-        been evicted to the cloud, which is the situation the requirement exists for.
+  \item \textbf{Real cloud-only (``dataless'') files and folders.}  \fq{PRV-10},
+        \fq{LST-13} and \fq{SEC-13} are tested against a synthetic dataless flag set on
+        an ordinary local file or folder (\code{TestIsDataless}, \code{TestRefuseDataless}
+        and their callers), because the real flag is set by the File Provider framework
+        itself and cannot be created to order: setting it directly with \code{chflags}
+        was tried and confirmed not to work (it reports success but the flag does not
+        persist), and a real iCloud Drive or OneDrive placeholder cannot be created in a
+        test fixture or a CI runner.  Findings 19 and 20 (Section~\ref{sec:history}) are
+        exactly this gap: a real File Provider folder was the only thing that ever
+        exercised the code path that was missing.  When fixing them, reaching the actual
+        reported folder to confirm the fix live was also tried and abandoned: the
+        process running the fix could not read \code{\textasciitilde/Library/CloudStorage}
+        at all (macOS refused it outright), a permission boundary distinct from the one
+        the user's own session had already been granted, so even this attempt at direct
+        confirmation was itself an instance of the same limitation.
   \item \textbf{A real mouse drag of a column header in Safari.}  The Safari driver
         cannot dispatch a native drag-and-drop sequence, so the browser test
         (\fq{LST-11}) falls back to dispatching the underlying drag events directly

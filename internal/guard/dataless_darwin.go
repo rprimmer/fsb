@@ -14,3 +14,17 @@ func isDataless(fi fs.FileInfo) bool {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	return ok && st.Flags&sfDataless != 0
 }
+
+// refuseDataless is the one check that must run before anything reads the
+// contents of fi: a file it never reads (Head, Meta's attributes, the sniffed
+// endpoints), and, since a folder can be dataless too under the newer File
+// Provider domains (iCloud Drive, OneDrive and similar), a directory before
+// its entries are ever read. Reading either would risk triggering the
+// provider to materialize it, which is exactly what fsb must never do
+// implicitly.
+func refuseDataless(fi fs.FileInfo) error {
+	if isDataless(fi) {
+		return ErrDataless
+	}
+	return nil
+}

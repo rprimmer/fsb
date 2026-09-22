@@ -307,6 +307,7 @@
         return 'Permission denied by the operating system or security software. On macOS, check System Settings > Privacy & Security, and any security tool that guards this folder.';
       }
       if (e.status === 403) return 'Session not authorized. Re-open the single-use URL that fsb printed when it started.';
+      if (e.status === 409) return 'This folder is stored in the cloud and not downloaded. fsb will not trigger a download.';
       return `Server error (${e.status}).`;
     }
     return e instanceof Error ? e.message : String(e);

@@ -118,6 +118,17 @@ the metadata, the previews and the archive listing all refuse to read it.  Readi
 a file would make the system download it, which \texttt{fsb} must never do implicitly.
 An explicit download by the user is the one path that reads it.
 
+A \emph{folder} can carry the same flag: the newer File Provider domains (iCloud Drive,
+OneDrive and similar) can make a whole folder a placeholder, not only the files inside
+it, and reading its contents is exactly as capable of triggering a download as reading a
+dataless file's bytes is.  Listing and search each check the flag on a directory before
+opening it for reading, refusing it the same way as a dataless file, rather than only on
+the files this directory would contain.  This was missing for a released cycle: nothing
+had ever put a real File Provider placeholder folder in front of the guard, only a
+synthetic flag on individual files, so listing one fell through to the directory read and
+surfaced whatever the provider's virtual file system returned for it, unrecognized, as an
+internal error (Finding~19).
+
 \subsection{Other files and endpoints}
 
 \begin{description}

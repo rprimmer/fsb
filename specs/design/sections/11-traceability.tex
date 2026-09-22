@@ -55,10 +55,11 @@ Req. & Coverage \\
 \fq{LST-10} & \code{web: format.test.ts} (\code{pathToHash}/\code{parseHash} round trip, laws.test.ts). \\
 \fq{LST-11} & e2e: ``resizes a column \ldots'', ``reorders columns with Alt+Arrow'', ``reorders columns by dragging a header'', ``keeps the layout across a reload, and Reset restores the defaults'', ``the Columns menu closes on an outside click and on Escape''; \code{web: columns.test.ts}. \\
 \fq{LST-12} & \code{TestListHidesDeniedAndIgnored}, \code{TestEveryEndpointReturns404ForDeniedPaths}; e2e: ``never lists secret files, even with hidden files shown''. \\
+\fq{LST-13} & \code{TestRefuseDataless}, \code{TestFailMapsDatalessToConflictWithAHelpfulBody} (the ErrDataless\,$\to$\,409 mapping every endpoint shares); \code{ListFunc}'s own check has no test with a real cloud-only folder (Section~\ref{sec:untested}). \\
 \fq{SRC-1} & \code{TestSearchEndpoint}, \code{TestSearchFindsMatchesBreadthFirst}; e2e: ``searches by name, shallowest first, without denied or hidden results''. \\
 \fq{SRC-2} & \code{TestSearchLimitsAndCancellation}. \\
 \fq{SRC-3} & \code{TestSearchFoldsCaseAndUnicode}, \code{TestSearchEndpointMatchCase}, \code{TestSearchMatchCase}, \code{TestSearchMatchCaseStillNormalizesUnicode}; e2e: ``Match case applies to the filter and to search''. \\
-\fq{SRC-4} & \code{TestSearchNeverReportsOrEntersDeniedOrHidden}, \code{TestSearchDoesNotFollowSymlinkedDirectories}. \\
+\fq{SRC-4} & \code{TestSearchNeverReportsOrEntersDeniedOrHidden}, \code{TestSearchDoesNotFollowSymlinkedDirectories}; the cloud-only case shares \fq{LST-13}'s citation and the same untested real-folder gap. \\
 \fq{SRC-5} & e2e: ``opens a search result in its folder with the file selected'', ``the current-folder link leaves a search and returns to the listing''. \\
 \fq{PRV-1} & e2e: ``toggles the preview pane with a real Space key'', ``the preview pane is a checkbox like the other view options'', ``the preview pane can be resized \ldots''. \\
 \fq{PRV-2} & \code{TestOpenImageAcceptsRasterImagesByContent}, \code{TestOpenPDFIdentifiesPDFsByContentOnly}, \code{TestListArchiveByContentNotName}; e2e: ``shows a real PDF \ldots, and treats a fake .pdf as text''. \\
@@ -69,7 +70,7 @@ Req. & Coverage \\
 \fq{PRV-7} & \code{web: markdown.test.ts}; e2e: ``renders Markdown in a sandboxed frame; raw HTML and scripts stay inert'', ``a Markdown file link opens that file inside fsb; a web link opens a new tab'', ``Markdown can be viewed as source, and back''. \\
 \fq{PRV-8} & \code{TestOpenPDFIdentifiesPDFsByContentOnly}, \code{TestPDFIsServedInlineOnlyForRealPDFsAndOnlyToOurOwnFrames}, \code{TestPDFEndpointObeysDenyRules}; e2e: ``shows a real PDF \ldots''. \\
 \fq{PRV-9} & \code{TestListArchiveByContentNotName}, \code{TestListArchiveRefusesNonArchives}, \code{TestListArchiveNamesAreDefanged}, \code{TestListArchiveIsBounded}, \code{TestListArchiveStopsAtTheDecompressionLimit}; e2e: ``lists zip and tar contents without extracting; a fake archive is just text''. \\
-\fq{PRV-10} & \code{TestIsDataless} (fixture-level; macOS dataless files cannot be created on demand, so this and the endpoints are exercised with a synthetic dataless flag, not a real iCloud placeholder; see Section~\ref{sec:untested}). \\
+\fq{PRV-10} & \code{TestIsDataless}, \code{TestRefuseDataless} (fixture-level; macOS dataless files cannot be created on demand, so this and the endpoints are exercised with a synthetic dataless flag, not a real iCloud or File Provider placeholder; see Section~\ref{sec:untested}). \\
 \fq{PRV-11} & \code{TestMetaBasics} (symlink target); e2e: ``previews each file type correctly and safely'' (the \code{link-to-main} entry). \\
 \fq{HOV-1} & e2e: ``shows a hover bubble for text files only''. \\
 \fq{HOV-2} & e2e: same test (cancel and cache are exercised implicitly by repeated hovers in the suite; there is no dedicated timing assertion). \\
@@ -88,7 +89,7 @@ Req. & Coverage \\
 \fq{RUL-5} & \code{TestDifferentialEverySpellingOfASecretIsRefused} (thousands of generated spellings, filtered by the operating system), \code{TestDenyRulesSurviveFullCaseFoldingAliases}, \code{TestRootOfSlashHonoursDenyRulesThroughFoldedFirmlinkSpellings}, \code{FuzzGuardNeverExposesSecrets}. \\
 \fq{RUL-6} & \code{TestHardLinkToADeniedFileIsRefusedWhateverItIsCalled}, \code{TestHardLinkCreatedAfterTheIndexWasBuiltIsStillFound}, \code{TestHardLinkToAFileOutsideTheRootsIsFoundThroughProtect}, \code{TestFilesWithSeveralNamesAreRefusedUntilTheIndexIsReady}, \code{TestLinkIndexWalkIsBounded}; e2e: ``a hard link to a denied file is refused under any name \ldots''. \\
 \fq{RUL-7} & \code{TestUnreadableFilesInDeniedDirectoriesLookMissing}, \code{TestUnsearchableDeniedDirectoryThroughASymlinkLooksMissing}, \code{TestSocketFileIsRefusedLikeAnyOtherSpecialFileNotWithAnInternalError}, \code{TestSocketFileAtHTTPLevelAnswersNotFoundNotInternalError}. \\
-\fq{RUL-8} & \code{TestIsDataless} and the per-endpoint dataless checks (see \fq{SEC-13}); denial is decided in \code{Guard.open} before any read, by construction. \\
+\fq{RUL-8} & \code{TestIsDataless}, \code{TestRefuseDataless} and the per-endpoint dataless checks (see \fq{SEC-13}); denial is decided in \code{Guard.open} before any read, by construction. \\
 \fq{RUL-9} & \code{TestMatch}, \code{TestRegexMetacharsInHomePath}, \code{TestParseErrors}, \code{TestLawSlashlessPatternsStayWithinOneComponent}, \code{TestSlashInsideAClassIsAParseError}, \code{FuzzDenyMatchesEverythingUnderADeniedDirectory}. \\
 \fq{RUL-10} & \code{TestMatch}, \code{TestMatchBelow}. \\
 \fq{RUL-11} & \code{TestDenyRulesSurviveAwkwardFileNames}; the NAM-1 citations for folding. \\
@@ -110,7 +111,7 @@ Req. & Coverage \\
 \fq{SEC-10} & \code{TestFileServedSafely}. \\
 \fq{SEC-11} & \code{TestPreviewServesOnlySandboxedImages}, \code{TestOpenImageRefusesEverythingElse}, \code{TestPDFIsServedInlineOnlyForRealPDFsAndOnlyToOurOwnFrames}, \code{TestMarkdownFrameIsServedWithItsOwnStrictPolicy}, \code{TestMarkdownFrameRequiresASession}. \\
 \fq{SEC-12} & By construction: the binary makes no outbound HTTP call anywhere in its source. Not exercised by a network-monitoring test; verified by code inspection and by the fuzzers never observing one. \\
-\fq{SEC-13} & \code{TestIsDataless} and the per-endpoint refusals it feeds (synthetic flag, not a real cloud placeholder; see Section~\ref{sec:untested}). \\
+\fq{SEC-13} & \code{TestIsDataless}, \code{TestRefuseDataless}, \code{TestFailMapsDatalessToConflictWithAHelpfulBody}, and the per-endpoint refusals they feed (synthetic flag, not a real cloud or File Provider placeholder; see Section~\ref{sec:untested}). \\
 \fq{SEC-14} & \code{TestDeniedIsIndistinguishableFromMissing}, \code{TestNewEndpointsReturn404ForDeniedPathsAndMatchMissingOnes}; e2e: ``answers 404, with no content, for denied paths on every endpoint'', ``shows the same message for a denied folder and a missing one''. Timing equality is explicitly \emph{not} claimed or tested (\fq{SEC-14} itself says so). \\
 \fq{API-1}--\fq{API-8} & \code{server\_test.go} and \code{m2\_test.go} exercise every endpoint in the table individually (see the citations above, by feature); \code{FuzzPathParameter} (\code{internal/server/fuzz\_test.go}) fuzzes the \code{path} parameter of every endpoint together, and \code{FuzzGuardNeverExposesSecrets} (\code{internal/guard}) fuzzes the guard beneath them with an oracle independent of \texttt{fsb}'s own rules. \\
 \fq{LIM-1} & Each limit has a citation under its own feature above (\fq{SRC-2}, \fq{PRV-3}, \fq{PRV-7}, \fq{PRV-9}, \fq{RUL-6}, \fq{LST-11}); \code{web} pane-width and column-width clamping in \code{prefs.test.ts}/\code{columns.test.ts}. \\

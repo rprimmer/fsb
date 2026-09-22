@@ -39,7 +39,8 @@
 \subsection{History of defects found by the design's own checks}
 
 Stating the laws of the algebraic specification, auditing every comparison of names and paths,
-and using the running application found eighteen defects, all fixed and each covered by a test.
+and using the running application found twenty-one defects, all fixed and each covered by a test where
+the underlying condition could be reproduced at all (Section~\ref{sec:untested} says where it could not).
 In brief:
 
 \begin{enumerate}
@@ -67,12 +68,30 @@ In brief:
         and hid its own message whenever the main preview had already failed, so it could
         read ``Loading…'' forever even though its own request had already finished.  Found
         alongside the previous defect, in the same screenshot.
+  \item Listing or searching a folder that is itself a cloud-only placeholder (a File
+        Provider domain such as OneDrive or iCloud Drive can make a whole folder dataless,
+        not only the files in it) went straight into reading its directory entries, which
+        the provider's virtual file system answered with something the guard's error map
+        did not recognize, surfacing as an internal error instead of the same cloud
+        message a dataless \emph{file} already gets.  Found from a screenshot of a real
+        OneDrive folder, not from any test: no fixture anywhere had a real cloud-only
+        placeholder, only a synthetic flag on individual files.
+  \item The folder listing's own error mapping, separate from the preview pane's, had no
+        case for status 409, so once the previous defect was fixed at the guard level the
+        interface still showed ``Server error (409).'' for a cloud-only folder instead of
+        explaining it.  Found alongside the previous defect.
+  \item While fixing the above, a latent defect in \code{Search}: a directory reopened
+        from its queue that turned out no longer to be a directory (a rare race) left its
+        descriptor open, because the code path that skipped it predates the fix and never
+        closed what \code{Open} had just handed it.  The new dataless check would have
+        turned this from a rare race into a routine leak, since a cloud-only subfolder
+        hits the same code path on every walk that reaches one.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
-allow checks must decide by identity.  Findings 17 and 18 are a different lesson: an error path that no
-test happened to reach (no fixture had ever contained a real socket; no test had selected a file whose
-main preview fails) is still worth trying by hand.
+allow checks must decide by identity.  Findings 17, 18, 19 and 20 are a different lesson: an error path that
+no test happened to reach (no fixture had ever contained a real socket, a real cloud-only folder, or a
+selected file whose main preview fails) is still worth trying by hand.
 
 \subsection{Milestones}
 
