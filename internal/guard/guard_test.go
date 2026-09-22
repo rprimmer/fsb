@@ -3,6 +3,7 @@ package guard
 import (
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -326,6 +327,61 @@ func TestSpecialFilesAreNeverOpened(t *testing.T) {
 	es, err := fx.g.List(filepath.Join(fx.home, "proj"))
 	if err != nil || !contains(names(es), "pipe") {
 		t.Fatalf("FIFO should be listed: %v %v", names(es), err)
+	}
+}
+
+// A real bug, found from a screenshot of the running app: opening a UNIX
+// domain socket's path fails at the syscall itself (EOPNOTSUPP on macOS,
+// historically ENXIO on Linux), not merely at the later type check that
+// catches a FIFO. An unrecognized errno fell through mapErr's default case as
+// an opaque wrapped error, which the server then reported as a 500 instead of
+// the same "not found" every other non-regular file gets.
+//
+// A real (not symlinked) socket needs a short root: its bind path has an OS
+// limit of about 104 bytes on macOS, which the deep path under t.TempDir()
+// (used by newFixture) can exceed, so this builds its own short-rooted guard
+// rather than reusing the shared fixture.
+func TestSocketFileIsRefusedLikeAnyOtherSpecialFileNotWithAnInternalError(t *testing.T) {
+	root, err := os.MkdirTemp("/tmp", "fsbsock")
+	if err != nil {
+		t.Skipf("no writable short-path temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	write(t, filepath.Join(root, "proj", "hello.txt"), "hello")
+	sockPath := filepath.Join(root, "proj", "app.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Skipf("unix sockets unsupported here: %v", err)
+	}
+	defer ln.Close()
+
+	deny, err := rules.Parse(strings.NewReader(""), rules.ParseOptions{Home: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := New([]string{root}, deny, deny)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f, _, err := g.Open(sockPath)
+	if err == nil {
+		f.Close()
+		t.Fatal("a socket file was opened")
+	}
+	if !errors.Is(err, ErrNotRegular) {
+		t.Fatalf("err = %v, want ErrNotRegular (an unrecognized errno must not surface as an opaque internal error)", err)
+	}
+	if _, err := g.Head(sockPath, 64); !errors.Is(err, ErrNotRegular) {
+		t.Errorf("Head: err = %v, want ErrNotRegular", err)
+	}
+	if _, err := g.Meta(sockPath, true); !errors.Is(err, ErrNotRegular) {
+		t.Errorf("Meta: err = %v, want ErrNotRegular", err)
+	}
+	// It is still listed, like a FIFO.
+	es, err := g.List(filepath.Join(root, "proj"))
+	if err != nil || !contains(names(es), "app.sock") {
+		t.Fatalf("socket file should be listed: %v %v", names(es), err)
 	}
 }
 

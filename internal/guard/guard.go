@@ -183,6 +183,15 @@ func mapErr(err error) error {
 		return ErrNotFound
 	case errors.Is(err, syscall.EACCES), errors.Is(err, syscall.EPERM):
 		return ErrPermission
+	case errors.Is(err, syscall.ENXIO), errors.Is(err, syscall.EOPNOTSUPP):
+		// Opening a UNIX domain socket's path fails at the syscall itself,
+		// before there is a descriptor to fstat: EOPNOTSUPP on macOS,
+		// historically ENXIO on Linux. Sockets are exactly the kind of
+		// special file Open already refuses after opening a FIFO or device
+		// (see the fstat check below); this is the same refusal, just
+		// signaled earlier, and must map the same way rather than falling
+		// through as an unrecognized error.
+		return ErrNotRegular
 	}
 	return fmt.Errorf("open: %w", err)
 }

@@ -60,6 +60,15 @@
   let head = $state<Head | null>(null);
   let archive = $state<ArchiveListing | null>(null);
   let error = $state('');
+  // The Details panel's own outcome, kept separate from the main preview's
+  // `error`: they come from two independent requests (getMeta vs. head/pdf/
+  // archive), and sharing one variable meant whichever settled last silently
+  // overwrote the other's message, and the panel could not tell "still
+  // loading" from "loaded, and it failed" once the main preview had already
+  // failed. A real bug found from a screenshot: selecting a file whose main
+  // preview failed left the Details panel showing "Loading…" forever, even
+  // though its own request had already come back with an error.
+  let metaError = $state('');
 
   // The controller of the current selection. Everything started for it, including
   // a fallback after a failed image, is cancelled when the selection changes, so a
@@ -75,6 +84,7 @@
     head = null;
     archive = null;
     error = '';
+    metaError = '';
     if (!e || !p) {
       mode = 'idle';
       return;
@@ -86,7 +96,7 @@
       getMeta(p, true, ctrl.signal)
         .then((m) => (meta = m))
         .catch((err) => {
-          if (!ctrl.signal.aborted) error = describe(err);
+          if (!ctrl.signal.aborted) metaError = describe(err);
         });
       if (e.isDir) mode = 'folder';
       else if (e.broken) mode = 'error';
@@ -391,8 +401,8 @@
               {/each}
             </ul>
           {/if}
-        {:else if error && mode !== 'error'}
-          <p class="hint error">{error}</p>
+        {:else if metaError}
+          <p class="hint error">{metaError}</p>
         {:else}
           <p class="hint">Loading…</p>
         {/if}

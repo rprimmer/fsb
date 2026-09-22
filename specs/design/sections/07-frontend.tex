@@ -44,6 +44,14 @@ requests.  Every request started for a selection, including a fall back, shares 
 cancellation handle and is cancelled when the selection changes, so a late answer can never be
 shown for the wrong file.  The laws are in the algebraic specification.
 
+The Details panel (metadata and extended attributes) is a second, independent request
+against the same selection, and keeps its own error state rather than sharing the main
+preview's.  An earlier version used one shared variable for both: whichever request
+settled last silently overwrote the other's message, and the panel's own error was
+suppressed whenever the main preview had already failed, which could leave it reading
+``Loading…'' forever even though its own request had already come back (Finding~18).
+Two independent outcomes need two independent variables.
+
 \subsection{Hover peek}
 
 A short delay before the request, a cache, a limit on simultaneous requests, and cancellation

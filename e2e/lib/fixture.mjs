@@ -106,6 +106,15 @@ export function makePng() {
   ]);
 }
 
+function mkfifoOrNull(path) {
+  try {
+    execFileSync('mkfifo', [path], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false; // no mkfifo on this platform; the test using it will skip
+  }
+}
+
 function setXattrHex(file, name) {
   try {
     if (process.platform === 'darwin') execFileSync('xattr', ['-wx', name, 'de ad be ef 00 01', file], { stdio: 'ignore' });
@@ -201,5 +210,11 @@ export function makeFixture({ big = false } = {}) {
   }
   // What the home folder lists: .ssh and .aws are denied, node_modules is hidden.
   const homeRows = [...(big ? ['big/'] : []), 'casetest/', 'pics/', 'spoof/', 'work/'];
-  return { root, home, work, xattrs, xattrsHex, homeRows };
+
+  // A special file: listed like any other entry, but never opened (guard.ErrNotRegular).
+  // A pipe, not a socket, so it needs no short-path workaround for sun_path's OS limit.
+  mkdirSync(join(work, 'special'), { recursive: true });
+  const fifoPath = join(work, 'special', 'a.pipe');
+  const hasFifo = mkfifoOrNull(fifoPath);
+  return { root, home, work, xattrs, xattrsHex, homeRows, fifoPath: hasFifo ? fifoPath : null };
 }

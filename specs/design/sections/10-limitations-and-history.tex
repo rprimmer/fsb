@@ -38,8 +38,9 @@
 
 \subsection{History of defects found by the design's own checks}
 
-Stating the laws of the algebraic specification, and then auditing every comparison of names and paths,
-found sixteen defects, all fixed and each covered by a test.  In brief:
+Stating the laws of the algebraic specification, auditing every comparison of names and paths,
+and using the running application found eighteen defects, all fixed and each covered by a test.
+In brief:
 
 \begin{enumerate}
   \item Simple case folding let \code{.\ss h} open \code{.ssh} (a bypass of a deny rule).
@@ -58,10 +59,20 @@ found sixteen defects, all fixed and each covered by a test.  In brief:
   \item Rule files that loaded without error and did nothing.
   \item Secrets under other names (\code{id\_rsa}, certificate stores, password databases).
   \item File names that disguised themselves with bidirectional characters.
+  \item Opening a UNIX domain socket used an errno (\code{EOPNOTSUPP}, or \code{ENXIO} on
+        Linux) that the guard's error map did not recognize, so it surfaced as an opaque
+        500 instead of the same ``not found'' every other special file gets.  Found from a
+        screenshot of the running application, not from any test.
+  \item The preview pane's Details panel shared one error variable with the main preview
+        and hid its own message whenever the main preview had already failed, so it could
+        read ``Loading…'' forever even though its own request had already finished.  Found
+        alongside the previous defect, in the same screenshot.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
-allow checks must decide by identity.
+allow checks must decide by identity.  Findings 17 and 18 are a different lesson: an error path that no
+test happened to reach (no fixture had ever contained a real socket; no test had selected a file whose
+main preview fails) is still worth trying by hand.
 
 \subsection{Milestones}
 

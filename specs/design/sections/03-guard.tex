@@ -21,7 +21,12 @@ Every operation begins by opening the path, in this order.  The order is the des
         non-blocking, so that a pipe or a device cannot hang the server.  A permission
         error is examined (Section~\ref{sec:ancestor}) before it is reported.
   \item \textbf{Reject special files.}  On the descriptor, anything but a regular file
-        or a folder is refused.  Only then is blocking restored.
+        or a folder is refused.  Only then is blocking restored.  Some special files
+        never reach a descriptor to reject this way: opening a UNIX domain socket's
+        path fails at the syscall itself (\code{EOPNOTSUPP} on macOS, historically
+        \code{ENXIO} on Linux), so those two errnos are mapped to the same refusal as
+        every other special file, rather than left to fall through as an unrecognized
+        error (Finding~17).
   \item \textbf{Resolve and confirm.}  The real path is resolved (symbolic links
         followed), and the guard confirms that the file at that real path is the
         \emph{same file} as the open descriptor (device and inode).  If not, the path

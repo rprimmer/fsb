@@ -280,6 +280,35 @@ export function defineSuite({ label, launch }) {
       assert.equal(link.linkTo, 'src/main.go');
     });
 
+    // A real bug, found from a screenshot of the running app: selecting a
+    // special file (there: a UNIX socket; here: a FIFO, which needs no
+    // short-path workaround) showed "Server error (500)." for the main
+    // preview, and the Details panel was stuck on "Loading..." forever - even
+    // though its own request had already come back with an error too, because
+    // the panel shared one error variable with the main preview and hid its
+    // own message whenever the main preview had already failed.
+    test('a special file (FIFO) shows a graceful message, not a crash or a stuck Details panel', async () => {
+      if (!fx.fifoPath) return; // no mkfifo on this platform
+      await open(`${fx.work}/special`);
+      await selectByKeys('a.pipe');
+      if (!(await previewOpen())) await d.key(' ');
+      const result = await waitFor(
+        () =>
+          d.eval(`
+            const p = document.querySelector('.preview');
+            const main = p?.querySelector('.pbody > .hint');
+            const meta = p?.querySelector('.meta > .hint');
+            if (!main || !meta || main.textContent.startsWith('Loading') || meta.textContent.startsWith('Loading')) return null;
+            return { mainText: main.textContent, mainIsError: main.classList.contains('error'), metaText: meta.textContent, metaIsError: meta.classList.contains('error') };
+          `),
+        { message: 'the preview and Details panel to settle' },
+      );
+      assert.equal(result.mainIsError, true, `main preview should show an error, got: ${JSON.stringify(result)}`);
+      assert.doesNotMatch(result.mainText, /error \(500\)|internal error/i, 'never a raw server error');
+      assert.equal(result.metaIsError, true, `Details must not be stuck on "Loading...": ${JSON.stringify(result)}`);
+      assert.doesNotMatch(result.metaText, /^Loading/i);
+    });
+
     // ---- archives ------------------------------------------------------------
     test('lists zip and tar contents without extracting; a fake archive is just text', async () => {
       await open(fx.work);
@@ -684,24 +713,29 @@ export function defineSuite({ label, launch }) {
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await rows()).includes('.envrc'), { message: 'dotfiles to appear' });
       // Case-insensitive, dotfiles first, folders NOT grouped (src/ sits among the files by name).
-      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'bundle.tar', 'bundle.zip', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'fake.zip', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'src/']);
+      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'bundle.tar', 'bundle.zip', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'fake.zip', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'special/', 'src/']);
 
       const foldersFirst = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Folders first')).querySelector('input')`;
       const box = await d.eval(`const b = ${foldersFirst}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);
       const sizeHeader = async () => { const p = await pointOf('.head [data-col="size"] button'); await d.click(p.x, p.y); };
 
-      // Sorting by size: a folder counts as smaller than any file, so it leads ascending and trails descending.
+      // Sorting by size: a folder counts as smaller than any file, so both of
+      // fx.work's folders lead ascending and trail descending (their relative
+      // order between themselves is an unrelated name tiebreak, so this checks
+      // the set of leading/trailing rows, not which folder is first).
+      const folderNames = ['special/', 'src/'];
       await sizeHeader();
-      await waitFor(async () => (await rows())[0] === 'src/', { message: 'src/ first when sorting by size ascending' });
+      await waitFor(async () => { const r = await rows(); return folderNames.every((f) => r.slice(0, folderNames.length).includes(f)); }, { message: 'folders first when sorting by size ascending' });
       await sizeHeader();
-      await waitFor(async () => (await rows()).at(-1) === 'src/', { message: 'src/ last when sorting by size descending' });
+      await waitFor(async () => { const r = await rows(); return folderNames.every((f) => r.slice(-folderNames.length).includes(f)); }, { message: 'folders last when sorting by size descending' });
 
       // Folders first keeps folders in front for BOTH directions.
       await d.click(box.x, box.y);
-      await waitFor(async () => (await rows())[0] === 'src/', { message: 'src/ first with Folders first (descending)' });
+      await waitFor(async () => { const r = await rows(); return folderNames.every((f) => r.slice(0, folderNames.length).includes(f)); }, { message: 'folders first with Folders first (descending)' });
       await sizeHeader(); // back to ascending
       await waitFor(async () => (await d.eval(`return document.querySelector('.head [data-col="size"]').getAttribute('aria-sort')`)) === 'ascending');
-      assert.equal((await rows())[0], 'src/');
+      const last = await rows();
+      assert.ok(folderNames.every((f) => last.slice(0, folderNames.length).includes(f)));
 
       // The choice is remembered.
       assert.equal(await d.eval(`return JSON.parse(localStorage.getItem('fsb.prefs.v1')).foldersFirst`), true);

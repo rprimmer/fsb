@@ -48,7 +48,7 @@ Req. & Coverage \\
 \fq{LST-3} & \code{web: sort.test.ts}, \code{web: laws.test.ts} (total order); e2e: ``sorts like eza by default, and Folders first \ldots''. \\
 \fq{LST-4} & \code{web: sort.test.ts}, \code{web: laws.test.ts}; e2e: same as \fq{LST-3}. \\
 \fq{LST-5} & \code{TestSymlinkIntoDeniedDirectory}, \code{TestListOmitsSymlinkToDeniedTarget}, \code{TestListOmitsDeniedHiddenAndEscapingEntries}; e2e: ``previews each file type correctly and safely'' (a link entry). A broken-link row's on-screen marker is not asserted by an automated test. \\
-\fq{LST-6} & \code{TestSpecialFilesAreNeverOpened}. \\
+\fq{LST-6} & \code{TestSpecialFilesAreNeverOpened}, \code{TestSocketFileIsRefusedLikeAnyOtherSpecialFileNotWithAnInternalError}; e2e: ``a special file (FIFO) shows a graceful message, not a crash or a stuck Details panel''. \\
 \fq{LST-7} & \code{web: filter.test.ts}; e2e: ``lists the home folder without denied or ignored entries'' (Hidden files toggle). \\
 \fq{LST-8} & \code{web: filter.test.ts}, \code{web: laws.test.ts} (fold agreement with search); e2e: ``Match case applies to the filter and to search''. \\
 \fq{LST-9} & \code{web: format.test.ts} (\code{crumbsFor}); e2e: ``the current-folder link leaves a search and returns to the listing''; \code{c} key: e2e ``copies the selected path with the c key''. \\
@@ -87,7 +87,7 @@ Req. & Coverage \\
 \fq{RUL-4} & \code{TestSymlinkIntoDeniedDirectory}, \code{TestSymlinkEscapingRoot}, \code{TestListingThroughASymlinkedDirectoryHonoursDenyRules}, \code{TestSearchThroughASymlinkedDirectoryNeverReportsDeniedEntries}, \code{TestFirmlinkAliasesCannotDodgeDenyRules}, \code{TestRootOfSlashHonoursDenyRulesThroughAliases}. \\
 \fq{RUL-5} & \code{TestDifferentialEverySpellingOfASecretIsRefused} (thousands of generated spellings, filtered by the operating system), \code{TestDenyRulesSurviveFullCaseFoldingAliases}, \code{TestRootOfSlashHonoursDenyRulesThroughFoldedFirmlinkSpellings}, \code{FuzzGuardNeverExposesSecrets}. \\
 \fq{RUL-6} & \code{TestHardLinkToADeniedFileIsRefusedWhateverItIsCalled}, \code{TestHardLinkCreatedAfterTheIndexWasBuiltIsStillFound}, \code{TestHardLinkToAFileOutsideTheRootsIsFoundThroughProtect}, \code{TestFilesWithSeveralNamesAreRefusedUntilTheIndexIsReady}, \code{TestLinkIndexWalkIsBounded}; e2e: ``a hard link to a denied file is refused under any name \ldots''. \\
-\fq{RUL-7} & \code{TestUnreadableFilesInDeniedDirectoriesLookMissing}, \code{TestUnsearchableDeniedDirectoryThroughASymlinkLooksMissing}. \\
+\fq{RUL-7} & \code{TestUnreadableFilesInDeniedDirectoriesLookMissing}, \code{TestUnsearchableDeniedDirectoryThroughASymlinkLooksMissing}, \code{TestSocketFileIsRefusedLikeAnyOtherSpecialFileNotWithAnInternalError}, \code{TestSocketFileAtHTTPLevelAnswersNotFoundNotInternalError}. \\
 \fq{RUL-8} & \code{TestIsDataless} and the per-endpoint dataless checks (see \fq{SEC-13}); denial is decided in \code{Guard.open} before any read, by construction. \\
 \fq{RUL-9} & \code{TestMatch}, \code{TestRegexMetacharsInHomePath}, \code{TestParseErrors}, \code{TestLawSlashlessPatternsStayWithinOneComponent}, \code{TestSlashInsideAClassIsAParseError}, \code{FuzzDenyMatchesEverythingUnderADeniedDirectory}. \\
 \fq{RUL-10} & \code{TestMatch}, \code{TestMatchBelow}. \\

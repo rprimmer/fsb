@@ -37,5 +37,10 @@ on a hosted service, because the repository has no remote yet.)
 
 None of this is a guarantee.  It is a record of what was checked.  A fuzzer reaches only what
 its fixture contains, and an early version missed a bug for that reason; the differential test
-exists because reasoning about names had been wrong.  An independent review, and a
-professional penetration test before wide release, remain planned.
+exists because reasoning about names had been wrong.  Findings~17 and~18
+(Section~\ref{sec:history}) were caught by neither: no fixture anywhere contained a UNIX domain
+socket, so nothing had ever exercised that errno, and the Details-panel race needed a preview
+that fails, which no test happened to select.  Both were found by using the running
+application, not by any automated layer, which is itself a reason to keep doing that rather
+than treating the test suite as the last word.  An independent review, and a professional
+penetration test before wide release, remain planned.
