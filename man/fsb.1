@@ -203,28 +203,25 @@ Show or hide the preview pane.
 .B /
 Filter this folder by name.
 .TP
-.B s
+.B Alt+S
 Search subfolders by name.
 Enter runs the search.
 .TP
-.B g
+.B Alt+G
 Go to a path.
 Accepts an absolute path or one beginning with
 .BR ~/ .
 .TP
-.B c
+.B Alt+C
 Copy the selected entry's path (the folder's, if nothing is selected).
 .TP
-.RI "a letter or digit not listed above"
+.RI "any letter or digit"
 Jump to the next entry whose name starts with it, as in a graphical file
 manager: typing several keys quickly narrows the match, and typing the same
 key again cycles to the next entry that still matches.
-Since
-.BR / ", " s ", " g " and " c
-above are already shortcuts, an entry beginning with one of those letters
-cannot be reached this way; use
-.B /
-(filter) instead.
+Search, Go to a path and Copy live on
+.BR Alt ,
+rather than the bare letter, precisely so every letter is free for this.
 .TP
 .B Escape
 Clear the search, close a menu, or leave a text box.

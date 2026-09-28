@@ -364,11 +364,11 @@
     revealSelected();
   }
 
-  // A letter or digit not already claimed by another shortcut jumps to the next
-  // entry whose name starts with what has been typed, as in Finder: typing
-  // quickly narrows the match, and repeating the same key cycles through ties.
-  // '/', 's', 'g' and 'c' are already single-key shortcuts, so a folder or file
-  // starting with one of those letters cannot be reached this way.
+  // Any letter or digit (Search/Go to path/Copy live on Alt+S/G/C, not the bare
+  // letters, precisely so this covers every one of them) jumps to the next entry
+  // whose name starts with what has been typed, as in Finder: typing quickly
+  // narrows the match, and repeating the same key cycles through ties. '/' is
+  // still its own shortcut (the filter box), since it can never start a name.
   function typeahead(key: string) {
     if (!visible.length) return;
     const now = Date.now();
@@ -610,9 +610,33 @@
       colMenu.open = false;
       return;
     }
-    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     const t = ev.target as HTMLElement | null;
     const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+    if (ev.altKey && !ev.metaKey && !ev.ctrlKey) {
+      // Search/Go to path/Copy live on Alt+letter (rather than bare s/g/c) so every
+      // plain letter is free for type-ahead. Read by physical key (code), not the
+      // character (key): macOS remaps what Option+letter produces (Option+C types
+      // "©", not "c"), the same reason keyOf() already uses code for arrow keys.
+      if (!typing) {
+        switch (ev.code) {
+          case 'KeyS':
+            ev.preventDefault();
+            searchEl?.focus();
+            return;
+          case 'KeyG':
+            ev.preventDefault();
+            goEl?.focus();
+            goEl?.select(); // typing replaces the previous attempt
+            return;
+          case 'KeyC':
+            ev.preventDefault();
+            copyText(selectedRow ? rowPath(selectedRow) : path);
+            return;
+        }
+      }
+      return; // any other Alt combination (e.g. Alt+Left/Right on a column header): no effect here
+    }
+    if (ev.metaKey || ev.ctrlKey) return;
     if (typing) {
       if (ev.key === 'Escape') {
         if (t === filterInput) filter = '';
@@ -640,15 +664,6 @@
       case '/':
         ev.preventDefault();
         filterInput?.focus();
-        break;
-      case 's':
-        ev.preventDefault();
-        searchEl?.focus();
-        break;
-      case 'g':
-        ev.preventDefault();
-        goEl?.focus();
-        goEl?.select(); // typing replaces the previous attempt
         break;
       case 'ArrowDown':
         ev.preventDefault();
@@ -703,9 +718,6 @@
           showPreview = !showPreview;
           savePrefs();
         }
-        break;
-      case 'c':
-        copyText(selectedRow ? rowPath(selectedRow) : path);
         break;
       case 'Escape':
         if (searchActive) clearSearch();
@@ -908,7 +920,7 @@
       {/if}
     {/each}
     {#if path}
-      <button class="textbtn small" onclick={() => copyText(path)} title="Copy this folder's path">Copy path</button>
+      <button class="textbtn small" onclick={() => copyText(path)} title="Copy this folder's path (⌥C)">Copy path</button>
     {/if}
   </nav>
   <span class="barright">
@@ -946,7 +958,7 @@
     bind:value={goInput}
     class="goto"
     type="text"
-    placeholder="Go to path   ( g )"
+    placeholder="Go to path   ( ⌥G )"
     aria-label="Go to path"
     autocomplete="off"
     spellcheck="false"
@@ -965,7 +977,7 @@
     bind:this={searchEl}
     bind:value={searchInput}
     type="search"
-    placeholder="Search subfolders by name, then Enter   ( s )"
+    placeholder="Search subfolders by name, then Enter   ( ⌥S )"
     aria-label="Search subfolders by name"
     autocomplete="off"
     spellcheck="false"
@@ -1144,7 +1156,7 @@
     {visible.length.toLocaleString()} of {entries.length.toLocaleString()} items
   {/if}
   <span class="keys"
-    >↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · s search · g go to path · c copy path · type a letter to
-    jump</span
+    >↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · ⌥S search · ⌥G go to path · ⌥C copy path · type a letter
+    to jump</span
   >
 </footer>

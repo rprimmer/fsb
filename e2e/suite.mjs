@@ -287,6 +287,33 @@ export function defineSuite({ label, launch }) {
       assert.equal(await d.eval(`return location.href`), before, 'a plain click on a file must not navigate (i.e. must not download it)');
     });
 
+    test('bare "s" now types ahead instead of opening Search (moved to Alt+S)', async () => {
+      await open(fx.home);
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key('Escape');
+      await d.key('s');
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'spoof/', { message: '"s" to jump to spoof/' });
+      assert.notEqual(await d.eval(`return document.activeElement?.getAttribute('aria-label')`), 'Search subfolders by name');
+    });
+
+    test('bare "c" now types ahead instead of copying the path (moved to Alt+C)', async () => {
+      await open(fx.home);
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key('Escape');
+      await d.key('c');
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'casetest/', { message: '"c" to jump to casetest/' });
+      assert.equal(await d.eval(`return document.querySelector('.toast')?.textContent ?? null`), null, 'must not show the "Copied" toast');
+    });
+
+    test('bare "g" no longer opens Go to path (moved to Alt+G)', async () => {
+      await open(fx.home);
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key('Escape');
+      await d.key('g');
+      await sleep(150);
+      assert.notEqual(await d.eval(`return document.activeElement?.getAttribute('aria-label')`), 'Go to path');
+    });
+
     // ---- previews ------------------------------------------------------------
     test('previews each file type correctly and safely', async () => {
       await open(fx.work);
@@ -599,7 +626,7 @@ export function defineSuite({ label, launch }) {
     test('searches by name, shallowest first, without denied or hidden results', async () => {
       await open(fx.home);
       await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
-      await d.key('s');
+      await d.key('s', { alt: true });
       await waitFor(async () => (await d.eval(`return document.activeElement?.getAttribute('aria-label')`)) === 'Search subfolders by name', { message: 'the search box to take focus' });
       await d.type('needle');
       await d.key('Enter');
@@ -630,10 +657,10 @@ export function defineSuite({ label, launch }) {
       await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'Needle-Deep.txt', { message: 'the file to be selected' });
     });
 
-    test('copies the selected path with the c key', async (t) => {
+    test('copies the selected path with Alt+C', async (t) => {
       await open(fx.work);
       await selectByKeys('app.log');
-      await d.key('c');
+      await d.key('c', { alt: true });
       const toast = await waitFor(() => d.eval(`return document.querySelector('.toast')?.textContent ?? null`), { message: 'a toast' });
       assert.match(toast, /Copied/);
       if (d.caps.clipboardRead) {
@@ -852,8 +879,8 @@ export function defineSuite({ label, launch }) {
       await open(fx.home);
       const goTo = async (text) => {
         await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
-        await d.key('g');
-        await waitFor(async () => (await d.eval(`return document.activeElement?.getAttribute('aria-label')`)) === 'Go to path', { message: 'g to focus the box' });
+        await d.key('g', { alt: true });
+        await waitFor(async () => (await d.eval(`return document.activeElement?.getAttribute('aria-label')`)) === 'Go to path', { message: 'Alt+G to focus the box' });
         await d.type(text);
         await d.key('Enter');
       };

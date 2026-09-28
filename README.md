@@ -13,10 +13,10 @@
 | `←` or `Backspace` | Up one folder (re-selecting the one you left) |
 | `Space` | Show or hide the preview pane |
 | `/` | Filter this folder |
-| `s` | Search subfolders by name (Enter runs it; `Esc` clears) |
-| `g` | Go to a path |
-| `c` | Copy the selected path (or the folder's, if nothing is selected) |
-| any other letter or digit | Jump to (and, repeated, cycle through) entries whose name starts with it |
+| `Alt+S` | Search subfolders by name (Enter runs it; `Esc` clears) |
+| `Alt+G` | Go to a path |
+| `Alt+C` | Copy the selected path (or the folder's, if nothing is selected) |
+| any letter or digit | Jump to (and, repeated, cycle through) entries whose name starts with it |
 
 ### Preview, hover peek, search, attributes
 
