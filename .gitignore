@@ -1,4 +1,5 @@
 .DS_Store
+/attic/
 /fsb
 /web/node_modules/
 /dist/
