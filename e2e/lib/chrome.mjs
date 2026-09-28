@@ -137,7 +137,9 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
 
     /** A real key press. modifiers: { alt, shift }. */
     async key(name, { alt = false, shift = false } = {}) {
-      const k = KEYS[name];
+      // Any other single letter or digit (type-ahead tests): synthesize it rather
+      // than hand-list every possible key.
+      const k = KEYS[name] ?? (/^[a-z0-9]$/i.test(name) ? { key: name, code: /[a-z]/i.test(name) ? `Key${name.toUpperCase()}` : `Digit${name}`, vk: name.toUpperCase().charCodeAt(0), text: name } : undefined);
       if (!k) throw new Error(`unknown key ${name}`);
       const modifiers = (alt ? 1 : 0) | (shift ? 8 : 0);
       const base = { key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, modifiers };

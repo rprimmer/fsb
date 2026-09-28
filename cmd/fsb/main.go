@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -32,6 +34,12 @@ With no path, the root is your home directory.
 flags:
 `
 
+// singleDashFlag matches the leading "  -name" that flag.PrintDefaults always
+// prints for each flag, so it can be rewritten to "  --name": fsb accepts one
+// or two leading hyphens equally, but the manual page writes them all with
+// two, and showing one here needlessly makes "fsb -h" look like it disagrees.
+var singleDashFlag = regexp.MustCompile(`(?m)^  -`)
+
 type stringList []string
 
 func (l *stringList) String() string     { return strings.Join(*l, ",") }
@@ -49,7 +57,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
 		fmt.Fprint(stderr, usage)
+		var buf bytes.Buffer
+		fs.SetOutput(&buf)
 		fs.PrintDefaults()
+		fs.SetOutput(stderr)
+		fmt.Fprint(stderr, singleDashFlag.ReplaceAllString(buf.String(), "  --"))
 	}
 	var (
 		extraRoots stringList
@@ -148,6 +160,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "fsb: warning: core deny rule(s) disabled: %s; these paths are browsable.\n", strings.Join(coreMissing, ", "))
 	}
 	fmt.Fprintf(stdout, "fsb: open this single-use URL: %s\n", launchURL)
+	fmt.Fprintln(stdout, "fsb: runs until stopped (Control-C), or start it as \"fsb &\" and bring it back later with \"fg\"")
 	if !*noOpen && runtime.GOOS == "darwin" {
 		// The URL is passed as one argument, never through a shell. `open` returns
 		// promptly, so its exit status says whether the application was found.

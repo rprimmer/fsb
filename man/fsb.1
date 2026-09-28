@@ -140,6 +140,7 @@ URL:
 .nf
 fsb: serving /Users/you read-only on http://127.0.0.1:53349
 fsb: open this single-use URL: http://127.0.0.1:53349/AaGF.../?token=...
+fsb: runs until stopped (Control-C), or start it as "fsb &" and bring it back later with "fg"
 .fi
 .RE
 .PP
@@ -160,11 +161,29 @@ bookmark of
 the URL does not survive a restart.
 .PP
 .B fsb
-runs in the foreground.
+runs in the foreground, like any other program that keeps serving requests
+(a development web server, for example): it does not exit on its own, because
+exiting would stop the browser from being able to reach it.
 Interrupt it with Control-C or send
 .BR SIGTERM ;
 it stops accepting requests, allows requests in progress up to three seconds to
 finish, and exits with status 0.
+.PP
+To get your shell prompt back without stopping
+.BR fsb ,
+start it in the background instead of interrupting it:
+.RS
+.nf
+.RB "$ " "fsb &"
+.RB "$ " "\&..."  "  (your prompt is free; fsb keeps running and keeps serving the browser)"
+.RB "$ " fg        "  (brings fsb back to the foreground)"
+.RB "^C"           "  (or, from the background, ""kill %1"" to stop it directly)"
+.fi
+.RE
+A browser tab open on the printed URL keeps working the whole time
+.B fsb
+is running, in the foreground or in the background; only stopping the process
+(by either method) ends the session.
 .SH USING THE INTERFACE
 .SS Keys
 .TP
@@ -172,7 +191,7 @@ finish, and exits with status 0.
 Move the selection.
 .TP
 .BR Enter " or " Right
-Open the selected folder.
+Open the selected folder, which selects its first entry.
 A search result opens in its folder with the file selected.
 .TP
 .BR Left " or " Backspace
@@ -195,6 +214,17 @@ Accepts an absolute path or one beginning with
 .TP
 .B c
 Copy the selected entry's path (the folder's, if nothing is selected).
+.TP
+.RI "a letter or digit not listed above"
+Jump to the next entry whose name starts with it, as in a graphical file
+manager: typing several keys quickly narrows the match, and typing the same
+key again cycles to the next entry that still matches.
+Since
+.BR / ", " s ", " g " and " c
+above are already shortcuts, an entry beginning with one of those letters
+cannot be reached this way; use
+.B /
+(filter) instead.
 .TP
 .B Escape
 Clear the search, close a menu, or leave a text box.

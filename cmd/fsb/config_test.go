@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -122,6 +123,25 @@ func TestRunRejectsAnOutOfRangePortEarly(t *testing.T) {
 		}
 		if out.Len() != 0 {
 			t.Errorf("--port %s: nothing may be started or printed for a bad value, got %q", bad, out.String())
+		}
+	}
+}
+
+// The manual page writes every flag with two leading hyphens; "fsb -h" must
+// match it, even though flag.PrintDefaults defaults to one (both are accepted
+// on input either way).
+func TestUsageShowsDoubleDashFlags(t *testing.T) {
+	var out, errb bytes.Buffer
+	if err := run([]string{"-h"}, &out, &errb); err != nil {
+		t.Fatalf("run -h: %v", err)
+	}
+	got := errb.String()
+	if regexp.MustCompile(`(?m)^  -[a-zA-Z]`).MatchString(got) {
+		t.Errorf("usage still shows a single-dash flag:\n%s", got)
+	}
+	for _, want := range []string{"--allow-system-root", "--browser", "--debug", "--init", "--no-open", "--port", "--root"} {
+		if !strings.Contains(got, "  "+want) {
+			t.Errorf("usage missing %q:\n%s", want, got)
 		}
 	}
 }

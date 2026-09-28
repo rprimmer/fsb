@@ -9,12 +9,14 @@
 | Key | Action |
 |---|---|
 | `↑` `↓` `PgUp` `PgDn` `Home` `End` | Select |
-| `Enter` or `→` | Open a folder (a search hit opens its folder with the file selected) |
+| `Enter` or `→` | Open a folder, selecting its first entry (a search hit opens its folder with the file selected) |
 | `←` or `Backspace` | Up one folder (re-selecting the one you left) |
 | `Space` | Show or hide the preview pane |
 | `/` | Filter this folder |
 | `s` | Search subfolders by name (Enter runs it; `Esc` clears) |
+| `g` | Go to a path |
 | `c` | Copy the selected path (or the folder's, if nothing is selected) |
+| any other letter or digit | Jump to (and, repeated, cycle through) entries whose name starts with it |
 
 ### Preview, hover peek, search, attributes
 
@@ -51,6 +53,8 @@ make uninstall
 `PREFIX`, `BINDIR`, `MANDIR` (the folder that holds `man1`) and `DESTDIR` (a staging root for packaging) can each be overridden; `make help` shows the values in effect.
 
 `fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`.
+
+`fsb` is a small web server: like any other program that keeps serving requests, it does not exit on its own, because exiting would stop the browser from being able to reach it. Most people run it as `fsb &` so their shell prompt comes back immediately; `fg` brings it back to the foreground later, and Control-C (or `kill %1` from the background) stops it. `--no-open` and an unopenable `--browser` name behave the same way: `fsb` keeps serving so the printed URL stays usable, so it is worth pairing either with `fsb &` for the same reason.
 
 The browser keeps preferences such as column widths and the preview pane's width per address, including the port, so `fsb` remembers the port it last used successfully (in `~/.config/fsb/lastport`) and reuses it, rather than picking a new one every time; the first run, with nothing to reuse yet, picks a free port as before. If that remembered port is ever taken by something else, `fsb` says so and asks you to pick another with `--port N` for that run, rather than silently moving to a different port and losing the address your preferences are keyed to. `--port N` also works any time you want a specific port; a value chosen this way is used just for that run and is not remembered.
 

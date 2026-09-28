@@ -275,6 +275,9 @@
   let searchCtrl: AbortController | undefined;
   let selectedKey = $state('');
   let pendingSelect = '';
+  let typeaheadBuf = '';
+  let typeaheadAt = 0;
+  const TYPEAHEAD_TIMEOUT = 800;
 
   const rowPath = (e: Row) => e.path ?? joinPath(path, e.name);
   const source = $derived(searchActive ? searchRows : entries);
@@ -359,6 +362,31 @@
     if (name.startsWith('.')) showHidden = true;
     selectedKey = joinPath(path, name);
     revealSelected();
+  }
+
+  // A letter or digit not already claimed by another shortcut jumps to the next
+  // entry whose name starts with what has been typed, as in Finder: typing
+  // quickly narrows the match, and repeating the same key cycles through ties.
+  // '/', 's', 'g' and 'c' are already single-key shortcuts, so a folder or file
+  // starting with one of those letters cannot be reached this way.
+  function typeahead(key: string) {
+    if (!visible.length) return;
+    const now = Date.now();
+    const fresh = now - typeaheadAt > TYPEAHEAD_TIMEOUT;
+    const repeat = !fresh && typeaheadBuf !== '' && [...typeaheadBuf].every((c) => c === key);
+    typeaheadBuf = fresh || repeat ? key : typeaheadBuf + key;
+    typeaheadAt = now;
+    const want = fold(typeaheadBuf);
+    const n = visible.length;
+    const start = repeat && selectedIdx >= 0 ? selectedIdx + 1 : 0;
+    for (let i = 0; i < n; i++) {
+      const idx = (start + i) % n;
+      if (fold(visible[idx].name).startsWith(want)) {
+        selectedKey = rowPath(visible[idx]);
+        list?.scrollToIndex(idx);
+        return;
+      }
+    }
   }
 
   function move(delta: number) {
@@ -683,6 +711,9 @@
         if (searchActive) clearSearch();
         else selectedKey = '';
         break;
+      default:
+        if (!onControl && key.length === 1 && /[a-z0-9]/i.test(key)) typeahead(key.toLowerCase());
+        break;
     }
   }
 
@@ -769,6 +800,11 @@
         const name = pendingSelect;
         pendingSelect = '';
         selectByName(name);
+      } else if (visible.length) {
+        // Opening a folder without an entry to reselect (i.e. going further in,
+        // not coming back up) selects its first row, so arrowing or typing
+        // ahead works immediately without an extra keystroke to reach it.
+        selectedKey = rowPath(visible[0]);
       }
     };
 
@@ -816,7 +852,16 @@
       {:else if searchActive}
         <a class="name" href={pathToHash(dirname(rowPath(e)), e.name)} title="Show in its folder">{displayName(e.rel ?? e.name)}</a>
       {:else}
-        <a class="name" href={fileURL(rowPath(e))} download={e.name}>{displayName(e.name)}</a>
+        <!-- A plain left click only selects, like the keyboard; the download attribute
+             still applies to a right-click's "Download Linked File" / "Save Link As". -->
+        <a
+          class="name"
+          href={fileURL(rowPath(e))}
+          download={e.name}
+          onclick={(ev) => {
+            if (ev.button === 0 && !ev.metaKey && !ev.ctrlKey && !ev.shiftKey && !ev.altKey) ev.preventDefault();
+          }}>{displayName(e.name)}</a
+        >
       {/if}
       {#if e.isSymlink}<span class="link" title="Symbolic link">→</span>{/if}
     </div>
@@ -1098,5 +1143,8 @@
   {:else}
     {visible.length.toLocaleString()} of {entries.length.toLocaleString()} items
   {/if}
-  <span class="keys">↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · s search · g go to path · c copy path</span>
+  <span class="keys"
+    >↑↓ select · Enter/→ open · ←/Backspace up · Space preview · / filter · s search · g go to path · c copy path · type a letter to
+    jump</span
+  >
 </footer>

@@ -137,10 +137,13 @@ export function defineSuite({ label, launch }) {
     test('lists the home folder without denied or ignored entries', async () => {
       await open(fx.home);
       assert.deepEqual(await rows(), fx.homeRows); // .ssh and .aws are denied, node_modules is hidden
-      // Showing hidden files must never reveal a denied folder.
+      // Showing hidden files must never reveal a denied folder. fsb itself created
+      // ~/.config/fsb (rule templates, the remembered port) when it started with
+      // this fixture's $HOME; it is an ordinary, non-denied dotfile, so it is
+      // expected to appear here, sorted before the rest (a leading dot sorts first).
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await d.eval(`return [...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').checked`)) === true);
-      assert.deepEqual(await rows(), fx.homeRows);
+      assert.deepEqual(await rows(), ['.config/', ...fx.homeRows]);
     });
 
     test('names that would disguise themselves are shown with visible markers', async () => {
@@ -239,9 +242,49 @@ export function defineSuite({ label, launch }) {
       await d.key('ArrowRight');
       await waitFor(async () => (await title()) === 'pics - fsb', { message: 'to open pics/' });
       assert.deepEqual(await rows(), ['gradient.png', 'no-extension']);
+      // Going further in (not coming back up) selects the first entry, so arrowing
+      // or typing ahead works right away without an extra keystroke to reach it.
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'gradient.png', { message: 'gradient.png to be selected on entry' });
       await d.key('ArrowLeft');
       await waitFor(async () => (await title()) === `${basename(fx.home)} - fsb`, { message: 'to go back up' });
       await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'pics/', { message: 'pics/ to be re-selected' });
+    });
+
+    test('typing a letter jumps to the entry that starts with it', async () => {
+      await open(fx.home);
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key('Escape');
+      await d.key('w');
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'work/', { message: '"w" to jump to work/' });
+    });
+
+    test('typing the same letter again cycles to the next match', async () => {
+      await open(fx.work);
+      await d.eval(`document.activeElement?.blur?.(); document.body.focus();`);
+      await d.key('Escape');
+      const names = await rows();
+      const rMatches = names.filter((n) => /^r/i.test(n));
+      assert.ok(rMatches.length >= 2, `fixture needs at least two names starting with r: ${JSON.stringify(names)}`);
+      await d.key('r');
+      await d.key('r');
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === rMatches[1], {
+        message: `the second r-name (${rMatches[1]}) after two quick "r" presses`,
+      });
+      await d.key('r');
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === rMatches[0], {
+        message: `wrap back to the first r-name (${rMatches[0]}) after a third "r"`,
+      });
+    });
+
+    test('clicking a file selects it instead of downloading it', async () => {
+      await open(fx.work);
+      const before = await d.eval(`return location.href`);
+      const p = await rowPoint('README.md');
+      await d.click(p.x, p.y);
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'README.md', {
+        message: 'README.md to be selected by a click',
+      });
+      assert.equal(await d.eval(`return location.href`), before, 'a plain click on a file must not navigate (i.e. must not download it)');
     });
 
     // ---- previews ------------------------------------------------------------
@@ -407,7 +450,7 @@ export function defineSuite({ label, launch }) {
 
     test('previews an image through the sandboxed endpoint', async () => {
       await open(`${fx.home}/pics`);
-      await d.key('ArrowDown');
+      // gradient.png is already selected: opening a folder selects its first entry.
       if (!(await previewOpen())) await d.key(' ');
       const img = await waitFor(
         () => d.eval(`const i = document.querySelector('.preview .pimg'); return i && i.complete && i.naturalWidth ? { w: i.naturalWidth, h: i.naturalHeight } : null`),
@@ -536,7 +579,11 @@ export function defineSuite({ label, launch }) {
     test('fetches the Attributes column lazily, only for rows on screen', async () => {
       await open(fx.work);
       assert.equal(await d.eval(`return !!document.querySelector('.head [data-col="xattr"]')`), false, 'hidden by default');
-      const metaRequests = () => d.eval(`return performance.getEntriesByType('resource').filter((r) => r.name.includes('/api/meta')).length`);
+      // Filtered to the xattr column's own lazy per-row fetches (values=0): the
+      // preview pane, open by default at this width, also calls /api/meta (with
+      // values) for whichever row ends up selected, which is not what this test
+      // is counting.
+      const metaRequests = () => d.eval(`return performance.getEntriesByType('resource').filter((r) => r.name.includes('/api/meta') && r.name.includes('values=0')).length`);
       const before = await metaRequests();
       await d.eval(`document.querySelector('.colmenu').open = true; [...document.querySelectorAll('.colmenu label')].find((l) => l.textContent.includes('Attributes')).querySelector('input').click()`);
       const onScreen = await d.eval(`return document.querySelectorAll('.vrow').length`);

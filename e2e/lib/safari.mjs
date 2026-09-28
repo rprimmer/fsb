@@ -114,7 +114,9 @@ export async function launchSafari({ width = 1280, height = 900 } = {}) {
     },
 
     async key(name, { alt = false, shift = false } = {}) {
-      const k = KEYS[name];
+      // Any other single letter or digit (type-ahead tests): WebDriver's normalized
+      // key for an ordinary printable character is just the character itself.
+      const k = KEYS[name] ?? (/^[a-z0-9]$/i.test(name) ? name : undefined);
       if (!k) throw new Error(`unknown key ${name}`);
       const steps = [];
       if (alt) steps.push({ type: 'keyDown', value: ALT });
