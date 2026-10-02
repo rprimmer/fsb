@@ -17,7 +17,9 @@ fsb \- filesystem browser: a read-only, local-only web view of your files
 .br
 .B fsb \-\-init
 .br
-.B fsb \-\-stop
+.B fsb
+.RB [ \-\-stop ]
+.RB [ \-\-status ]
 .br
 .B fsb
 .RB [ \-\-show\-deny ]
@@ -127,12 +129,28 @@ Stop it with
 .BR \-\-stop .
 .TP
 .B \-\-stop
-Stop the
-.B fsb
-started with
-.BR \-\-background ,
+Stop the running
+.BR fsb ,
 wait for it to exit, and exit.
+That is the one started with
+.BR \-\-background ,
+or else an
+.BR fsb ,
+however it was started (for example in another terminal), that holds the port
+remembered in
+.IR ~/.config/fsb/lastport .
+Only a process that is
+.B fsb
+is ever stopped.
 Fails if none is running.
+.TP
+.B \-\-status
+Say whether
+.B fsb
+is running, found as for
+.BR \-\-stop ,
+and if so whether in the background or the foreground, its address, process
+number, start time and terminal; then exit.
 .TP
 .BI \-\-browser " NAME"
 Open the launch URL in the macOS application
@@ -631,11 +649,17 @@ A rule file could not be parsed, and
 did not start.
 Fix the line named.
 .TP
-.B fsb: port N (used last time) is already in use by another program; run again with \-\-port N to use a different one
+.B fsb: port N (used last time) is in use by ...
 Something else is now using the port
 .B fsb
 remembered from before.
-Run again with
+The message names the program holding it, with its process number, when it
+can be found.
+If it is another
+.B fsb
+(often one left running in another terminal), stop it with
+.BR "fsb \-\-stop" .
+Otherwise run again with
 .B \-\-port
 and a different number.
 The remembered port itself is left unchanged, so plain

@@ -84,8 +84,8 @@ func childMain(args []string) int {
 // startup output to stdout until it is serving (success) or has exited (its
 // error is shown, and returned as a failure).
 func startBackground(cfgDir string, args []string, stdout io.Writer) error {
-	if pid, ok := runningPID(cfgDir); ok {
-		return fmt.Errorf("fsb is already running in the background (process %d); stop it with fsb --stop", pid)
+	if p, _, ok := findRunning(cfgDir); ok {
+		return fmt.Errorf("fsb is already running: %s; stop it with \"fsb --stop\"", p)
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -140,48 +140,64 @@ func removePID(cfgDir string) {
 	}
 }
 
-// runningPID returns the process ID of the background fsb, if one is running.
-// A PID file left behind by a process that has since gone, or whose number now
-// belongs to some other program, does not count.
-func runningPID(cfgDir string) (int, bool) {
-	data, err := os.ReadFile(filepath.Join(cfgDir, pidFile))
-	if err != nil {
-		return 0, false
+// findRunning finds a running fsb: the one started with --background (from
+// the PID file), or else one, started any way, that is listening on the port
+// remembered in lastport. A PID file left behind by a process that has since
+// gone, or whose number now belongs to some other program, does not count, and
+// neither does a program other than fsb holding the port.
+func findRunning(cfgDir string) (p process, background, ok bool) {
+	if data, err := os.ReadFile(filepath.Join(cfgDir, pidFile)); err == nil {
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			if p, ok := lookupProcess(pid); ok && p.isFsb() {
+				return p, true, true
+			}
+		}
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || pid <= 1 {
-		return 0, false
+	if port := readLastPort(cfgDir); port != 0 {
+		if p, ok := portHolder(port); ok && p.isFsb() {
+			return p, false, true
+		}
 	}
-	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "comm=").Output()
-	if err != nil {
-		return 0, false
-	}
-	exe, _ := os.Executable()
-	name := filepath.Base(strings.TrimSpace(string(out)))
-	if name != "fsb" && name != filepath.Base(exe) {
-		return 0, false
-	}
-	return pid, true
+	return process{}, false, false
 }
 
-// stopBackground stops the background fsb and waits briefly for it to exit.
-func stopBackground(cfgDir string, stdout io.Writer) error {
-	pid, ok := runningPID(cfgDir)
+// stopRunning stops the fsb that findRunning finds and waits briefly for it to
+// exit.
+func stopRunning(cfgDir string, stdout io.Writer) error {
+	p, _, ok := findRunning(cfgDir)
 	if !ok {
 		if err := os.Remove(filepath.Join(cfgDir, pidFile)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
-		return errors.New("no fsb is running in the background")
+		return errors.New("no fsb is running")
 	}
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		return fmt.Errorf("stopping process %d: %w", pid, err)
+	if err := syscall.Kill(p.pid, syscall.SIGTERM); err != nil {
+		return fmt.Errorf("stopping process %d: %w", p.pid, err)
 	}
 	for range 50 {
-		if syscall.Kill(pid, 0) != nil {
-			fmt.Fprintf(stdout, "fsb: stopped the background fsb (process %d)\n", pid)
+		if syscall.Kill(p.pid, 0) != nil {
+			fmt.Fprintf(stdout, "fsb: stopped %s\n", p)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return fmt.Errorf("process %d did not stop within 5 seconds", pid)
+	return fmt.Errorf("process %d did not stop within 5 seconds", p.pid)
+}
+
+// showStatus says whether fsb is running, and where.
+func showStatus(cfgDir string, stdout io.Writer) {
+	p, background, ok := findRunning(cfgDir)
+	if !ok {
+		fmt.Fprintln(stdout, "fsb: not running")
+		return
+	}
+	how := "in the foreground"
+	if background {
+		how = "in the background"
+	}
+	port := ""
+	if n, ok := listeningPort(p.pid); ok {
+		port = fmt.Sprintf(" on http://127.0.0.1:%d", n)
+	}
+	fmt.Fprintf(stdout, "fsb: running %s%s: %s; stop it with \"fsb --stop\"\n", how, port, p)
 }

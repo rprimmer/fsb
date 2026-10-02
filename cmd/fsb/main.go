@@ -73,7 +73,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		debug      = fs.Bool("debug", false, "verbose logging; denied paths answer 404 naming the matching rule")
 		noOpen     = fs.Bool("no-open", false, "do not open the browser; just print the URL")
 		background = fs.Bool("background", false, "run in the background: print the URL and return to the shell (stop it with --stop)")
-		stopFlag   = fs.Bool("stop", false, "stop the fsb started with --background, and exit")
+		stopFlag   = fs.Bool("stop", false, "stop the running fsb (started with --background, or holding the usual port), and exit")
+		status     = fs.Bool("status", false, "say whether fsb is running, with its process, port and start time, and exit")
 		browser    = fs.String("browser", "", `macOS application to open the URL in, e.g. "Google Chrome" (default: your default browser)`)
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
 		showDeny   = fs.Bool("show-deny", false, "print the deny rules in effect, and where they come from, and exit")
@@ -117,7 +118,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return initConfig(cfgDir, stdout)
 	}
 	if *stopFlag {
-		return stopBackground(cfgDir, stdout)
+		return stopRunning(cfgDir, stdout)
+	}
+	if *status {
+		showStatus(cfgDir, stdout)
+		return nil
 	}
 	if *background && !isBackgroundChild() {
 		return startBackground(cfgDir, args, stdout)

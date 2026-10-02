@@ -6,3 +6,4 @@
 *.test
 specs/*/build/
 specs/dist/
+/_transcripts/

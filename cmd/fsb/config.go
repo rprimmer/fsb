@@ -142,7 +142,7 @@ func choosePort(cfgDir string, port int, explicit bool) (net.Listener, error) {
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", remembered))
 	if err != nil {
 		if remembered != 0 && errors.Is(err, syscall.EADDRINUSE) {
-			return nil, fmt.Errorf("port %d (used last time) is already in use by another program; run again with --port N to use a different one", remembered)
+			return nil, errors.New(portInUseMessage(remembered))
 		}
 		return nil, err
 	}
