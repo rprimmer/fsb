@@ -27,6 +27,7 @@
   import DOMPurify from 'dompurify';
 
   import { ApiError, apiPath, getArchive, getHead, getMeta, pdfURL, previewURL, quicklookURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
+  import { mapLimit, readCapped } from './fetchcap';
   import { basename, dirname, displayName, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
   import { fillImages, renderMarkdown } from './markdown';
   import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, looksLikeQuickLook, parseDelimited, plural, prettyJSON } from './preview';
@@ -227,14 +228,15 @@
   };
 
   const MAX_IMAGES = 20;
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // never read past this, whatever the server sends
+  const IMAGE_FETCHES = 4; // at a time
 
   async function fetchImage(path: string, signal: AbortSignal): Promise<string | null> {
     try {
       const r = await fetch(previewURL(path), { signal });
       if (!r.ok) return null;
-      const b = await r.blob();
-      if (b.size > MAX_IMAGE_BYTES || !/^image\/(png|jpeg|gif|webp)$/.test(b.type)) return null;
+      const b = await readCapped(r, MAX_IMAGE_BYTES);
+      if (!b || !/^image\/(png|jpeg|gif|webp)$/.test(b.type)) return null;
       return await new Promise<string>((res, rej) => {
         const fr = new FileReader();
         fr.onload = () => res(String(fr.result));
@@ -255,7 +257,7 @@
     const ctrl = new AbortController();
     (async () => {
       const r = renderMarkdown(text, dir);
-      const urls = await Promise.all(r.images.slice(0, MAX_IMAGES).map((p) => fetchImage(p, ctrl.signal)));
+      const urls = await mapLimit(r.images.slice(0, MAX_IMAGES), IMAGE_FETCHES, (p) => fetchImage(p, ctrl.signal));
       if (ctrl.signal.aborted) return;
       const clean = DOMPurify.sanitize(fillImages(r.html, urls), PURIFY);
       target.contentWindow?.postMessage({ type: 'fsb-md-render', html: clean }, '*');
