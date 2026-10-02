@@ -3,6 +3,7 @@ package guard
 import (
 	"archive/zip"
 	"bytes"
+	"os"
 	"testing"
 )
 
@@ -13,6 +14,11 @@ func FuzzListZipAgreesWithArchiveZip(f *testing.F) {
 	f.Add(makeZip(nil))
 	f.Add(append([]byte("stub"), makeZip(nil, "a")...))
 	f.Add(makeEmptyZip(f, 3))
+	for _, p := range []string{"testdata/infozip-stream.zip", "testdata/infozip-stream-dir.zip"} {
+		if b, err := os.ReadFile(p); err == nil {
+			f.Add(b)
+		}
+	}
 	f.Fuzz(func(t *testing.T, b []byte) {
 		got, err := listZip(bytes.NewReader(b), int64(len(b)))
 		zr, zerr := zip.NewReader(bytes.NewReader(b), int64(len(b)))

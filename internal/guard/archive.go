@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -144,11 +145,18 @@ func listTar(r io.Reader, format string) (ArchiveListing, error) {
 	return l, nil
 }
 
-// cleanName makes an archive member name safe to show: control characters and
-// invalid UTF-8 become U+FFFD, and a name longer than archiveMaxName bytes is cut
-// (at a character boundary) and ends in "…".
+// cleanName makes an archive member name safe to show: control characters,
+// format characters (bidi overrides and isolates, zero-width characters, which
+// can make a name display as another) and invalid UTF-8 become U+FFFD, and a
+// name longer than archiveMaxName bytes after that is cut (at a character
+// boundary) and ends in "…".
 func cleanName(s string) string {
-	s = strings.ToValidUTF8(s, "�")
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || r == 0x2028 || r == 0x2029 || unicode.Is(unicode.Cf, r) {
+			return '�'
+		}
+		return r
+	}, strings.ToValidUTF8(s, "�"))
 	if len(s) > archiveMaxName {
 		cut := archiveMaxName
 		for !utf8.RuneStart(s[cut]) {
@@ -156,10 +164,5 @@ func cleanName(s string) string {
 		}
 		s = s[:cut] + "…"
 	}
-	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || r == 0x2028 || r == 0x2029 {
-			return '�'
-		}
-		return r
-	}, s)
+	return s
 }

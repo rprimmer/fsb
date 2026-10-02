@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 )
 
 func makeZip(t *testing.T, names ...string) []byte {
@@ -305,5 +307,38 @@ func TestTarGzLimitAtAHeaderBoundaryIsIncomplete(t *testing.T) {
 	}
 	if l.Total != 2 && !l.Incomplete {
 		t.Errorf("total=%d incomplete=%v: a partial listing looks complete", l.Total, l.Incomplete)
+	}
+}
+
+// Info-ZIP writing to a pipe adds ZIP64 end records even though the ordinary
+// end record holds real values (testdata made with `echo hi | zip - -` and
+// `zip -r - d`). From the independent review of d6d4f34.
+func TestZipWrittenToAPipeLists(t *testing.T) {
+	for _, f := range []string{"testdata/infozip-stream.zip", "testdata/infozip-stream-dir.zip"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		l, err := listZip(bytes.NewReader(b), int64(len(b)))
+		if err != nil || l.Total != len(zr.File) || l.Entries[0].Name != zr.File[0].Name {
+			t.Errorf("%s: %+v %v; archive/zip has %d", f, l, err, len(zr.File))
+		}
+	}
+}
+
+// Format characters (bidi overrides and isolates, zero-width characters) can
+// make a name display as something else, so they are replaced too.
+func TestArchiveNamesLoseFormatCharacters(t *testing.T) {
+	for _, s := range []string{"invoice\u202Eexe.pdf", "a\u2066b", "a\u200Bb", "a\uFEFFb", "a\u061Cb"} {
+		if got := cleanName(s); strings.ContainsFunc(got, func(r rune) bool { return unicode.Is(unicode.Cf, r) }) {
+			t.Errorf("cleanName(%q) = %q keeps a format character", s, got)
+		}
+	}
+	if n := len(cleanName(strings.Repeat("\x01", 10_000))); n > archiveMaxName+len("…") {
+		t.Errorf("a name of replaced characters is %d bytes", n)
 	}
 }

@@ -114,7 +114,10 @@ func findZipDir(f io.ReaderAt, size int64) (start, dirSize int64, count uint64, 
 	eocdPos := size - tail + int64(i)
 	count, size32, dirEnd := uint64(le.Uint16(e[10:])), uint64(le.Uint32(e[12:])), eocdPos
 	dirSize64 := size32
-	if le.Uint16(e[10:]) == 0xFFFF || le.Uint32(e[12:]) == 0xFFFFFFFF || le.Uint32(e[16:]) == 0xFFFFFFFF {
+	// A ZIP64 locator just before the record means ZIP64 end records sit
+	// between the directory and here, whether or not the ordinary record's
+	// fields overflowed (Info-ZIP writing to a pipe adds them regardless).
+	{
 		var loc [eocd64LocLen]byte
 		if eocdPos >= eocd64LocLen {
 			if _, err := f.ReadAt(loc[:], eocdPos-eocd64LocLen); err == nil && le.Uint32(loc[:]) == sigEOCD64Loc {
@@ -154,7 +157,7 @@ func zipSize(rec, extra []byte) uint64 {
 // no time zone, so labeled UTC as archive/zip does).
 func zipModTime(rec, extra []byte) time.Time {
 	if d := zipExtra(extra, 0x5455); len(d) >= 5 && d[0]&1 != 0 {
-		return time.Unix(int64(int32(le.Uint32(d[1:]))), 0).UTC()
+		return time.Unix(int64(le.Uint32(d[1:])), 0).UTC() // unsigned, as archive/zip reads it (dates past 2038)
 	}
 	t, d := le.Uint16(rec[12:]), le.Uint16(rec[14:])
 	if d == 0 {
