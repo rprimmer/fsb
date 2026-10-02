@@ -7,6 +7,7 @@ fsb \- filesystem browser: a read-only, local-only web view of your files
 .B fsb
 .RB [ \-\-debug ]
 .RB [ \-\-no\-open ]
+.RB [ \-\-background ]
 .RB [ \-\-browser
 .IR NAME ]
 .RB [ \-\-allow\-system\-root ]
@@ -15,6 +16,8 @@ fsb \- filesystem browser: a read-only, local-only web view of your files
 .RI [ path ]
 .br
 .B fsb \-\-init
+.br
+.B fsb \-\-stop
 .br
 .B fsb
 .RB [ \-\-show\-deny ]
@@ -37,9 +40,12 @@ zip and tar archives) without leaving the window.
 .B fsb
 is read-only.
 It never modifies, creates, renames, moves or deletes anything it serves.
-The only file it ever creates is by
-.BR \-\-init ,
-which writes two new rule files and never overwrites one.
+The only files it writes are its own, in
+.IR ~/.config/fsb/ :
+the rule files that
+.B \-\-init
+creates (never overwriting one), and the bookkeeping files listed under
+.BR FILES .
 .PP
 Two rule files control what you see.
 Paths matching the
@@ -105,6 +111,28 @@ The rules still apply.
 Print the launch URL and do not open a browser.
 Use this to paste the URL into a browser of your choice.
 .TP
+.B \-\-background
+Run in the background: print the startup lines, open the browser (unless
+.BR \-\-no\-open ),
+and return to the shell once
+.B fsb
+is serving.
+It keeps running after the terminal is closed.
+A startup error is reported as usual and nothing is left running.
+Only one background
+.B fsb
+runs at a time.
+Stop it with
+.BR \-\-stop .
+.TP
+.B \-\-stop
+Stop the
+.B fsb
+started with
+.BR \-\-background ,
+wait for it to exit, and exit.
+Fails if none is running.
+.TP
 .BI \-\-browser " NAME"
 Open the launch URL in the macOS application
 .I NAME
@@ -156,7 +184,7 @@ URL:
 .nf
 fsb: serving /Users/you read-only on http://127.0.0.1:53349
 fsb: open this single-use URL: http://127.0.0.1:53349/AaGF.../?token=...
-fsb: runs until stopped (Control-C), or start it as "fsb &" and bring it back later with "fg"
+fsb: runs until stopped (Control-C), or start it with --background to get your prompt back
 .fi
 .RE
 .PP
@@ -187,7 +215,21 @@ finish, and exits with status 0.
 .PP
 To get your shell prompt back without stopping
 .BR fsb ,
-start it in the background instead of interrupting it:
+start it with
+.BR \-\-background ,
+and stop it later with
+.BR "fsb \-\-stop" .
+With
+.BR \-\-background ,
+the last startup line names the process instead:
+.PP
+.RS
+.nf
+fsb: running in the background (process 4242); stop it with "fsb --stop"
+.fi
+.RE
+.PP
+Alternatively, use the shell's job control:
 .RS
 .nf
 .RB "$ " "fsb &"
@@ -319,6 +361,25 @@ Unlike the rule files, a
 that cannot be parsed does not stop
 .BR fsb :
 it is treated as if the file were absent, and a free port is chosen as usual.
+.TP
+.I ~/.config/fsb/pid
+The process number of the
+.B fsb
+started with
+.BR \-\-background ,
+for
+.BR \-\-stop .
+Removed when it stops.
+.TP
+.I ~/.config/fsb/background.log
+What the background
+.B fsb
+writes after startup, such as
+.B \-\-debug
+output.
+Replaced at each
+.B \-\-background
+start.
 .SH RULE SYNTAX
 The syntax is that of
 .BR gitignore (5).

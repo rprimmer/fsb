@@ -46,8 +46,13 @@ func (l *stringList) String() string     { return strings.Join(*l, ",") }
 func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
 
 func main() {
+	if isBackgroundChild() {
+		os.Exit(childMain(os.Args[1:]))
+	}
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "fsb:", err)
+		if !errors.As(err, new(errAlreadyReported)) {
+			fmt.Fprintln(os.Stderr, "fsb:", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -67,6 +72,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		extraRoots stringList
 		debug      = fs.Bool("debug", false, "verbose logging; denied paths answer 404 naming the matching rule")
 		noOpen     = fs.Bool("no-open", false, "do not open the browser; just print the URL")
+		background = fs.Bool("background", false, "run in the background: print the URL and return to the shell (stop it with --stop)")
+		stopFlag   = fs.Bool("stop", false, "stop the fsb started with --background, and exit")
 		browser    = fs.String("browser", "", `macOS application to open the URL in, e.g. "Google Chrome" (default: your default browser)`)
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
 		showDeny   = fs.Bool("show-deny", false, "print the deny rules in effect, and where they come from, and exit")
@@ -108,6 +115,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	if *doInit {
 		return initConfig(cfgDir, stdout)
+	}
+	if *stopFlag {
+		return stopBackground(cfgDir, stdout)
+	}
+	if *background && !isBackgroundChild() {
+		return startBackground(cfgDir, args, stdout)
 	}
 
 	// A malformed rules file is fatal: never start with weaker rules than the
@@ -178,7 +191,16 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "fsb: warning: core deny rule(s) disabled: %s; these paths are browsable.\n", strings.Join(coreMissing, ", "))
 	}
 	fmt.Fprintf(stdout, "fsb: open this single-use URL: %s\n", launchURL)
-	fmt.Fprintln(stdout, "fsb: runs until stopped (Control-C), or start it as \"fsb &\" and bring it back later with \"fg\"")
+	h, inBackground := stdout.(*handoff)
+	if inBackground {
+		if err := writePID(cfgDir); err != nil {
+			return err
+		}
+		defer removePID(cfgDir)
+		fmt.Fprintf(stdout, "fsb: running in the background (process %d); stop it with \"fsb --stop\"\n", os.Getpid())
+	} else {
+		fmt.Fprintln(stdout, "fsb: runs until stopped (Control-C), or start it with --background to get your prompt back")
+	}
 	if !*noOpen && runtime.GOOS == "darwin" {
 		// The URL is passed as one argument, never through a shell. `open` returns
 		// promptly, so its exit status says whether the application was found.
@@ -187,6 +209,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 			fmt.Fprintf(stderr, "fsb: could not open the browser (%v): %s\n", err, strings.TrimSpace(string(out)))
 			fmt.Fprintln(stderr, "fsb: open the URL above yourself, or check the --browser name")
 		}
+	}
+
+	if inBackground {
+		h.ready()
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
