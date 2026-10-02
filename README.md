@@ -40,6 +40,7 @@ The UI lists directories with 100,000+ entries: the API streams the listing in c
 
 ```sh
 go install github.com/rprimmer/fsb/cmd/fsb@latest   # installs fsb into $(go env GOPATH)/bin
+fsb --version       # the version and the commit it was built from
 fsb --init          # write ~/.config/fsb/{ignore,deny}
 fsb --show-deny     # print the deny rules in effect (--show-ignore: the hide rules)
 fsb                 # serve $HOME read-only, print a single-use URL

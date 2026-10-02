@@ -79,6 +79,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
 		showDeny   = fs.Bool("show-deny", false, "print the deny rules in effect, and where they come from, and exit")
 		showIgnore = fs.Bool("show-ignore", false, "print the ignore (hide) rules in effect, and where they come from, and exit")
+		version    = fs.Bool("version", false, "print the version and the commit fsb was built from, and exit")
 		sysRoot    = fs.Bool("allow-system-root", false, "allow / as a root")
 		portFlag   = fs.Int("port", 0, "use exactly this port for this run only (0 lets the OS choose); without this flag, fsb reuses the port it last used successfully, so the browser's stored preferences (column widths, the preview pane's width) survive a restart, and falls back to a free port the first time there is nothing to reuse yet")
 	)
@@ -88,6 +89,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 		return err
+	}
+	if *version {
+		fmt.Fprintln(stdout, buildVersion())
+		return nil
 	}
 	if fs.NArg() > 1 {
 		return errors.New("at most one path argument is allowed")

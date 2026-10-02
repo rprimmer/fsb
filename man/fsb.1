@@ -25,6 +25,8 @@ fsb \- filesystem browser: a read-only, local-only web view of your files
 .RB [ \-\-show\-deny ]
 .RB [ \-\-show\-ignore ]
 .br
+.B fsb \-\-version
+.br
 .B fsb \-h
 .SH DESCRIPTION
 .B fsb
@@ -189,6 +191,19 @@ Print the ignore rules in effect in the same way, and exit.
 Given together with
 .BR \-\-show\-deny ,
 both lists are printed, deny first.
+.TP
+.B \-\-version
+Print the version and the commit
+.B fsb
+was built from, and exit.
+The version comes from the git tag
+.RB ( v1.0.0 ,
+or a pseudo-version for a later commit); the commit is followed by
+.B modified
+if the source had uncommitted changes.
+A program installed with
+.B go install
+from a tagged version has no commit recorded and names the tag instead.
 .TP
 .B \-h ", " \-\-help
 Print a usage summary and exit with status 0.
