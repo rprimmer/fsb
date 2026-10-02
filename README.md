@@ -1,6 +1,6 @@
 # fsb
 
-`fsb` (filesystem browser): a read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
+`fsb` (filesystem browser): a read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; your files are only ever read, never changed, and nothing is reachable from the network. (fsb writes only its own files: its settings in `~/.config/fsb/`, and short-lived private copies of documents it hands to Quick Look, removed as soon as the picture is drawn.)
 
 > **Status: 1.0, finished, and provided as-is.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See the [functional specification](specs/functional/) and the [design specification](specs/design/).
 >
@@ -115,7 +115,7 @@ To edit on [Overleaf](https://www.overleaf.com) instead of installing TeX, uploa
 
 ## Development
 
-The compiled frontend in `web/dist` is committed, so building the Go binary needs no Node. To change the UI:
+The compiled frontend in `web/dist` is committed, so building the Go binary needs no Node. To change the UI you need [Node](https://nodejs.org/) 24 or later (CI uses 24; the tests rely on Node running TypeScript directly):
 
 ```sh
 cd web

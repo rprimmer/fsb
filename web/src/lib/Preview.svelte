@@ -320,7 +320,7 @@
   <header class="phead">
     <strong class="ptitle" title={fullPath}>{displayName(entry?.rel ?? entry?.name ?? 'Preview')}</strong>
     <span class="pactions">
-      {#if entry}<button onclick={() => oncopy(fullPath)} title="Copy the full path (c)">Copy path</button>{/if}
+      {#if entry}<button onclick={() => oncopy(fullPath)} title="Copy the full path (⌥C)">Copy path</button>{/if}
       <button onclick={onclose} aria-label="Close preview" title="Close (Space)">✕</button>
     </span>
   </header>

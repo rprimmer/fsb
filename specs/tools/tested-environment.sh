@@ -56,9 +56,11 @@ cat <<TEX
 \label{sec:environment}
 
 Every result in this document, and every test referenced by it, was produced on the
-single machine described below.  Nothing has been run on any other machine, on any
-other operating system, or on the browsers this lists as not installed.
-Section~\ref{sec:untested} states plainly what that leaves unchecked.
+single machine described below, except that continuous integration also runs the Go
+tests on macOS and Linux and the Chrome end-to-end suite on Linux, on GitHub's hosted
+runners.  Nothing else has been run on any other machine, and nothing at all on the
+browsers this lists as not installed.  Section~\ref{sec:untested} states plainly
+what that leaves unchecked.
 
 \subsection{Hardware}
 
