@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"path/filepath"
 	"testing"
 	"time"
@@ -110,4 +111,78 @@ func (c *cancelAfter) Read(p []byte) (int, error) {
 		c.cancel()
 	}
 	return k, err
+}
+
+// countingSeeker is a seekable reader that counts the bytes actually read.
+type countingSeeker struct {
+	r    *bytes.Reader
+	read int
+}
+
+func (c *countingSeeker) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.read += n
+	return n, err
+}
+func (c *countingSeeker) Seek(off int64, whence int) (int64, error) { return c.r.Seek(off, whence) }
+
+// Listing a plain tar must skip a member's body by seeking, not read it, so the
+// cost of a listing does not grow with the size of the archive's contents.
+func TestPlainTarListingStillSeeksPastMemberBodies(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	big := make([]byte, 8<<20)
+	for _, m := range []struct {
+		name string
+		body []byte
+	}{{"big.bin", big}, {"after.txt", nil}} {
+		if err := tw.WriteHeader(&tar.Header{Name: m.name, Mode: 0o644, Size: int64(len(m.body)), Format: tar.FormatUSTAR}); err != nil {
+			t.Fatal(err)
+		}
+		tw.Write(m.body)
+	}
+	tw.Close()
+	src := &countingSeeker{r: bytes.NewReader(buf.Bytes())}
+	l, err := listTar(context.Background(), newCtxReader(context.Background(), src), "tar")
+	if err != nil || l.Total != 2 {
+		t.Fatalf("total %d, err %v", l.Total, err)
+	}
+	if src.read > 1<<20 {
+		t.Errorf("read %d bytes to list two headers: the 8 MiB member was read, not skipped", src.read)
+	}
+}
+
+// blockingReader signals when Read is entered, waits to be released, then
+// reports a clean end of input.
+type blockingReader struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (b blockingReader) Read(p []byte) (int, error) {
+	close(b.entered)
+	<-b.release
+	return 0, io.EOF
+}
+
+// A copy whose context ended while a read was blocked must not then report
+// success when that read finally returns end of input.
+func TestCopyThatExpiredDuringAReadDoesNotSucceed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	src := blockingReader{make(chan struct{}), make(chan struct{})}
+	budget := int64(MaxQuickLookBytes)
+	done := make(chan error, 1)
+	go func() { done <- copyBounded(ctx, src, filepath.Join(t.TempDir(), "out"), &budget) }()
+	<-src.entered
+	time.Sleep(60 * time.Millisecond) // the deadline passes while Read is blocked
+	close(src.release)
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("err = %v, want the deadline: expired work must not report success", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the copy never returned")
+	}
 }

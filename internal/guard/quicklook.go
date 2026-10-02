@@ -149,7 +149,7 @@ func copyBounded(ctx context.Context, src io.Reader, dst string, budget *int64) 
 	if err != nil {
 		return err
 	}
-	n, err := io.Copy(out, io.LimitReader(ctxReader{ctx, src}, *budget+1))
+	n, err := io.Copy(out, io.LimitReader(newCtxReader(ctx, src), *budget+1))
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}
@@ -164,6 +164,10 @@ func copyBounded(ctx context.Context, src io.Reader, dst string, budget *int64) 
 
 // ctxReader reads from r until ctx ends, then fails with ctx's error, so a
 // copy or a decompression on slow storage stops when it is no longer wanted.
+// The check is cooperative: it cannot interrupt a read that is already blocked
+// in the file system. It is made again once a read returns, so work that
+// expired in the meantime fails (even if that read reported the end of the
+// input) instead of being reported as a success.
 type ctxReader struct {
 	ctx context.Context
 	r   io.Reader
@@ -173,5 +177,34 @@ func (c ctxReader) Read(p []byte) (int, error) {
 	if err := c.ctx.Err(); err != nil {
 		return 0, err
 	}
-	return c.r.Read(p)
+	n, err := c.r.Read(p)
+	if err == nil || errors.Is(err, io.EOF) {
+		if cerr := c.ctx.Err(); cerr != nil {
+			return n, cerr
+		}
+	}
+	return n, err
+}
+
+// ctxReadSeeker is a ctxReader over something seekable. It keeps the Seek: the
+// tar reader skips a member's body by seeking when it can, and without it a
+// listing would read every byte of the archive.
+type ctxReadSeeker struct {
+	ctxReader
+	s io.Seeker
+}
+
+func (c ctxReadSeeker) Seek(off int64, whence int) (int64, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.s.Seek(off, whence)
+}
+
+// newCtxReader wraps r, keeping its Seek if it has one.
+func newCtxReader(ctx context.Context, r io.Reader) io.Reader {
+	if s, ok := r.(io.Seeker); ok {
+		return ctxReadSeeker{ctxReader{ctx, r}, s}
+	}
+	return ctxReader{ctx, r}
 }

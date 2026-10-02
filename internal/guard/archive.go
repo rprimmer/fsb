@@ -89,7 +89,7 @@ func (g *Guard) ListArchiveContext(ctx context.Context, p string) (ArchiveListin
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return fail(err)
 		}
-		zr, err := gzip.NewReader(bufio.NewReader(ctxReader{ctx, f}))
+		zr, err := gzip.NewReader(bufio.NewReader(newCtxReader(ctx, f)))
 		if err != nil {
 			if cerr := ctx.Err(); cerr != nil {
 				return ArchiveListing{}, cerr
@@ -103,7 +103,7 @@ func (g *Guard) ListArchiveContext(ctx context.Context, p string) (ArchiveListin
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return fail(err)
 		}
-		return listTar(ctx, ctxReader{ctx, f}, "tar")
+		return listTar(ctx, newCtxReader(ctx, f), "tar")
 	}
 	return ArchiveListing{}, ErrUnsupported
 }
