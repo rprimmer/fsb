@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func makeZip(t *testing.T, names ...string) []byte {
@@ -169,5 +170,121 @@ func TestListArchiveStopsAtTheDecompressionLimit(t *testing.T) {
 	l, err := fx.g.ListArchive(p)
 	if err != nil || !l.Incomplete || l.Total < 1 {
 		t.Fatalf("%+v %v", l, err)
+	}
+}
+
+// makeEmptyZip writes a valid zip of n empty stored entries with Go's own
+// writer, which switches to ZIP64 above 65,535 entries.
+func makeEmptyZip(t testing.TB, n int) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for i := range n {
+		if _, err := zw.CreateHeader(&zip.FileHeader{Name: itoa(i), Method: zip.Store}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// The entry limit must hold for valid archives, including ZIP64 ones whose
+// 16-bit count field says nothing (it reads 0xFFFF), not only for archives
+// that lie about their count.
+func TestZipEntryLimitHoldsForValidArchives(t *testing.T) {
+	fx := newFixture(t)
+	for _, n := range []int{70_000, archiveMaxScanned, archiveMaxScanned + 1} {
+		p := filepath.Join(fx.home, "arch", "n"+itoa(n)+".zip")
+		put(t, p, makeEmptyZip(t, n))
+		l, err := fx.g.ListArchive(p)
+		if err != nil {
+			t.Fatalf("%d entries: %v", n, err)
+		}
+		wantTotal, wantIncomplete := n, false
+		if n > archiveMaxScanned {
+			wantTotal, wantIncomplete = archiveMaxScanned, true
+		}
+		if l.Total != wantTotal || l.Incomplete != wantIncomplete || len(l.Entries) != archiveMaxShown || !l.Truncated {
+			t.Errorf("%d entries: total=%d incomplete=%v shown=%d truncated=%v; want total=%d incomplete=%v",
+				n, l.Total, l.Incomplete, len(l.Entries), l.Truncated, wantTotal, wantIncomplete)
+		}
+	}
+}
+
+// The central directory is read within a byte budget too, so huge names or
+// extra fields cannot make it cost more than that.
+func TestZipDirectoryByteBudget(t *testing.T) {
+	old := archiveMaxZipDir
+	archiveMaxZipDir = 4096
+	defer func() { archiveMaxZipDir = old }()
+	fx := newFixture(t)
+	names := make([]string, 20)
+	for i := range names {
+		names[i] = strings.Repeat("n", 1000) + itoa(i)
+	}
+	p := filepath.Join(fx.home, "arch", "long.zip")
+	put(t, p, makeZip(t, names...))
+	l, err := fx.g.ListArchive(p)
+	if err != nil || !l.Incomplete || l.Total == 0 || l.Total >= 20 {
+		t.Fatalf("%+v %v", l.Total, err)
+	}
+}
+
+// A count that disagrees with the directory is refused rather than trusted.
+func TestZipWithAMisleadingCountIsRefused(t *testing.T) {
+	fx := newFixture(t)
+	z := makeZip(t, "a", "b", "c")
+	i := bytes.LastIndex(z, []byte("PK\x05\x06"))
+	z[i+8], z[i+10] = 1, 1 // claims one entry; the directory holds three
+	p := filepath.Join(fx.home, "arch", "lies.zip")
+	put(t, p, z)
+	if _, err := fx.g.ListArchive(p); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("err = %v, want ErrUnsupported", err)
+	}
+}
+
+// Self-extracting archives (a program with a zip appended) still list.
+func TestZipWithDataInFrontStillLists(t *testing.T) {
+	fx := newFixture(t)
+	p := filepath.Join(fx.home, "arch", "sfx.zip")
+	put(t, p, append([]byte("PK\x03\x04"+strings.Repeat("stub", 100)), makeZip(t, "a", "b")...))
+	l, err := fx.g.ListArchive(p)
+	if err != nil || l.Total != 2 || l.Entries[1].Name != "b" {
+		t.Fatalf("%+v %v", l, err)
+	}
+}
+
+// A name is shown, never used, so a very long one is cut for display.
+func TestArchiveNamesAreCutForDisplay(t *testing.T) {
+	fx := newFixture(t)
+	p := filepath.Join(fx.home, "arch", "longname.zip")
+	put(t, p, makeZip(t, strings.Repeat("é", 30_000)))
+	l, err := fx.g.ListArchive(p)
+	if err != nil || len(l.Entries) != 1 {
+		t.Fatal(l, err)
+	}
+	if n := len(l.Entries[0].Name); n > archiveMaxName+len("…") {
+		t.Errorf("name is %d bytes", n)
+	}
+	if !strings.HasSuffix(l.Entries[0].Name, "é…") {
+		t.Errorf("cut mid-character or unmarked: %q", l.Entries[0].Name[len(l.Entries[0].Name)-8:])
+	}
+}
+
+// Modification times come through as the zip records them.
+func TestZipModTime(t *testing.T) {
+	fx := newFixture(t)
+	when := time.Date(2024, 5, 6, 7, 8, 10, 0, time.UTC)
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	zw.CreateHeader(&zip.FileHeader{Name: "a", Modified: when})
+	zw.Close()
+	p := filepath.Join(fx.home, "arch", "time.zip")
+	put(t, p, buf.Bytes())
+	l, err := fx.g.ListArchive(p)
+	if err != nil || !l.Entries[0].ModTime.Equal(when) {
+		t.Fatalf("%v %v, want %v", l.Entries, err, when)
 	}
 }
