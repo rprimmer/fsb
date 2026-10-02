@@ -64,8 +64,9 @@ regard to case, digits inside names compare by value (\code{file2} before
 \code{file10}), and a leading dot sorts before letters, so \code{.bashrc} comes
 first.  Folders are \emph{not} grouped by default.  Clicking a column header sorts
 by that column, and clicking it again reverses the order.  Ties fall back to the
-name, so the order is total and does not depend on the order in which the file
-system returned the entries.
+name and, if two names still compare equal (\code{file1} and \code{file01}, whose
+digits compare by value), to their raw characters, so the order is total and does
+not depend on the order in which the file system returned the entries.
 \end{req}
 
 \begin{req}{LST-4}
@@ -157,10 +158,25 @@ Search never enters or reports a denied, hidden or cloud-only folder, never repo
 denied or hidden entry, and does not follow symbolic links to folders (so it always
 terminates).  A cloud-only folder is skipped rather than failing the whole search.
 Anything a search reports is also shown when the folder that contains it is listed.
+A folder that was queued for searching and, by the time its turn came, had been
+replaced by a symbolic link (or lies behind one) is not entered, because its entries
+would be judged under a name that is not where they are; it counts as not searched
+(\rid{SRC-6}).
 \end{req}
 
 \begin{req}{SRC-5}
 Choosing a result opens its folder with that entry selected.  While results are
 shown, the last breadcrumb, Escape, and a \emph{Clear search} control all return to
 the plain listing.
+\end{req}
+
+\begin{req}{SRC-6}
+A search that could not look at everything it was allowed to look at says so, and its
+results are not presented as complete.  This covers a folder that is there and
+allowed but could not be opened (a permission error, an input/output error), a
+folder that failed partway through being read, and a folder replaced by a symbolic
+link as in \rid{SRC-4}.  A denied folder, which looks exactly like a missing one,
+and a folder that vanished are not counted, and neither is a cloud-only folder, which
+is skipped on purpose (\rid{SRC-4}): completeness is relative to the searchable,
+allowed content.
 \end{req}

@@ -136,10 +136,16 @@ therefore judges a regular file with more than one name by its \emph{identity}
 \code{Open} and in listings alike (Law~\ref{law:linked}).  The other names come
 from an index of all multi-name files under the roots and under the protected
 credential locations, built in the background because visiting every file takes
-seconds; until it is ready, and for a multi-name file that it has not seen yet
-(a link made since), the file is refused.  Not detected: a denied name outside
-every root and protected location, and links missed because a walk was stopped
-by its limit.
+seconds.  A multi-name file is served only if the index accounts for all of its
+names now: it found as many distinct names (by folder identity and folded name) as
+the file has links, none is denied, and each is still, when the file is used, a real
+path to that file.  Otherwise it is refused: while the index is not ready, for a
+name outside every root and protected location or in a folder that could not be
+read, after a walk stopped at its limit, and after the names changed.  Within one
+listing or search a verdict is reused for at most one second, so a name or size
+shown may lag a rename by that long; \code{Open} never reuses it.  Not detected:
+a denied name outside every root and protected location, whose file is refused
+rather than served.
 \end{boundary}
 
 \begin{boundary}[Case classes in ranges]

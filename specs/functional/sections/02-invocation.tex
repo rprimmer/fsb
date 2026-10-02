@@ -24,8 +24,10 @@ is already the default root), is served once.
 
 \begin{req}{CLI-4}
 The folder \code{/} is refused as a root unless \code{--allow-system-root} is given;
-the message says so.  Rules (Section~\ref{sec:rules}) apply to a root of \code{/} as
-to any other root.
+the message says so.  The decision is made on the folder itself, after symbolic links
+are resolved, not on how it was spelled: a path argument, a \code{--root} or a home
+folder that is a symbolic link to \code{/} is refused too.  Rules
+(Section~\ref{sec:rules}) apply to a root of \code{/} as to any other root.
 \end{req}
 
 \begin{req}{CLI-5}
@@ -155,6 +157,12 @@ not start and does not silently choose a different port.  The message names the
 port and, when it can be found, the program holding it with its process number,
 start time and terminal; if that program is another \texttt{fsb}, it suggests
 \code{fsb --stop}.  Otherwise it suggests \code{--port}.
+\end{req}
+
+\begin{req}{CLI-21}
+\code{--version} prints the version of \texttt{fsb} and the commit it was built from,
+on standard output, and exits with status 0 without reading any file or starting
+anything.
 \end{req}
 
 \subsection{Environment}

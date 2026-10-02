@@ -20,13 +20,15 @@ Bytes one \code{api/head} call may request & 1 to 65{,}536 (default 2{,}048) \\
 Rows of a CSV or TSV table & 200 \\
 Lines in a hover bubble & about 20 \\
 Extended attributes shown / largest value shown & 64 / 4~KB \\
-Markdown images per file / size of each & 20 / 5~MB \\
+Markdown images per file / size of each / fetched at once & 20 / 5~MB / 4 \\
 Archive entries shown & 1{,}000 \\
 Tar entries scanned / decompressed bytes read (tar.gz) & 200{,}000 / 512~MiB \\
-Zip: entries claimed in its directory & 200{,}000 \\
+Zip: entries read / bytes of its directory read & 200{,}000 / 64~MiB \\
+Archive member name kept & 4{,}096 bytes \\
 Column width & 60 to 900 pixels \\
 Preview pane width & 240 pixels to the window's width less 320 \\
-Quick Look: time per picture / pictures drawn at once & 5 seconds / 2 (\rid{PRV-12}) \\
+Quick Look: time to copy / time per picture / pictures drawn at once & 20 seconds / 5 seconds / 2 (\rid{PRV-12}) \\
+Hard-link verdict reused within one listing or search & 1 second (\rid{RUL-6}) \\
 Quick Look: picture size / its bytes & 1{,}200 pixels / 20~MB \\
 Quick Look: document copied / entries in a package & 256~MB / 5{,}000 \\
 Hard-link index walk (entries / time) & 20{,}000{,}000 / 10 minutes \\
@@ -39,8 +41,8 @@ Time \code{--stop} waits for \texttt{fsb} to exit & 5 seconds (\rid{CLI-18}) \\
 
 \begin{req}{LIM-2}
 When a limit stops a search, an archive listing or a text preview, the interface says
-so (\rid{SRC-2}, \rid{PRV-3}, \rid{PRV-9}); a limit never makes a listing silently
-incomplete.
+so (\rid{SRC-2}, \rid{SRC-6}, \rid{PRV-3}, \rid{PRV-9}); a limit never makes a listing
+silently incomplete.
 \end{req}
 
 \subsection{Non-functional requirements}

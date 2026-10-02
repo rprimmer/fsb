@@ -145,6 +145,18 @@ clean one. \\
         directory is empty and the path cannot be opened.
 \end{itemize}
 
+\subsection{Defects found afterwards by review}
+
+Reviews of the code (October 2026) found defects that these laws did not, each in
+a place the laws state only loosely: a hard-link verdict served for a file whose
+names the index had not seen, or whose names changed (Law~\ref{law:linked} now says
+what ``determined'' means); a search that entered a folder swapped for a link after it
+was queued, and that looked complete when a folder could not be opened (the search
+definition now says so); a collator that left two names in input order (the row order
+now ends on the raw characters); and several limits that did not bind (a count that could
+never trip, a work limit that ignored excluded entries).  The design specification's
+history lists them; each has a test that fails without its fix.
+
 \subsection{What the method did and did not find}
 
 Findings 1 to 3 come from the rule and access laws and are about names: two

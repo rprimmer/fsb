@@ -59,7 +59,9 @@ opens in a new browser tab without sending a referrer; a link of any other kind
 (\code{javascript:}, \code{data:}, \code{file:} and so on) is shown as plain text.  An
 image that lies inside the roots is shown; a remote image is replaced by a note that
 it was blocked, so previewing a file never contacts anything outside the machine.  At
-most 20 images of at most 5~MB each are loaded for one file.
+most 20 images of at most 5~MB each are loaded for one file, four at a time; an
+image is cut off as soon as it passes the size limit, whatever its server said it
+would send, and a bigger one is not shown.
 \end{req}
 
 \begin{req}{PRV-8}
@@ -76,8 +78,13 @@ A file recognized by its bytes as a zip, tar or gzip-compressed tar archive (inc
 \code{.jar}) is shown as a table of its contents: each member's name and size, the
 format, and the number of entries.  Nothing is extracted.  At most 1{,}000 entries are
 shown; the listing reports when it stopped at a safety limit
-(Section~\ref{sec:limits}).  Member names are displayed as text with control
-characters replaced and are never used as paths.  A file that has an archive name but
+(Section~\ref{sec:limits}).  A zip's directory is read record by record, so a
+directory that claims more entries than it holds cannot make \texttt{fsb} allocate
+for them, and a zip64 directory is honored whenever it is present.  A plain tar is
+listed by skipping each member's body, so the work does not grow with the size of
+its contents.  Listing stops when the request is abandoned.  Member names are
+displayed as text with control and Unicode formatting characters replaced, cut at
+4{,}096 bytes, and are never used as paths.  A file that has an archive name but
 is not one is shown as ordinary text or as a binary file.
 \end{req}
 
@@ -99,8 +106,10 @@ a note saying so.  It is subject to every rule of an ordinary preview.  Quick Lo
 draws a private copy that \texttt{fsb} reads, never the user's own file, so it
 cannot follow a Finder alias.  A cloud-only document, or a package with a cloud-only
 part, is not copied; parts of a package that a listing leaves out (denied files,
-links, hard links to denied files) are left out of the copy.  Drawing is stopped
-after 5 seconds.  When there is no picture, the pane shows what it would
+links, hard links to denied files) are left out of the copy.  Copying is given 20 seconds and drawing 5; both stop when the request is
+abandoned.  The 20 seconds is a cooperative limit: it is checked between reads and
+once more when a read returns, so work that ran out of time fails instead of
+succeeding, but it cannot interrupt a read that the file system is itself holding up.  When there is no picture, the pane shows what it would
 show without one (\rid{PRV-3}, or \emph{Folder} for a package).  Keynote documents
 (\code{.key}) are denied by a core rule (Section~\ref{sec:core}) and are not shown.
 \end{req}
@@ -138,8 +147,9 @@ file is stored only in the cloud.
 Extended attributes are listed with their values.  A value is shown as text if it is
 valid printable UTF-8 and as hexadecimal otherwise (labelled \emph{hex}, the label
 before the digits).  At most 64 attributes are shown, and a value larger than
-4~KB is shown by name and size only.  Attributes are available on macOS and Linux;
-elsewhere none are shown.
+4~KB is shown by name and size only.  An attribute that another program changes
+while it is being read is read again, a few times; one that does not settle is shown
+by name only.  Attributes are available on macOS and Linux; elsewhere none are shown.
 \end{req}
 
 \begin{req}{META-3}

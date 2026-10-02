@@ -58,13 +58,27 @@ firmlink aliases, and resource-fork names such as \code{file/..namedfork/rsrc}.
 
 \begin{req}{RUL-6}
 A file with more than one name (a hard link) is judged by its identity: if any of
-its names is denied, it is refused under every name and is not listed.  The other
-names are found under the roots and under the credential locations of every home
-folder on the machine, using an index built in the background at startup (about 20
-seconds for a home folder of 700{,}000 files).  Until the index is ready, and for a
-file with several names that it has not yet seen, the file is refused rather than
-guessed.  A denied name that lies outside every root and every credential location
-is not detected.
+its names is denied, it is refused under every name and is not listed.  The names
+are found under the roots and under the credential locations of every home folder on
+the machine, using an index built in the background at startup (about 20 seconds for
+a home folder of 700{,}000 files).  A file with several names is served only when
+all of the following hold: the index has found as many distinct names as the file has
+links (names are compared as the file system compares them, \rid{NAM-1}, by folder and
+name, so one name reached two ways counts once); none of them is denied; and, when
+the file is used, each recorded name is still a real path, with no symbolic link
+along it, to this very file.  Otherwise it is refused rather than guessed: while the
+index is not ready, when a name lies outside every location or in a folder that could
+not be read, when the walk stopped at its limits (Section~\ref{sec:limits}), and after
+the names changed (a link added or removed, a file or folder renamed or moved).
+The index is walked again, at most as often as its cooldown allows, and a file
+found short of names is owed one more walk, which is spent only when that walk
+starts; if it still finds fewer names than links, the file stays refused until
+something changes.  A listing or a search reuses one verdict about a file for at most
+one second (so a folder of many names of one file costs one check, not one per
+name); after that the recorded names are checked again.  The interval bounds how
+stale a name or size shown in a response that runs long can be; it does not retract
+entries already sent, and a request to open the file never uses it.  A denied name
+that lies outside every root and every credential location is not detected.
 \end{req}
 
 \begin{req}{RUL-7}

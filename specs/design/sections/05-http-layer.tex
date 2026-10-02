@@ -56,6 +56,17 @@ malformed and not-regular all map to the same 404 with the same body; only \code
 the rule name.  Permission errors on paths that passed every rule map to 403; cloud-only files to
 409; wrong kinds to 415; anything unexpected to 500 with the detail in the log only.
 
+\subsection{Streams end explicitly}
+
+A listing and a search are streamed as newline-delimited JSON, and a response that simply
+stops (a dropped connection, a server error after the header) would otherwise look like a
+folder that was just short.  Both therefore end with a line that says how they ended: a
+listing with \code{\{"done":true\}}, a search with \code{\{"done":true,\ldots\}} carrying
+how many entries were visible, whether a limit stopped it, and whether part of it could
+not be searched (\code{incomplete}); an error mid-stream is a line of its own instead.
+The client requires the done line and treats a stream that ends without one as broken,
+not as complete.
+
 \subsection{Timeouts and shutdown}
 
 The server sets a header-read timeout against slow clients and has no write timeout,

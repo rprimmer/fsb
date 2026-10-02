@@ -23,7 +23,9 @@ loaded from (\code{base}).  The components hold only what needs the DOM.
         directory, so the random prefix (which scopes the cookie) needs no configuration.
   \item[Sorting in the browser.]  The server streams entries in the order the file system
         gave them; the browser sorts, with a comparison that is a total order and does not
-        depend on the input order (a test).  A time that cannot be parsed sorts as the oldest,
+        depend on the input order (a test).  The collator used for names compares digits by
+        value, so \code{file1} and \code{file01} compare equal; the final tiebreak is the
+        raw characters, so they still have a fixed order.  A time that cannot be parsed sorts as the oldest,
         so the order stays total.
   \item[Names are displayed, not trusted.]  Characters that would disguise a name are replaced by
         visible markers for display only.  Names are always inserted as text, never as markup.
@@ -44,6 +46,15 @@ loaded from (\code{base}).  The components hold only what needs the DOM.
         it selects the row instead of following the link's \code{download} attribute;
         modified clicks and the context menu still reach the browser's own download
         (\fq{MOUSE-1}).
+  \item[A search belongs to one run.]  Starting, replacing or clearing a search aborts the old
+        one and clears its timers, and everything the old run still delivers (batched results,
+        its end, its error) is checked against the current run before it touches the page, so a
+        slow old search can never overwrite a new one's results.  The logic is a small module
+        (\code{searchrun}) tested without a browser.  A stream that ends without its done line
+        is an error, and the done line's \code{incomplete} produces a note.
+  \item[A resize handle keeps its keys.]  When a column or the preview pane's edge has the
+        focus, its arrow keys resize it and the global key handler ignores the event, so
+        resizing does not also move the selection or leave the folder.
   \item[No dynamic code.]  There is no use of \code{eval}, of \code{innerHTML}, or of any
         other markup sink except one: the output of the syntax highlighter, which escapes its
         input.

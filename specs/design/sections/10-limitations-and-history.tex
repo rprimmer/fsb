@@ -10,7 +10,8 @@
         weakens them.  Residual: a secret with an unremarkable name outside the core list, the optional
         rules left off, and a user who disables the core rules and ignores the warning.
   \item[R2: files with several names.]  Path rules cannot see a second name for a file.  Covered
-        for denied names under the roots and for the credential locations; see the limits below.
+        for denied names under the roots and for the credential locations, by refusing any file whose
+        names are not all accounted for; see the limits below.
   \item[R3: untrusted content in a page that holds a session.]  Markdown, PDF and archive names are
         rendered or shown; mitigated by the layers of Section~\ref{sec:content}.
   \item[R5: another program reads the user's documents.]  Quick Look draws iWork and Office
@@ -25,7 +26,12 @@
 
 \begin{itemize}
   \item A denied name outside every root and every protected credential location is not found as another
-        name of a file; links created after a size-limited walk are not found.
+        name of a file, so a file with such a name is refused (a pnpm store outside the root, or a
+        clone made with \code{git clone --local}, can make ordinary files unavailable).  A listing or a
+        search may show a name or a size up to one second after the file was renamed onto a denied name;
+        opening the file never does.  Cancellation of copying and listing is cooperative: a read that the
+        file system is itself holding up cannot be interrupted, and keeps a Quick Look slot until it
+        returns.  Search completeness does not include cloud-only folders, which are skipped on purpose.
   \item Response timing is not equalized: a denied path can be answered slightly faster than a missing
         one.  The status and body are identical.
   \item Anything that runs as the user can read the same files.  \texttt{fsb} is not a sandbox against
@@ -45,7 +51,7 @@
 \subsection{History of defects found by the design's own checks}
 
 Stating the laws of the algebraic specification, auditing every comparison of names and paths,
-and using the running application found twenty-one defects, all fixed and each covered by a test where
+and using the running application found thirty-one defects, all fixed and each covered by a test where
 the underlying condition could be reproduced at all (Section~\ref{sec:untested} says where it could not).
 In brief:
 
@@ -115,12 +121,43 @@ In brief:
         standard library has since had security fixes (reported by \code{govulncheck}); the
         developer's machine happened to use a newer release.  The module now names the
         toolchain (Go 1.27.1).  The same run found two tests that assumed macOS.
+  \item Found by an external review (October 2026, eleven findings, all confirmed and fixed;
+        the commits cite them by number).  The ones that mattered most: a file with several names that
+        the index had not seen was \emph{allowed} during the rebuild cooldown (the code returned the
+        wrong flag, and the tests, which set the cooldown to zero, hid it); the index trusted names
+        recorded at the last walk; a zip's entry limit compared a 16-bit count with 200{,}000, so it
+        could never trip, and the standard library built the whole directory first; the index walk and
+        the Quick Look package copy entered cloud-only folders; a symbolic link to \code{/} passed a
+        check that only looked at spellings; an image fetch read its whole body before checking its
+        size; search's work limit ignored entries it excluded; a tar.gz stopped exactly at a member
+        boundary looked complete; an old search's timer overwrote a new search's results; resize-handle
+        keys also moved the selection; and a collator that compares digits by value left
+        \code{file1} and \code{file01} in an order that depended on the input.
+  \item Found by an independent review of those fixes: two more hard-link bypasses and a quadratic
+        cost in the index, and zips written to a pipe were refused.  Fixing them with a change-time test
+        was itself broken by the next review (renaming a folder renames its files without touching
+        them), which led to the policy of Section~\ref{sec:linkindex}: serve a file only when every name
+        is accounted for, now.  A third round refined it (names folded by parent identity; one
+        retry walk).
+  \item Found by a second review of the whole (seven findings, all medium): a hard-link verdict
+        remembered for the length of a listing or search hid a rename that kept the link count; a
+        folder queued for search could be swapped for a symbolic link before it was entered; the
+        one retry walk a short-counted file is owed was spent by a lookup during the cooldown that
+        could not start it; the wrapper that added cancellation hid \code{Seek}, so listing a plain
+        tar read every member's body; a copy that ran out of time while a read was blocked reported
+        success when the read returned end of file; a folder that could not be opened left a search
+        looking complete; and an empty extended attribute that grew between two system calls was
+        sliced out of an empty buffer and panicked.  A third review confirmed each fix and found
+        nothing new.  Two choices came out of it and are stated as limits rather than hidden: the
+        one-second reuse of a verdict, and cooperative (not hard) cancellation.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
 allow checks must decide by identity.  Findings 17, 18, 19 and 20 are a different lesson: an error path that
 no test happened to reach (no fixture had ever contained a real socket, a real cloud-only folder, or a
-selected file whose main preview fails) is still worth trying by hand.  Finding 24 is a third: handing a
+selected file whose main preview fails) is still worth trying by hand.  Findings 29 to 31 are a fourth: a fix can introduce the next defect (a wrapper that hid
+\code{Seek}, a retry spent before it ran, a memo that outlived the facts it summarized), so each
+fix got a test that fails without it, and the reviews were repeated until one found nothing.  Finding 24 is a third: handing a
 path to another program hands over that program's idea of what the path means, which the guard cannot
 check; the safe input is bytes the guard has already read.
 
@@ -135,7 +172,7 @@ Milestone & Scope & Status \\
 M0 Skeleton & Repository, CI, guard, matcher, middleware & Done. \\
 M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file folder measured. Daily use by the author still to confirm. \\
 M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
-Hardening & The audits and defects of the preceding subsection & Done, including a second independent review (October 2026) and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
+Hardening & The audits and defects of the preceding subsection & Done, including three independent reviews in October 2026 (the last found nothing new) and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
 M3 Public release & Public repository, documentation, a source release & Done: version 1.0 (October 2026), source only; no binaries and no Homebrew formula, by decision. \\
 M4 Run & The stage-three requirements of the functional specification & Not planned: the project is finished and provided as-is. \\
 \bottomrule

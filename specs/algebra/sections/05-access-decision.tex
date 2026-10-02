@@ -34,8 +34,11 @@ it contains an entry $e$ of $d$ exactly when $\Visible(d,e)$:
 \end{align*}
 where $\rho_d=\Real(d)$: children are judged by where the directory really is,
 not by the link it was reached through.  $\Search(d,q)$ walks breadth-first from
-$d$, entering only visible unlinked directories, and reports the visible entries
-whose folded name contains $\fold{q}$.
+$d$, entering only visible unlinked directories whose real location is still the
+name they were queued under, and reports the visible entries whose folded name
+contains $\fold{q}$.  It also reports whether it was \emph{complete}: not if a
+folder that was allowed could not be opened or read to the end, or was replaced by a
+link before it was entered; denied, vanished and cloud-only folders do not count.
 \end{definition}
 
 \subsection{Laws}
@@ -63,10 +66,12 @@ inside the root is served.
 \label{law:linked}
 If a regular file has several names and one of them is matched by a deny rule,
 then $\Open$ refuses the file under every name, and no listing shows it.  If the
-names cannot yet be determined, the file is refused.  Identity is the pair
+names cannot be determined, or the index does not account for every one of them
+(as many distinct names as the file has links, each still a real path to it), the
+file is refused.  Identity is the pair
 (device, inode), never a hash of the contents, so an ordinary copy of a secret is
 not treated as the secret and no file is read to decide.
-\Tests{guard/hardlink\_test.go (all four rule kinds, links made after the index was built, links to files outside the roots, refusal while the index builds, bounded walk); e2e ``a hard link to a denied file is refused under any name''}
+\Tests{guard/hardlink\_test.go (all four rule kinds, links made after the index was built, links to files outside the roots, refusal while the index builds, bounded walk, names renamed or moved, names outside every location, the retry walk and cooldown, the one-second verdict reuse in listings and searches); e2e ``a hard link to a denied file is refused under any name''}
 \end{law}
 
 \begin{law}[Indistinguishable from missing]
@@ -148,7 +153,8 @@ $\Canon(\Canon(p))=\Canon(p)$.
 
 \begin{law}[Bounded work]
 \label{law:bounded}
-$\Search$ visits at most $V$ directory entries and reports at most $M$ results,
+$\Search$ examines at most $V$ directory entries (excluded ones included) and
+reports at most $M$ results,
 and reports truncation when a bound stopped it; it never follows symbolic links
 to directories, so it terminates on cyclic links.
 \Tests{guard/search_test.go; e2e (100,000-file directory, optional)}

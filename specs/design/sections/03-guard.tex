@@ -110,13 +110,32 @@ also rules out cycles).  It stops at a result limit or an entry limit and report
 stopped it.  Names are compared after the folding of Section~\ref{sec:fold}, or, for
 \emph{Match case}, after normalization only.
 
+Three details keep the walk honest.  The entry limit counts every entry
+\emph{examined}, including those a rule then rejects, because it bounds work; the
+count reported back is of visible entries only, so it says nothing about how many were
+excluded.  Folders are queued by path, so before one is entered its real location, as
+the guard's own open reports it, is compared with the name it was queued under; if a
+symbolic link has taken its place (or one above it) in the meantime, the children would
+be judged under a name that is not where they are, so it is not entered (a test swaps a
+queued folder for a link after the walk has queued it).  Finally, the search returns a
+summary beside its results: a folder that is there and allowed but could not be opened,
+one that failed partway through being read, and one skipped as just described count as
+not searched, and the done line of the stream carries \code{incomplete} so the
+interface says so.  A folder that is denied or has vanished is not counted: a denied
+folder must look exactly like a missing one, and neither is a loss.  Cloud-only folders
+are skipped by design and do not count either, so completeness means completeness of
+the searchable, allowed content.
+
 \subsection{Cloud-only files}
 
 On macOS a file that exists only in the cloud carries a flag in its file information.
 The guard checks it before any read and reports the file as not downloaded; the head,
 the metadata, the previews and the archive listing all refuse to read it.  Reading such
 a file would make the system download it, which \texttt{fsb} must never do implicitly.
-An explicit download by the user is the one path that reads it.
+An explicit download by the user is the one path that reads it.  The hard-link index walk
+(Section~\ref{sec:linkindex}) and the copy of a package for Quick Look do not enter a
+cloud-only folder either: the walk skips it (its contents are not on this disk, so they
+hold no other name of a file that is), and a package with a cloud-only part is refused.
 
 A \emph{folder} can carry the same flag: the newer File Provider domains (iCloud Drive,
 OneDrive and similar) can make a whole folder a placeholder, not only the files inside
@@ -156,20 +175,60 @@ than one name by its identity: if any of its names is denied, all of them are.
 
 \paragraph{The index.}  Finding the other names of a file means visiting every file
 under the roots, because the operating system offers no way to ask.  A walk therefore
-builds an index from identity to names, containing only regular files with more than one
-name (a few dozen on a typical home folder), and the guard evaluates a file's names
-against the deny rules.  The walk also covers the \emph{protected locations} named by the
-program at startup (the credential folders of every home), so that a link from a served
-folder to a credential file outside the roots is found.
+builds an index from identity (device and inode) to what it saw of the file: its names
+as real paths, the link count it saw, and whether any name is denied.  It contains only
+regular files with more than one name (a few dozen on a typical home folder).  The walk
+also covers the \emph{protected locations} named by the program at startup (the
+credential folders of every home), so that a link from a served folder to a credential
+file outside the roots is found.  A name is identified by the folder holding it (by
+identity) and its last component folded as the file system compares names
+(Section~\ref{sec:fold}); two paths that spell one name (a firmlink, a folder walked
+twice, \code{a.txt} and \code{A.TXT}) therefore count once.  On a case-sensitive volume
+two names that differ only in case also count once, which undercounts and so refuses:
+the safe direction.
 
 \paragraph{The walk is in the background.}  On a home folder of 700{,}000 files it takes
-about 18 seconds, which must not be spent inside a request.  It is started at startup.
-While it has not finished, and for a file with several names that it has not seen (a link
-made since), the file is \emph{refused}: guessing ``allowed'' would defeat the purpose.
-A later walk that began after the file was first noticed and still does not find it
-shows that the walker cannot see it, and the file is then allowed, so that nothing is
-refused forever.  Walks are spaced by at least twice the time the last one took, and
-bounded by an entry count and a time.
+about 18 seconds, which must not be spent inside a request.  It is started at startup,
+and nothing is served as a multi-name file until it has finished.  Walks are spaced by at
+least twice the time the last one took (and never closer than a fixed cooldown), and are
+bounded by an entry count and a time.  A cloud-only folder is not entered.
+
+\paragraph{The policy: verify all the names.}  A file with several names is served only
+when the index accounts for every one of them, now.  The decision
+(\code{judgeLinked}) requires that the walk found as many distinct names as the file has
+links, that none is denied, and that each recorded name is still a real path to this very
+file when it is used: it is looked at again, resolved, and must still reach the same
+identity with no symbolic link along it.  Nothing about the file itself is trusted to
+reveal a change, because renaming or moving a folder renames the files in it without
+touching them (an earlier design that trusted a file whose change time was old enough
+was broken exactly this way by a second review, and was replaced).  Anything else is
+refused, never guessed: the index is not ready, a name lies where the walk does not look
+(a pnpm store outside the roots) or in a folder it could not read, the walk stopped at its
+limits, or the names changed.  This was once the other way round for a file the walk
+could not see (it was allowed after a second walk failed to find it); a review showed
+that fail-open policy let a hard link to a denied file through, and the decision is now
+fail closed throughout.
+
+\paragraph{Retry.}  A pair made while a walk runs can be recorded with one name, and one
+more walk settles it.  That walk is owed once per file and link count, and is spent only
+when it really starts: a first look during the cooldown, or while another walk is
+running, refuses the file without using it up (an earlier version marked it spent
+before checking, so the file stayed refused after the cooldown).  If the extra walk still
+finds fewer names than links, the file is refused without walking again until something
+changes.
+
+\paragraph{Listings and searches reuse a verdict for one second.}  A folder holding many
+names of one file would cost one check per name, each a look at every recorded name, so a
+listing or a search remembers the verdict for a file (keyed by identity and link count,
+so a name added meanwhile is noticed) --- but only for a short, stated time.  After one
+second (\code{linkMemoTTL}) the names are checked again, because a rename that leaves the
+count unchanged, one of two names moved onto a denied name, would otherwise stay
+invisible for as long as a slow consumer or a long search ran.  This is a memo reuse
+interval, not a guarantee that every row on the screen reflects the file system
+now: entries already sent are not retracted, and the check made when a file is
+\emph{opened} never uses the memo.  The remaining staleness affects a name or a size
+shown, not access to contents.
 
 \paragraph{What is not covered.}  A denied name that lies outside every root and every
-protected location, and links made after a walk was stopped by its limit, are not found.
+protected location is not found; the file is then refused while the file has links the
+walk cannot account for, rather than served.

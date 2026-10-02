@@ -33,7 +33,10 @@ Only the methods \code{GET} and \code{HEAD} are answered; anything else gets sta
 it serves.  The only files it writes are its own, in \code{\~{}/.config/fsb/}: the
 rule files of \code{--init} (\rid{CLI-7}), which never overwrites one, the remembered
 port (\rid{CFG-5}), and the process-number and log files of a background instance
-(\rid{CFG-6}).
+(\rid{CFG-6}).  Before writing one of them \texttt{fsb} checks that it is an
+ordinary file with a single name that belongs to the user, and opens it without
+blocking and without emptying it first, so that a link, a pipe or another user's file
+placed there cannot make \texttt{fsb} overwrite something else.
 \end{req}
 
 \subsection{Credential}
@@ -110,7 +113,9 @@ the user's own file: it is given a private copy of a document that every other
 endpoint would serve, which \texttt{fsb} read after the same checks, as a single
 argument and never through a shell.  The copy carries no extended attributes or
 resource fork.  It is stopped after 5 seconds, at most two run at once, and one
-whose request is abandoned is stopped.
+whose request is abandoned is stopped.  Copying the document for it is limited to
+20 seconds, cooperatively (\rid{PRV-12}), and also stops when the request is
+abandoned.
 \end{req}
 
 \begin{req}{SEC-13}
@@ -121,6 +126,9 @@ a cloud-only placeholder in its own right, not only the files inside it); each r
 ``not downloaded'' (status 409) instead of reading it.  The one exception is an explicit
 download by the user of a cloud-only file (\rid{API-4}), which is the user's request for
 it; there is no equivalent for a folder, since fsb never downloads or extracts one.
+The same holds for the hard-link index walk (\rid{RUL-6}) and the copy of a package
+made for Quick Look (\rid{PRV-12}): neither enters a cloud-only folder, and a package
+with a cloud-only part is refused.
 \end{req}
 
 \begin{req}{SEC-14}

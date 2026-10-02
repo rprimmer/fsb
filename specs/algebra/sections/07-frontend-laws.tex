@@ -10,7 +10,9 @@ Let $\Cmp_{k,a,g}$ be the row comparison for sort key $k\in\{\text{name, size,
 time, kind}\}$, direction $a$, and grouping flag $g$ (``Folders first'').  A
 folder has no size and sorts as smaller than any file; a modification time that
 cannot be read sorts as the oldest; ties fall back to the name, then to the
-exact name.
+exact name, then to the raw characters (a collator that compares digits by value
+calls \code{file1} and \code{file01} equal, and the order must not depend on the
+input).
 
 \begin{law}[Total preorder]
 \label{law:total}

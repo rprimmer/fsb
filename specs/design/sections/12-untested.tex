@@ -73,6 +73,22 @@ document; they are gathered here so a reader does not have to hunt for them.
         cannot read the system clipboard back in every environment (logged as
         \emph{``clipboard contents not read back with this driver''}), so the copy
         action is exercised but the copied text is not always verified.
+  \item \textbf{A read blocked in the file system} (\fq{PRV-12}, \fq{PRV-9}).
+        Cancellation is cooperative (Section~\ref{sec:quicklook}).  The tests use a
+        reader that blocks on command, which shows that expired work fails and that
+        nothing is abandoned; an actual stalled network volume was not tried, and a read
+        it holds up cannot be interrupted by design.
+  \item \textbf{Whether the zip reader accepts every archive the standard library does}
+        (\fq{PRV-9}).  The fuzz test compares the two where both accept an archive, and
+        a corpus of archives written by other tools is checked by name; but an
+        implementation that rejected too many valid archives could still pass the fuzz
+        test, so acceptance of the full supported set is not proved.
+  \item \textbf{The one-second hard-link verdict} (\fq{RUL-6}).  Tested at its boundary
+        with a short interval and a sleep; the production interval was exercised by an
+        independent review, not by a test in this repository.
+  \item \textbf{Search completeness and cloud-only folders} (\fq{SRC-6}).  A cloud-only
+        folder is skipped without marking the result incomplete, by choice, and no real
+        placeholder was searched (see the cloud-only item above).
 \end{itemize}
 
 \subsection{Process and infrastructure}
@@ -88,7 +104,7 @@ document; they are gathered here so a reader does not have to hunt for them.
         headless CI runner cannot drive Safari.  The Safari suite has been run only on
         this machine, by hand, each time a feature changed.
   \item \textbf{No independent review has been performed by anyone other than the
-        author and an assistant.}  The two ``independent reviews'' recorded in
+        author and an assistant.}  The ``independent reviews'' recorded in
         Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant
         with access to the source but none to the author's reasoning, not by a third
         party, and not by a professional security firm.  No penetration test by an

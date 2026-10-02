@@ -57,7 +57,16 @@ outside the roots.  Quick Look is therefore never given the user's file.
         not a regular file is left out of the copy, as a listing leaves it out, so the
         answer does not reveal it (the same review found that refusing the whole package
         did); a cloud-only part refuses the package.
-  \item \textbf{Bounds.}  A copy is limited to 256~MB and 5{,}000 entries.  Copying and
+  \item \textbf{Bounds.}  A copy is limited to 256~MB and 5{,}000 entries, and to 20
+        seconds, and it stops when the browser abandons the request.  The time limit is
+        \emph{cooperative}: the reader checks the request's context before each read and
+        again when a read returns (so a copy that ran out of time while a read was blocked
+        fails rather than reporting success when that read reports the end of the file), but
+        it cannot interrupt a read the file system is itself holding up, such as a stalled
+        network volume.  The slot is held until that read returns.  Enforcing a hard limit
+        would need the copy to run somewhere it could be abandoned and cleaned up, which this
+        version does not do; abandoning the work in the background while releasing the slot
+        was rejected, because the work would still be running.  Copying and
         drawing share two slots.  \code{qlmanage} never finishes on a document it cannot
         draw, so it runs under a 5-second deadline and is killed when the browser abandons
         the request.  Exactly one PNG under 20~MB must come out, or there is no picture.
@@ -76,16 +85,25 @@ The format is decided from bytes: the zip signature, the \code{ustar} marker at 
 tar, or a gzip stream that contains a tar.  The limits of \fq{LIM-1} bound a hostile file:
 
 \begin{itemize}
-  \item A zip's directory is held in memory by the standard library, so the guard first reads
-        the end-of-central-directory record and refuses a zip that claims more entries than it
-        will index (and, when the count is stored elsewhere in a very large zip, refuses by
-        size).
-  \item A tar is streamed, stopping at an entry limit; a gzip-compressed tar is read through a
-        reader capped at a number of decompressed bytes, so a bomb costs a bounded amount of
-        time and memory, and the listing says it was cut short.
-  \item Member names are untrusted: control characters and invalid UTF-8 are replaced, and the
-        interface additionally replaces bidirectional characters, and names are only ever
-        displayed, never used as paths.
+  \item A zip's directory is read by the guard itself, record by record, rather than by the
+        standard library, which would build the whole directory in memory before any limit
+        could count it.  Reading stops at 200{,}000 entries or 64~MiB of directory and the
+        listing says so; a directory whose own count disagrees with what it holds is refused.
+        A zip64 end-of-directory locator is honored whenever it is present (a first version
+        compared a 16-bit count with 200{,}000, a test that could never be true).  A fuzz
+        test compares this reader with the standard library's wherever both accept an
+        archive; it does not require that every archive the standard library accepts is
+        accepted here, which is listed among the gaps in Section~\ref{sec:untested}.
+  \item A plain tar is read through a wrapper that checks the request's context but keeps
+        the file's \code{Seek}, so that the tar reader skips a member's body instead of
+        reading it (a first wrapper exposed only \code{Read}, and listing an 8~MiB member
+        read all 8~MiB).  A gzip-compressed tar is streamed through a reader capped at a
+        number of decompressed bytes, so a bomb costs a bounded amount of time and memory; a
+        listing that ends because the budget was spent exactly at a member boundary says it
+        was cut short.  All archive listing stops when the request is abandoned.
+  \item Member names are untrusted: control characters, Unicode formatting characters (such as
+        bidirectional overrides) and invalid UTF-8 are replaced, a name is cut at 4{,}096 bytes
+        after that, and names are only ever displayed, never used as paths.
 \end{itemize}
 
 \subsection{Rendered Markdown}
@@ -115,4 +133,8 @@ validates it and either changes the location to the target file's folder with th
 or opens a web address in a new tab without a referrer.  Images inside the roots are fetched by
 the interface, through the guarded image endpoint, and passed in as \code{data:} URLs, because the
 cookie's scope and \code{SameSite} would otherwise stop the opaque-origin frame from fetching them.
-Opening a Markdown file therefore makes no request to anything outside the machine.
+Opening a Markdown file therefore makes no request to anything outside the machine.  The
+interface fetches at most four images at a time, refuses one whose declared length is over
+5~MB before reading it, and otherwise counts the bytes as they arrive and cancels the
+request the moment they pass 5~MB, because a declared length is not trusted
+(\code{fetchcap}).

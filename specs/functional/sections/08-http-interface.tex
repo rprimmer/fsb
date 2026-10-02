@@ -43,8 +43,9 @@ Endpoint & Parameters & Answer \\
 \begin{req}{API-2}
 \code{api/list} answers with newline-delimited JSON: a line \code{\{"path":P\}}, then
 lines \code{\{"entries":[\ldots]\}} in the order the file system gave them (the client
-sorts), then, only if the listing broke after it had started,
-\code{\{"error":"listing interrupted"\}}.  An entry has \code{name}, \code{isDir},
+sorts), then \code{\{"done":true\}}, or, if the listing broke after it had started,
+\code{\{"error":"listing interrupted"\}} instead.  A client treats a stream that ends
+with neither as broken, never as a complete listing.  An entry has \code{name}, \code{isDir},
 \code{size}, \code{modTime} and \code{mode}, and, when true, \code{isSymlink} and
 \code{broken}.  A denied, hidden or unreachable entry is not present.  A path that is
 not a folder, is denied, or does not exist is answered 404.
@@ -54,8 +55,11 @@ not a folder, is denied, or does not exist is answered 404.
 \code{api/search} answers with newline-delimited JSON: a line
 \code{\{"path":P,"query":Q\}}, then lines \code{\{"matches":[\ldots]\}} as results are
 found (each with \code{path}, \code{rel}, \code{name}, \code{isDir}, \code{size} and
-\code{modTime}), then \code{\{"done":true,"visited":N,"truncated":B\}}, or
-\code{\{"error":"search interrupted"\}}.  \code{case=1} makes matching case-sensitive.
+\code{modTime}), then \code{\{"done":true,"visited":N,"truncated":B,"incomplete":B\}}, or
+\code{\{"error":"search interrupted"\}} instead.  \code{incomplete} is true when part
+of what the search was allowed to look at could not be searched (\rid{SRC-6}); the
+interface then says so.  A client treats a stream that ends with neither line as
+broken.  \code{case=1} makes matching case-sensitive.
 The limits are those of \rid{SRC-2}.  An empty query finds nothing.
 \end{req}
 
