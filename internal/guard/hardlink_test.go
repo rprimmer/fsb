@@ -709,3 +709,42 @@ func TestASearchNoticesARenameIntoADeniedNameBetweenResults(t *testing.T) {
 		t.Errorf("found %v: the second name was reported after the first became a denied name", found)
 	}
 }
+
+// The one extra walk a short-counted file is owed must not be spent by a lookup
+// that could not start it. A pair made during the first walk is recorded with
+// one name; asking during the rebuild cooldown refuses it (correctly) without a
+// walk, and asking again once the cooldown has passed must still get its walk.
+func TestARetryRefusedByTheCooldownIsStillOwedAfterIt(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = time.Hour, true
+	root := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(root, "m", "t1"), "trigger")
+	link(t, filepath.Join(root, "m", "t1"), filepath.Join(root, "m", "t2"))
+	write(t, filepath.Join(root, "z", "a"), "ordinary")
+	if err := os.MkdirAll(filepath.Join(root, "l"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	made := false
+	fx.g.linkVisitHook = func(p string) {
+		if !made && filepath.Base(p) == "t1" {
+			made = true
+			link(t, filepath.Join(root, "z", "a"), filepath.Join(root, "l", "c")) // "l" was walked before "m"
+		}
+	}
+	fx.g.StartLinkIndex()
+	fx.g.linkVisitHook = nil
+	walks := 0
+	fx.g.linkWalkHook = func() { walks++ }
+	if openOK(fx.g, filepath.Join(root, "z", "a")) {
+		t.Fatal("served although one of its names was not accounted for")
+	}
+	if walks != 0 {
+		t.Fatalf("%d walks during the cooldown", walks)
+	}
+	fx.g.links.mu.Lock()
+	fx.g.links.lastStart = time.Time{} // the cooldown is over
+	fx.g.links.mu.Unlock()
+	if !openOK(fx.g, filepath.Join(root, "z", "a")) {
+		t.Error("an ordinary pair stayed refused after the cooldown: its one retry was spent while it could not run")
+	}
+}

@@ -169,24 +169,22 @@ func (g *Guard) judgeLinked(id fileID, nlink uint64) bool {
 		if known && uint64(len(e.names)) == nlink && namesStillName(id, e.names) {
 			return e.denied
 		}
+		// A file the walk saw with as many links as now but did not find all
+		// the names of (a name outside every location, a pnpm store say, in a
+		// folder it could not read, or made while the walk ran) is owed one
+		// more walk, which settles the last case. After that, walking again
+		// would find the same, so it is refused without one. The retry is spent
+		// only when a walk really starts for it, not when the cooldown or a
+		// walk already running prevents that.
+		owed := false
 		if known && e.nlink == nlink && uint64(len(e.names)) < nlink {
-			// The walk saw it with as many links as now but did not find them
-			// all: a name outside every location (a pnpm store, say), in a
-			// folder it could not read, or made while it ran. One more walk
-			// settles the last case; after that, walking again would find the
-			// same, so refuse without starting one.
 			idx.mu.Lock()
-			again := idx.retried[id] == nlink
-			if !again {
-				if idx.retried == nil {
-					idx.retried = map[fileID]uint64{}
-				}
-				idx.retried[id] = nlink
-			}
+			spent := idx.retried[id] == nlink
 			idx.mu.Unlock()
-			if again {
+			if spent {
 				return true
 			}
+			owed = true
 		}
 		// Not accounted for: refuse, unless a walk may run now (with linkSync,
 		// tests, it completes here and the file is judged again). Walks are
@@ -194,8 +192,12 @@ func (g *Guard) judgeLinked(id fileID, nlink uint64) bool {
 		// cannot keep the machine busy walking.
 		idx.mu.Lock()
 		canWalk := !walked && time.Since(idx.lastStart) >= max(g.linkRebuildMin, 2*idx.lastTook)
-		if canWalk {
-			g.startWalkLocked()
+		started := canWalk && g.startWalkLocked()
+		if started && owed {
+			if idx.retried == nil {
+				idx.retried = map[fileID]uint64{}
+			}
+			idx.retried[id] = nlink
 		}
 		idx.mu.Unlock()
 		if !canWalk {
@@ -247,12 +249,13 @@ func (g *Guard) anyDenied(names []string) bool {
 	return false
 }
 
-// startWalkLocked starts a walk unless one is running. Caller holds the lock.
-// With linkSync (tests) it runs to completion before returning.
-func (g *Guard) startWalkLocked() {
+// startWalkLocked starts a walk unless one is running, and reports whether it
+// did. Caller holds the lock. With linkSync (tests) it runs to completion
+// before returning.
+func (g *Guard) startWalkLocked() bool {
 	idx := &g.links
 	if idx.building {
-		return
+		return false
 	}
 	idx.building = true
 	idx.lastStart = time.Now()
@@ -268,7 +271,7 @@ func (g *Guard) startWalkLocked() {
 	locations := append(append([]string(nil), g.roots...), g.protect...)
 	if g.linkSync {
 		finish(g.walkLinks(locations))
-		return
+		return true
 	}
 	go func() {
 		byID := g.walkLinks(locations)
@@ -276,6 +279,7 @@ func (g *Guard) startWalkLocked() {
 		finish(byID)
 		idx.mu.Unlock()
 	}()
+	return true
 }
 
 // walkLinks visits every file under the roots and protected locations and
