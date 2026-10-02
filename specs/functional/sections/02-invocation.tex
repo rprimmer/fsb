@@ -17,7 +17,9 @@ in a root are resolved, so a root is always a real location.
 \begin{req}{CLI-3}
 \code{--root PATH}, which may be repeated, adds further roots (for example
 \code{/Volumes/Data}).  All roots are equal: each is listed as a place the user can
-switch to when there are several.
+switch to when there are several.  A folder given more than once, under any
+spelling (a trailing slash, a symbolic link, \code{--root \~{}} when the home folder
+is already the default root), is served once.
 \end{req}
 
 \begin{req}{CLI-4}
@@ -45,8 +47,9 @@ other flag or setting reveals which rule matched.
 \code{--init} writes the default rule files (Section~\ref{sec:config}) and exits.  It
 creates the folder \code{\~{}/.config/fsb} with mode \code{0700} if needed, creates each
 file with mode \code{0600}, and \emph{never overwrites} a file that exists: it reports
-that the file was left unchanged.  It is the only operation in which \texttt{fsb}
-creates a file.
+that the file was left unchanged.  The rule files are the only files \texttt{fsb}
+creates that the user is meant to edit; its other files are listed in \rid{CFG-5}
+and \rid{CFG-6}.
 \end{req}
 
 \begin{req}{CLI-8}
@@ -58,8 +61,12 @@ unknown flag prints the error and the usage text and exits with status 1.
 
 \begin{req}{CLI-9}
 On success \texttt{fsb} prints, on standard output, one line naming the roots it
-serves and the loopback address and port, then one line giving the launch URL.  The
-port is chosen by the operating system at each start and is never configurable.
+serves and the loopback address and port, one line giving the launch URL, and one
+line saying how it is stopped (Control-C, or \code{--background}; under
+\code{--background} the line instead names its process and \code{fsb --stop}).
+The port is the one remembered from the last successful start (\rid{CFG-5}), or one
+chosen by the operating system when nothing is remembered; \code{--port}
+(\rid{CLI-15}) overrides it for one run.
 \end{req}
 
 \begin{req}{CLI-10}
@@ -77,14 +84,17 @@ therefore browsable.
 \subsection{Running and stopping}
 
 \begin{req}{CLI-12}
-\texttt{fsb} runs in the foreground until it receives \code{SIGINT} (Control-C) or
-\code{SIGTERM}.  It then stops accepting requests, allows requests in progress up to
+\texttt{fsb} runs in the foreground (or, with \code{--background}, detached:
+\rid{CLI-17}) until it receives \code{SIGINT} (Control-C) or \code{SIGTERM}
+(as \code{fsb --stop} sends: \rid{CLI-18}).  It then stops accepting requests, allows requests in progress up to
 three seconds to finish, and exits with status 0.
 \end{req}
 
 \begin{req}{CLI-13}
-The exit status is 0 after \code{--help}, \code{--init} and a normal shutdown, and 1
-after any error.  An error is reported on standard error as one line beginning
+The exit status is 0 after \code{--help}, \code{--init}, \code{--show-deny},
+\code{--show-ignore}, \code{--status} (whether or not \texttt{fsb} is running), a
+successful \code{--background} start or \code{--stop}, and a normal shutdown, and 1
+after any error, including \code{--stop} when no \texttt{fsb} is running.  An error is reported on standard error as one line beginning
 \code{fsb:}, and no server is started.
 \end{req}
 
@@ -92,6 +102,56 @@ after any error.  An error is reported on standard error as one line beginning
 \texttt{fsb} refuses to start, with a message that names the file and the line, if
 the deny file or the ignore file cannot be parsed
 (Section~\ref{sec:rulefiles}).  It never starts with weaker rules than the user wrote.
+\end{req}
+
+\begin{req}{CLI-15}
+\code{--port N} uses exactly port \code{N} on \code{127.0.0.1} for this run
+(\code{0} lets the operating system choose).  A value outside 0--65535 is refused
+before anything starts.  The port given is not remembered (\rid{CFG-5}), so a one-off
+choice never replaces the usual port.
+\end{req}
+
+\begin{req}{CLI-16}
+\code{--show-deny} and \code{--show-ignore} print the deny or ignore rules that
+would be in effect, one per line, and exit without serving.  A first comment line
+names their source: the rule file, or the built-in rules when there is no file.  For
+deny rules a last comment line names any core rule the file leaves out
+(\rid{CLI-11}).  Given together, both lists are printed, deny first.  A rule file
+that cannot be parsed is an error, as in \rid{CLI-14}.
+\end{req}
+
+\begin{req}{CLI-17}
+\code{--background} starts \texttt{fsb} detached from the terminal (in a new
+session, so closing the terminal or pressing Control-C there does not stop it),
+prints the startup output of \rid{CLI-9}, and returns to the shell once it is
+serving.  If startup fails, the error is reported as in \rid{CLI-13} and nothing is
+left running.  If an \texttt{fsb} is already running (as found by \rid{CLI-18}), the
+start is refused with a message naming it.  Output after startup (such as
+\code{--debug} logging) goes to the log file of \rid{CFG-6}.
+\end{req}
+
+\begin{req}{CLI-18}
+\code{--stop} stops the running \texttt{fsb}: the one started with
+\code{--background} (from its process-number file, \rid{CFG-6}), or else an
+\texttt{fsb} started any other way that is listening on the port remembered in
+\rid{CFG-5}.  It sends \code{SIGTERM}, waits up to five seconds for the process to
+exit, and reports it.  A process-number file naming a process that has gone, or that
+is not \texttt{fsb}, is ignored; only a process that is \texttt{fsb} is ever
+signaled.
+\end{req}
+
+\begin{req}{CLI-19}
+\code{--status} reports whether an \texttt{fsb} is running (found as in
+\rid{CLI-18}) and, if so, whether in the background or the foreground, its address,
+process number, start time and terminal; then exits.
+\end{req}
+
+\begin{req}{CLI-20}
+If the remembered port (\rid{CFG-5}) is held by another program, \texttt{fsb} does
+not start and does not silently choose a different port.  The message names the
+port and, when it can be found, the program holding it with its process number,
+start time and terminal; if that program is another \texttt{fsb}, it suggests
+\code{fsb --stop}.  Otherwise it suggests \code{--port}.
 \end{req}
 
 \subsection{Environment}
@@ -128,5 +188,22 @@ reported as in \rid{CLI-11} and \rid{RUL-14}.
 \begin{req}{CFG-4}
 User preferences (which columns are shown, the width of the preview pane, and the
 like) are not configuration files: they are kept in the browser
-(Section~\ref{sec:prefs}) and never on disk.
+(Section~\ref{sec:prefs}) and never on disk.  Browsers keep them per address,
+including the port, which is why the port itself is remembered (\rid{CFG-5}).
+\end{req}
+
+\begin{req}{CFG-5}
+\code{\~{}/.config/fsb/lastport} holds the port of the last successful start that
+did not use \code{--port}.  It is written after such a start (best effort: a failure
+to write it never stops \texttt{fsb}) and read at the next start.  A missing or
+malformed file means that nothing is remembered and never stops \texttt{fsb}, unlike
+a malformed rule file.
+\end{req}
+
+\begin{req}{CFG-6}
+While an \texttt{fsb} started with \code{--background} runs,
+\code{\~{}/.config/fsb/pid} holds its process number; it is removed when that
+\texttt{fsb} stops.  \code{\~{}/.config/fsb/background.log} receives its output
+after startup and is replaced at each \code{--background} start.  Both are created
+with mode \code{0600}.
 \end{req}

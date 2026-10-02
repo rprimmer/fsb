@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -226,7 +227,13 @@ func TestDifferentialEverySpellingOfAnOrdinaryFileIsServed(t *testing.T) {
 	}
 	r := rand.New(rand.NewSource(11))
 	paths := spellings(t, r, real, target, 300, map[string]string{"/private/var": "/var"})
-	if len(paths) < 50 {
+	// macOS file systems ignore case and normalization, so many spellings reach
+	// the file; a case-sensitive one (Linux) admits only a few.
+	min := 50
+	if runtime.GOOS != "darwin" {
+		min = 2
+	}
+	if len(paths) < min {
 		t.Fatalf("only %d spellings", len(paths))
 	}
 	refused := 0

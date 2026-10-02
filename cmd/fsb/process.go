@@ -52,7 +52,7 @@ func lookupProcess(pid int) (process, bool) {
 		return process{}, false
 	}
 	p := process{pid: pid, tty: f[0], started: strings.Join(f[1:6], " "), name: filepath.Base(strings.Join(f[6:], " "))}
-	if p.tty == "??" || p.tty == "-" {
+	if p.tty == "??" || p.tty == "?" || p.tty == "-" { // no terminal (macOS, Linux)
 		p.tty = ""
 	}
 	return p, true

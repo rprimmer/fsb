@@ -5,8 +5,10 @@
 \begin{req}{KEY-1}
 The interface can be operated entirely from the keyboard.  Navigation keys (arrows,
 Home, End, Page Up, Page Down, Space) are matched by the physical key, so they work
-whatever modifier is held; letters and punctuation are matched by the character they
-produce, so the shortcuts follow the user's keyboard layout.  No shortcut acts while
+whatever modifier is held; so are the Alt shortcuts below, because macOS changes the
+character that Option and a letter produce (Option+C types ``\copyright'').  Other
+letters and punctuation are matched by the character they produce, so they follow the
+user's keyboard layout.  No shortcut acts while
 the user is typing in a text box, except Escape, which leaves it.
 \end{req}
 
@@ -19,18 +21,37 @@ The following keys are defined.
 Key & Action \\
 \midrule
 \code{Up}, \code{Down}, \code{PgUp}, \code{PgDn}, \code{Home}, \code{End} & Move the selection \\
-\code{Enter} or \code{Right} & Open the selected folder (a search result opens in its folder) \\
+\code{Enter} or \code{Right} & Open the selected folder, selecting its first entry (a search result opens in its folder, with it selected) \\
 \code{Left} or \code{Backspace} & Up one folder, reselecting the one just left \\
 \code{Space} & Show or hide the preview pane \\
 \code{/} & Filter this folder \\
-\code{s} & Search subfolders by name (Enter runs, Escape clears) \\
-\code{g} & Go to a path \\
-\code{c} & Copy the selected path (or the folder's) \\
+A letter or digit & Jump to the next entry whose name starts with what has been typed (\rid{KEY-3}) \\
+\code{Alt+S} & Search subfolders by name (Enter runs, Escape clears) \\
+\code{Alt+G} & Go to a path \\
+\code{Alt+C} & Copy the selected path (or the folder's) \\
 \code{Escape} & Clear the search, close a menu, leave a text box \\
 \code{Alt+Left}, \code{Alt+Right} on a column header & Reorder the column \\
 \bottomrule
 \end{tabular}
 \end{center}
+\end{req}
+
+\begin{req}{KEY-3}
+Type-ahead: typing a letter or digit selects the next entry, after the current one
+and wrapping around, whose name starts with it, compared as the filter compares names
+(\rid{LST-8}).  Letters typed within 800~ms of each other extend the prefix; repeating
+the same letter cycles through the entries that start with it.  No plain letter is
+reserved for a shortcut, so every name can be reached this way.
+\end{req}
+
+\subsection{Mouse}
+
+\begin{req}{MOUSE-1}
+A plain left click on a row selects it, exactly as moving to it with the keyboard
+would; a click on a folder also opens it.  A plain click on a file never downloads it.
+A modified click (with Command, Control, Shift or Alt) or the browser's context menu on
+a file name still offers the browser's own download, which is the explicit way to
+download (\rid{API-4}).
 \end{req}
 
 \subsection{Preferences}

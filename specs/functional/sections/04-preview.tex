@@ -6,8 +6,10 @@
 \begin{req}{PRV-1}
 Selecting an entry shows a preview of it in a pane beside the list, together with
 its details (\rid{META-1}) and extended attributes (\rid{META-2}).  The pane is shown
-or hidden with the option \emph{Preview pane} or the Space key, and its width, between
-240 and 900 pixels, is changed by dragging its left edge or from the keyboard.  It
+or hidden with the option \emph{Preview pane} or the Space key, and its width, at
+least 240 pixels and at most the window's width less 320 pixels kept for the list, is
+changed by dragging its left edge or from the keyboard.  The pane grows when the window
+does, and shrinks if the window narrows below what it needs.  It
 starts open only on a window wide enough to hold it beside the list.
 \end{req}
 
@@ -15,7 +17,9 @@ starts open only on a window wide enough to hold it beside the list.
 Which preview is shown is decided from the \emph{contents} of the file, never from its
 name alone.  The name is only a hint about which check to try first: a file named
 \code{.png} that is not an image is shown as ordinary text or as a binary file, and a
-file with another name whose bytes are a PDF is a PDF.
+file with another name whose bytes are a PDF is a PDF.  The one exception is the
+Quick Look picture (\rid{PRV-12}), which is chosen by name because macOS draws it
+and decides itself what the document is.
 \end{req}
 
 \begin{req}{PRV-3}
@@ -61,7 +65,10 @@ most 20 images of at most 5~MB each are loaded for one file.
 \begin{req}{PRV-8}
 A file that begins with \code{\%PDF-} is shown in the browser's built-in PDF viewer.
 A file named \code{.pdf} that does not begin so is shown as ordinary text or as a
-binary file.
+binary file.  If the viewer takes the keyboard focus on its own (as Chrome's does, for
+the password field of an encrypted PDF), the focus returns to the list, so the arrow
+keys keep moving through the folder; the user can still click or tab into the viewer
+to use it.
 \end{req}
 
 \begin{req}{PRV-9}
@@ -81,6 +88,20 @@ and reads nothing (\rid{SEC-13}).
 
 \begin{req}{PRV-11}
 A symbolic link is previewed as what it points to, and the pane names the target.
+\end{req}
+
+\begin{req}{PRV-12}
+A Numbers, Pages, Word, Excel or PowerPoint document (\code{.numbers},
+\code{.pages}, \code{.docx}, \code{.doc}, \code{.xlsx}, \code{.xls},
+\code{.pptx}, \code{.ppt}), whether a single file or a package folder, is shown as
+the picture of its first page that macOS Quick Look draws, as Finder shows it, with
+a note saying so.  It is subject to every rule of an ordinary preview, and also:
+a cloud-only document, or a package with any part that is cloud-only, a symbolic
+link, denied, or a hard link to a denied file, is not handed to Quick Look; and the
+picture is discarded if the document changed while it was being drawn.  Drawing is
+stopped after 5 seconds.  When there is no picture, the pane shows what it would
+show without one (\rid{PRV-3}, or \emph{Folder} for a package).  Keynote documents
+(\code{.key}) are denied by a core rule (Section~\ref{sec:core}) and are not shown.
 \end{req}
 
 \subsection{Hover peek}

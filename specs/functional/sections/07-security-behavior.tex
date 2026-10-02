@@ -30,8 +30,10 @@ permitted.
 \begin{req}{SEC-4}
 Only the methods \code{GET} and \code{HEAD} are answered; anything else gets status
 405.  \texttt{fsb} never modifies, creates, renames, moves or deletes anything that
-it serves.  The only file it ever creates is by \code{--init} (\rid{CLI-7}), which
-writes new rule files, and never overwrites.
+it serves.  The only files it writes are its own, in \code{\~{}/.config/fsb/}: the
+rule files of \code{--init} (\rid{CLI-7}), which never overwrites one, the remembered
+port (\rid{CFG-5}), and the process-number and log files of a background instance
+(\rid{CFG-6}).
 \end{req}
 
 \subsection{Credential}
@@ -88,7 +90,9 @@ renders it.
 Inline responses other than the interface itself are limited to: raster images
 whose type is confirmed by their bytes (PNG, JPEG, GIF, WebP), which are sent with a
 policy that sandboxes them and allows nothing else; PDF documents whose bytes begin
-with \code{\%PDF-}, which may be framed only by the interface's own pages; and the
+with \code{\%PDF-}, which may be framed only by the interface's own pages; PNG
+pictures that macOS Quick Look draws of iWork and Office documents (\rid{PRV-12}),
+sent like the raster images; and the
 fixed page that renders Markdown, which runs in a sandboxed frame that has no
 access to the session or the interface, may run only its own fixed script, and may
 load nothing but images given to it as data.  File names are never trusted.
@@ -97,6 +101,15 @@ load nothing but images given to it as data.  File names are never trusted.
 \begin{req}{SEC-12}
 \texttt{fsb} makes no outbound network connection, sends no telemetry, and does not
 update itself.  Previewing a file never loads anything remote (\rid{PRV-7}).
+\end{req}
+
+\begin{req}{SEC-15}
+\texttt{fsb} runs no other program on the user's files except Apple's
+\code{qlmanage}, to draw a Quick Look picture (\rid{PRV-12}).  It is given only a
+document that every other endpoint would serve, after the same checks, as a single
+argument and never through a shell; a cloud-only document, or a package with a
+cloud-only, linked or denied part, is never given to it.  It is stopped after 5
+seconds, at most two run at once, and one whose request is abandoned is stopped.
 \end{req}
 
 \begin{req}{SEC-13}

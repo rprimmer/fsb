@@ -480,7 +480,8 @@ export function defineSuite({ label, launch }) {
       await waitFor(mdInfo, { message: 'the rendered view again' });
     });
 
-    test('shows the Quick Look picture of an Office document, sandboxed like an image', async () => {
+    test('shows the Quick Look picture of an Office document, sandboxed like an image', async (t) => {
+      if (process.platform !== 'darwin') return t.skip('Quick Look is macOS only');
       await open(`${fx.home}/office`);
       // letter.docx is already selected: opening a folder selects its first entry.
       if (!(await previewOpen())) await d.key(' ');

@@ -38,7 +38,7 @@ volume, a root named \code{Public} does not admit a different folder named
 
 \begin{req}{ROOT-2}
 When there is more than one root, the interface offers a way to switch between
-them.  The box \emph{Go to path} (key \code{g}) accepts an absolute path, or one
+them.  The box \emph{Go to path} (\code{Alt+G}) accepts an absolute path, or one
 beginning \code{\~{}/}, and resolves \code{.}, \code{..}, doubled and trailing
 slashes.  A path outside the roots produces a message that says the folder is not
 served and lists the roots.  \code{\~{}name} (another user's home) is refused.
@@ -101,7 +101,7 @@ finds (\rid{SRC-3}).
 
 \begin{req}{LST-9}
 The interface shows the current path as breadcrumbs, each a link to that folder,
-and a button that copies the path (also key \code{c}, which copies the selected
+and a button that copies the path (also \code{Alt+C}, which copies the selected
 entry's path, or the folder's when nothing is selected).
 \end{req}
 
@@ -136,7 +136,7 @@ that does not say why (\rid{SEC-13}).
 \subsection{Search}
 
 \begin{req}{SRC-1}
-The box \emph{Search subfolders by name} (key \code{s}; Enter runs the search)
+The box \emph{Search subfolders by name} (\code{Alt+S}; Enter runs the search)
 finds entries under the current folder whose names contain the text, at any depth.
 \end{req}
 
