@@ -1,6 +1,15 @@
 % Macros shared by every specification in this folder.
 \newcommand{\code}[1]{\texttt{#1}}
-\newcommand{\Tests}[1]{\par\smallskip\noindent\begingroup\raggedright\small\textit{Checked by:} \path{#1}\par\endgroup}
+% The tests that check a law or requirement: file and test names, and short
+% descriptions in words. The argument is read with _ as an ordinary character
+% (test file names are full of them) and set as text in typewriter type, with a
+% line break allowed after each slash. (\path, used before, dropped every space,
+% so descriptions ran together.)
+\makeatletter
+\newcommand{\Tests}{\par\smallskip\noindent\begingroup\raggedright\small\catcode`\_=12 \fsb@tests}
+\newcommand{\fsb@tests}[1]{\textit{Checked by:} {\ttfamily\frenchspacing\fsb@breakslashes#1/\@nil}\par\endgroup}
+\def\fsb@breakslashes#1/#2\@nil{#1\ifx\relax#2\relax\else/\allowbreak\fsb@breakslashes#2\@nil\fi}
+\makeatother
 
 % A numbered requirement of the functional specification. The identifier is a
 % label, so \rid{ID} is a link and a reference to an identifier that does not
