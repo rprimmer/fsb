@@ -184,3 +184,120 @@ func TestFilesWithSeveralNamesAreRefusedUntilTheIndexIsReady(t *testing.T) {
 		f.Close()
 	}
 }
+
+// openOK reports whether Open serves p.
+func openOK(g *Guard, p string) bool {
+	f, _, err := g.Open(p)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	return true
+}
+
+// The tests above set linkRebuildMin to 0. These keep the production spacing
+// between walks, so the time between "a link appeared" and "the next walk may
+// run" is exercised too: a file the index cannot vouch for must be refused
+// throughout that time, not only while a walk is running.
+
+func TestNewHardLinkIsRefusedDuringTheRebuildCooldown(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkSync = true // deterministic walks; the cooldown stays at its default
+	write(t, filepath.Join(fx.home, "proj", "x.txt"), "x")
+	link(t, filepath.Join(fx.home, "proj", "x.txt"), filepath.Join(fx.home, "proj", "y.txt"))
+	if !openOK(fx.g, filepath.Join(fx.home, "proj", "y.txt")) { // builds the index
+		t.Fatal("ordinary linked file refused")
+	}
+	write(t, filepath.Join(fx.home, "work", ".env"), "SECRET")
+	link(t, filepath.Join(fx.home, "work", ".env"), filepath.Join(fx.home, "proj", "alias.txt"))
+	if openOK(fx.g, filepath.Join(fx.home, "proj", "alias.txt")) {
+		t.Error("a new link to a denied file was served before the index had looked at it")
+	}
+	if openOK(fx.g, filepath.Join(fx.home, "proj", "alias.txt")) {
+		t.Error("a new link to a denied file was served on a second try within the cooldown")
+	}
+	// Once a walk is allowed, it finds the denied name and the refusal stands.
+	fx.g.links.mu.Lock()
+	fx.g.links.lastStart = time.Time{}
+	fx.g.links.mu.Unlock()
+	if openOK(fx.g, filepath.Join(fx.home, "proj", "alias.txt")) {
+		t.Error("a link to a denied file was served after the index was rebuilt")
+	}
+	if !openOK(fx.g, filepath.Join(fx.home, "proj", "x.txt")) {
+		t.Error("the ordinary pair must stay reachable")
+	}
+}
+
+// The index records the names a file had when it was walked. If they change
+// (a rename, a removed or added name, the inode reused), what it recorded no
+// longer describes the file, and the file is refused until a walk has looked again.
+func TestStaleIndexEntriesAreNotTrusted(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(t *testing.T, proj, work string)
+	}{
+		{"rename into a denied name", func(t *testing.T, proj, work string) {
+			if err := os.Rename(filepath.Join(proj, "a.txt"), filepath.Join(proj, ".env")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"add a denied name", func(t *testing.T, proj, work string) {
+			link(t, filepath.Join(proj, "a.txt"), filepath.Join(work, "server.pem"))
+		}},
+		{"replace a name with a denied one (same link count)", func(t *testing.T, proj, work string) {
+			if err := os.Remove(filepath.Join(proj, "a.txt")); err != nil {
+				t.Fatal(err)
+			}
+			link(t, filepath.Join(proj, "b.txt"), filepath.Join(work, ".env"))
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fx := newFixture(t)
+			fx.g.linkSync = true
+			proj, work := filepath.Join(fx.home, "proj"), filepath.Join(fx.home, "work")
+			if err := os.MkdirAll(work, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			write(t, filepath.Join(proj, "a.txt"), "ordinary")
+			link(t, filepath.Join(proj, "a.txt"), filepath.Join(proj, "b.txt"))
+			if !openOK(fx.g, filepath.Join(proj, "b.txt")) { // builds the index
+				t.Fatal("ordinary linked file refused")
+			}
+			c.change(t, proj, work)
+			if openOK(fx.g, filepath.Join(proj, "b.txt")) {
+				t.Error("served on the strength of names that have changed (within the cooldown)")
+			}
+			fx.g.links.mu.Lock()
+			fx.g.links.lastStart = time.Time{}
+			fx.g.links.mu.Unlock()
+			if openOK(fx.g, filepath.Join(proj, "b.txt")) {
+				t.Error("served after the index was rebuilt, although it now has a denied name")
+			}
+		})
+	}
+}
+
+// Renaming the denied name away makes the file ordinary again, once a walk has seen it.
+func TestRenamingTheDeniedNameAwayIsServedAfterARebuild(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkSync = true
+	proj := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(proj, ".env"), "x")
+	link(t, filepath.Join(proj, ".env"), filepath.Join(proj, "b.txt"))
+	if openOK(fx.g, filepath.Join(proj, "b.txt")) {
+		t.Fatal("precondition: b.txt is another name for .env")
+	}
+	if err := os.Rename(filepath.Join(proj, ".env"), filepath.Join(proj, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if openOK(fx.g, filepath.Join(proj, "b.txt")) {
+		t.Error("served before a walk had looked at the new names")
+	}
+	fx.g.links.mu.Lock()
+	fx.g.links.lastStart = time.Time{}
+	fx.g.links.mu.Unlock()
+	if !openOK(fx.g, filepath.Join(proj, "b.txt")) {
+		t.Error("an ordinary pair must be served once the index has seen it")
+	}
+}

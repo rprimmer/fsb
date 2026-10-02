@@ -91,7 +91,7 @@ See [specs/SECURITY.md](specs/SECURITY.md) for the threat model, what is and is 
 
 ### Known limitations
 
-- Rules are path-based, so a hard link (another name for the same file) is judged by file identity: if any name of a file with several names is denied, every name is refused, and it disappears from listings. This covers the served roots and the credential folders of every home directory. The index of such files is built in the background at startup (about 20 seconds for a home folder of 700,000 files); until it is ready, files that have several names are refused. A hard link whose other name lies outside both the roots and the credential folders cannot be seen.
+- Rules are path-based, so a hard link (another name for the same file) is judged by file identity: if any name of a file with several names is denied, every name is refused, and it disappears from listings. This covers the served roots and the credential folders of every home directory. The index of such files is built in the background at startup (about 20 seconds for a home folder of 700,000 files); until it is ready, files that have several names are refused, and so is a file whose names have changed since the index last looked (a link added, renamed or removed), until it is refreshed (at most every 15 seconds, or twice the time the last walk took). A hard link whose other name lies outside both the roots and the credential folders cannot be seen.
 - Rule files are read at startup; restart to apply changes.
 - Any process running as you can read the same files; fsb is not a sandbox against local malware.
 

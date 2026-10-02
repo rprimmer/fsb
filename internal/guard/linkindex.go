@@ -2,6 +2,7 @@ package guard
 
 import (
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -20,22 +21,25 @@ import (
 // Building the index means visiting every file, which takes seconds on a large
 // home folder, so it is built in the background (StartLinkIndex, called at
 // startup) and never on the path of a request. While it is not ready, and for a
-// file with several names that it has not seen yet (a link made since), the
-// file is refused: guessing "allowed" would defeat the point.
+// file with several names that it cannot vouch for, the file is refused until a
+// walk has looked at it: guessing "allowed" would defeat the point. It cannot
+// vouch for a file it has not seen (a link made since), nor for one whose names
+// have changed since (checked on every use: the link count must be the same and
+// every recorded name must still be this file).
 
 type fileID struct{ dev, ino uint64 }
 
 // linkIndex maps a file's identity to all its known names.
 type linkIndex struct {
 	mu        sync.Mutex
-	byID      map[fileID][]string
-	ready     bool          // a walk has completed
-	building  bool          // a walk is running
-	complete  bool          // the last walk was not cut short by a limit
-	startedAt time.Time     // when the last completed walk started
-	lastStart time.Time     // when the last walk (running or not) started
-	lastTook  time.Duration // how long the last completed walk took
-	pending   map[fileID]time.Time
+	byID      map[fileID]linkEntry
+	ready     bool                 // a walk has completed
+	building  bool                 // a walk is running
+	complete  bool                 // the last walk was not cut short by a limit
+	startedAt time.Time            // when the last completed walk started
+	lastStart time.Time            // when the last walk (running or not) started
+	lastTook  time.Duration        // how long the last completed walk took
+	pending   map[fileID]time.Time // first noticed unverified
 }
 
 // Limits of an index walk. It runs in the background, so they only need to keep
@@ -83,45 +87,101 @@ func (g *Guard) hardLinkToDenied(fi fs.FileInfo) bool {
 	}
 	idx := &g.links
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
-
 	if !idx.ready {
 		g.startWalkLocked()
 		if !idx.ready { // still walking (never the case when linkSync is set)
+			idx.mu.Unlock()
 			return true
 		}
 	}
-	names, known := idx.byID[id]
-	if !known && idx.complete {
-		// A file with several names that the walk did not see. If a walk that
-		// began after we first noticed it also missed it, the walker cannot see
-		// it (it is not refused forever); otherwise it is new, and is refused
-		// until a walk has looked at it.
-		if first, seen := idx.pending[id]; seen && idx.startedAt.After(first) {
-			return false
-		}
-		if _, seen := idx.pending[id]; !seen {
-			if idx.pending == nil {
-				idx.pending = map[fileID]time.Time{}
-			}
-			idx.pending[id] = time.Now()
-		}
-		// Walks are spaced by at least twice the time the last one took, so a
-		// huge tree cannot keep the machine busy walking.
-		if time.Since(idx.lastStart) >= max(g.linkRebuildMin, 2*idx.lastTook) {
-			g.startWalkLocked()
-		}
-		names, known = idx.byID[id]
-		if !known {
-			return idx.building
-		}
+	e, known := idx.byID[id]
+	complete := idx.complete
+	idx.mu.Unlock()
+
+	if known && e.current(id, nlink) {
+		return g.anyDenied(e.names)
 	}
+	if !known && !complete {
+		return false // a walk cut short by its limits: documented as not covered
+	}
+	return g.unverified(id, nlink)
+}
+
+// unverified decides a file with several names that the index cannot vouch
+// for: a name it does not know (a link made since the last walk), or names that
+// have changed since (renamed, removed, added, or the inode reused). It is
+// refused until a walk has looked at it again, however long walks are spaced.
+func (g *Guard) unverified(id fileID, nlink uint64) bool {
+	idx := &g.links
+	idx.mu.Lock()
+	first, seen := idx.pending[id]
+	if !seen {
+		if idx.pending == nil {
+			idx.pending = map[fileID]time.Time{}
+		}
+		first = time.Now()
+		idx.pending[id] = first
+	}
+	// Walks are spaced by at least twice the time the last one took, so a
+	// huge tree cannot keep the machine busy walking.
+	if time.Since(idx.lastStart) >= max(g.linkRebuildMin, 2*idx.lastTook) {
+		g.startWalkLocked()
+	}
+	e, known := idx.byID[id]
+	walkedSince := idx.startedAt.After(first)
+	idx.mu.Unlock()
+
+	if !walkedSince {
+		return true
+	}
+	if !known {
+		// A walk that began after we first noticed the file also missed it,
+		// so the walker cannot see any of its other names (it is not refused
+		// forever).
+		return false
+	}
+	if !e.current(id, nlink) {
+		return true // changed again since that walk
+	}
+	idx.mu.Lock()
+	delete(idx.pending, id)
+	idx.mu.Unlock()
+	return g.anyDenied(e.names)
+}
+
+func (g *Guard) anyDenied(names []string) bool {
 	for _, n := range names {
 		if g.deny.Match(n, false).Matched {
 			return true
 		}
 	}
 	return false
+}
+
+// linkEntry is what a walk saw of a file with several names.
+type linkEntry struct {
+	names []string
+	nlink uint64 // its link count then; 0 if it changed during the walk
+}
+
+// current reports whether e still describes the file id, which now has nlink
+// names: the count is unchanged and every recorded name is still this file.
+// Any rename, removal or addition of a name, or reuse of the inode, fails one
+// of the two checks.
+func (e linkEntry) current(id fileID, nlink uint64) bool {
+	if e.nlink != nlink {
+		return false
+	}
+	for _, n := range e.names {
+		fi, err := os.Lstat(n)
+		if err != nil {
+			return false
+		}
+		if got, _, ok := idOf(fi); !ok || got != id {
+			return false
+		}
+	}
+	return true
 }
 
 // startWalkLocked starts a walk unless one is running. Caller holds the lock.
@@ -134,7 +194,7 @@ func (g *Guard) startWalkLocked() {
 	idx.building = true
 	idx.lastStart = time.Now()
 	started := idx.lastStart
-	finish := func(byID map[fileID][]string, complete bool) {
+	finish := func(byID map[fileID]linkEntry, complete bool) {
 		idx.byID, idx.complete, idx.ready, idx.startedAt, idx.building = byID, complete, true, started, false
 		idx.lastTook = time.Since(started)
 	}
@@ -153,11 +213,11 @@ func (g *Guard) startWalkLocked() {
 
 // walkLinks visits every file under the roots and protected locations and
 // returns the names of those that have more than one.
-func (g *Guard) walkLinks() (map[fileID][]string, bool) {
+func (g *Guard) walkLinks() (map[fileID]linkEntry, bool) {
 	if g.linkWalkHook != nil {
 		g.linkWalkHook()
 	}
-	byID := map[fileID][]string{}
+	byID := map[fileID]linkEntry{}
 	seen := 0
 	deadline := time.Now().Add(g.linkWalkTime)
 	complete := true
@@ -179,7 +239,11 @@ func (g *Guard) walkLinks() (map[fileID][]string, bool) {
 				return nil
 			}
 			if id, nlink, ok := idOf(info); ok && nlink > 1 {
-				byID[id] = append(byID[id], canonPath(p))
+				e, seen := byID[id]
+				if seen && e.nlink != nlink {
+					nlink = 0 // a name was added or removed while walking: not to be trusted
+				}
+				byID[id] = linkEntry{append(e.names, canonPath(p)), nlink}
 			}
 			return nil
 		})
