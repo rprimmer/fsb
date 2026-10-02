@@ -240,3 +240,54 @@ func TestOwnFilesAreNeverWrittenThroughASymlink(t *testing.T) {
 		}
 	}
 }
+
+// From the review's hardening suggestions: an own file that is another name
+// for some other file (a hard link) must not be truncated or written, and a
+// FIFO planted in its place must not make fsb hang waiting for a reader.
+func TestOwnFilesAreNeverWrittenThroughAHardLinkOrIntoAFIFO(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("IMPORTANT DATA\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(dir, "pid")
+	if err := os.Link(victim, linked); err != nil {
+		t.Skip("hard links not supported here:", err)
+	}
+	if err := writeOwnFile(linked, "123\n"); err == nil {
+		t.Error("wrote through a hard link")
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "IMPORTANT DATA\n" {
+		t.Errorf("the other name's file was changed: %q", b)
+	}
+
+	fifo := filepath.Join(dir, "lastport")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- writeOwnFile(fifo, "8080\n") }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("wrote into a FIFO")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("writing an own file blocked on a FIFO")
+	}
+
+	// An ordinary own file is replaced, and left private.
+	own := filepath.Join(dir, "background.log")
+	if err := os.WriteFile(own, []byte("old contents, longer than the new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnFile(own, "new\n"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(own); string(b) != "new\n" {
+		t.Errorf("contents = %q", b)
+	}
+	if fi, _ := os.Stat(own); fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v", fi.Mode().Perm())
+	}
+}

@@ -156,16 +156,40 @@ func readPID(cfgDir string) (pid int, started string, ok bool) {
 }
 
 // openOwnFile opens one of fsb's own files for writing, empty, with mode 0600
-// whether or not it existed. It never follows a symbolic link: whatever could
-// plant one in ~/.config/fsb must not make fsb overwrite the link's target.
+// whether or not it existed. Whatever could plant something in ~/.config/fsb
+// must not make fsb change another file, or hang, through it, so it refuses
+// anything but an ordinary file of its own: a symbolic link (never followed),
+// a hard link (another name for some other file, checked before anything is
+// truncated), a FIFO or device (opened without blocking), or a file owned by
+// someone else. Links in the folders above it are not checked: whoever can
+// change those already controls the user's files.
 func openOwnFile(path string) (*os.File, error) {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	if err := f.Chmod(0o600); err != nil {
+	fail := func(err error) (*os.File, error) {
 		f.Close()
 		return nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return fail(err)
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	switch {
+	case !fi.Mode().IsRegular():
+		return fail(fmt.Errorf("%s is not an ordinary file; remove it", path))
+	case !ok || st.Nlink != 1:
+		return fail(fmt.Errorf("%s has other names (a hard link); remove it", path))
+	case int(st.Uid) != os.Getuid():
+		return fail(fmt.Errorf("%s belongs to another user; remove it", path))
+	}
+	if err := f.Truncate(0); err != nil {
+		return fail(err)
+	}
+	if err := f.Chmod(0o600); err != nil {
+		return fail(err)
 	}
 	return f, nil
 }
