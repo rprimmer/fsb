@@ -110,10 +110,15 @@ func (e *env) get(t *testing.T, endpoint, path string) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
-// ndjsonNames parses a /api/list body: a {"path"} line, then {"entries"} lines.
+// ndjsonNames parses a /api/list body: a {"path"} line, then {"entries"}
+// lines, then a {"done":true} line, without which the listing is incomplete.
 func ndjsonNames(t *testing.T, body string) []string {
 	t.Helper()
 	lines := strings.Split(strings.TrimSpace(body), "\n")
+	if last := lines[len(lines)-1]; last != `{"done":true}` {
+		t.Fatalf("a listing must end with its done line, got %.80q", last)
+	}
+	lines = lines[:len(lines)-1]
 	var head struct {
 		Path string `json:"path"`
 	}

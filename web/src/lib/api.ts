@@ -66,15 +66,20 @@ export interface ArchiveListing {
 
 export interface SearchDone {
   visited: number;
+  /** A limit stopped the search early. */
   truncated: boolean;
+  /** Some folders could not be read completely, so matches may be missing. */
+  incomplete: boolean;
 }
 
+/** Thrown when a stream ends without its {"done":true} line (a dropped connection). */
+const endedEarly = () => new Error('the server stopped answering before it finished; try again');
+
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
 
@@ -164,9 +169,12 @@ export async function streamList(
 ): Promise<void> {
   const resp = await fetch(apiPath(`api/list?path=${q(path)}`), { signal });
   if (!resp.ok) throw await failure(resp);
+  let finished = false;
   await streamNDJSON(resp, (m) => {
     if (Array.isArray(m.entries)) onEntries(m.entries as Entry[]);
+    if (m.done === true) finished = true;
   });
+  if (!finished) throw endedEarly();
 }
 
 /**
@@ -182,10 +190,11 @@ export async function streamSearch(
 ): Promise<SearchDone> {
   const resp = await fetch(apiPath(`api/search?path=${q(root)}&q=${encodeURIComponent(query)}${matchCase ? '&case=1' : ''}`), { signal });
   if (!resp.ok) throw await failure(resp);
-  let done: SearchDone = { visited: 0, truncated: false };
+  let done: SearchDone | undefined;
   await streamNDJSON(resp, (m) => {
     if (Array.isArray(m.matches)) onMatches(m.matches as Row[]);
-    if (m.done === true) done = { visited: Number(m.visited) || 0, truncated: m.truncated === true };
+    if (m.done === true) done = { visited: Number(m.visited) || 0, truncated: m.truncated === true, incomplete: m.incomplete === true };
   });
+  if (!done) throw endedEarly();
   return done;
 }

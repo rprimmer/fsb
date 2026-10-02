@@ -135,6 +135,9 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		start() // an empty directory still gets its header line
+		// Without this line the client treats the listing as cut off: a
+		// connection that drops between batches must not look complete.
+		enc.Encode(map[string]any{"done": true})
 	case !started:
 		s.fail(w, p, err)
 	default:
@@ -302,7 +305,9 @@ func (s *Server) mdframe(w http.ResponseWriter, r *http.Request) {
 }
 
 // search streams filename matches as NDJSON: a {"path","query"} line, then
-// {"matches":[...]} lines as results arrive, then {"done":true,...}.
+// {"matches":[...]} lines as results arrive, then {"done":true,...}, which says
+// whether a limit stopped it (truncated) and whether some folders could not be
+// read completely (incomplete).
 func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	root := r.URL.Query().Get("path")
 	query := r.URL.Query().Get("q")
@@ -334,7 +339,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 
 	opts := guard.DefaultSearchLimits
 	opts.MatchCase = r.URL.Query().Get("case") == "1"
-	visited, truncated, err := s.cfg.Guard.Search(r.Context(), root, query, opts, func(m guard.SearchMatch) error {
+	sum, err := s.cfg.Guard.SearchSummary(r.Context(), root, query, opts, func(m guard.SearchMatch) error {
 		pending = append(pending, m)
 		if len(pending) >= 25 || time.Since(lastFlush) > 150*time.Millisecond {
 			return flush()
@@ -345,7 +350,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		flush()
 		start()
-		enc.Encode(map[string]any{"done": true, "visited": visited, "truncated": truncated})
+		enc.Encode(map[string]any{"done": true, "visited": sum.Visited, "truncated": sum.Truncated, "incomplete": sum.Unreadable > 0})
 	case r.Context().Err() != nil:
 		// The client went away; nothing to send.
 	case !started && len(pending) == 0:

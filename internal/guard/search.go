@@ -46,6 +46,30 @@ var DefaultSearchLimits = SearchLimits{MaxResults: 1000, MaxVisited: 500_000}
 // followed (which also rules out cycles). It returns truncated=true if a limit
 // stopped the search early. fn is called from the calling goroutine.
 func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits, fn func(SearchMatch) error) (visited int, truncated bool, err error) {
+	sum, err := g.SearchSummary(ctx, root, query, lim, fn)
+	return sum.Visited, sum.Truncated, err
+}
+
+// SearchSummary says how a search went.
+type SearchSummary struct {
+	Visited    int  // visible entries examined
+	Truncated  bool // a limit stopped the search early
+	Unreadable int  // folders that failed partway through being read
+}
+
+// searchReadErrForTest, when set, makes reading a folder fail after its first
+// batch with the error it returns (tests).
+var searchReadErrForTest func(dir string) error
+
+// SearchSummary is Search, also reporting folders that could not be read
+// completely, so partial results are not presented as complete.
+func (g *Guard) SearchSummary(ctx context.Context, root, query string, lim SearchLimits, fn func(SearchMatch) error) (SearchSummary, error) {
+	unreadable := 0
+	visited, truncated, err := g.search(ctx, root, query, lim, fn, &unreadable)
+	return SearchSummary{visited, truncated, unreadable}, err
+}
+
+func (g *Guard) search(ctx context.Context, root, query string, lim SearchLimits, fn func(SearchMatch) error, unreadable *int) (visited int, truncated bool, err error) {
 	q := fold(strings.TrimSpace(query))
 	matches := func(name string) bool { return strings.Contains(fold(name), q) }
 	if lim.MatchCase {
@@ -125,7 +149,14 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 					queue = append(queue, child)
 				}
 			}
-			if errors.Is(rerr, io.EOF) || rerr != nil {
+			if rerr == nil && searchReadErrForTest != nil {
+				rerr = searchReadErrForTest(dir)
+			}
+			if errors.Is(rerr, io.EOF) {
+				break
+			}
+			if rerr != nil {
+				*unreadable++ // the rest of this folder is unseen
 				break
 			}
 			if err := ctx.Err(); err != nil {

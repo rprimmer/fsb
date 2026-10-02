@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -39,5 +40,34 @@ func TestSearchBudgetCountsExcludedEntries(t *testing.T) {
 				t.Errorf("visited = %d; it must count visible entries only", visited)
 			}
 		})
+	}
+}
+
+// A folder that fails partway through being read (an I/O error, a network
+// volume going away) leaves the search incomplete, and the summary says so,
+// rather than the results looking complete.
+func TestSearchReportsFoldersThatCouldNotBeReadCompletely(t *testing.T) {
+	fx := newFixture(t)
+	dir := filepath.Join(fx.home, "partial")
+	for _, n := range []string{"a1", "a2", "a3"} {
+		write(t, filepath.Join(dir, "sub", n), "x")
+	}
+	searchReadErrForTest = func(d string) error {
+		if filepath.Base(d) == "sub" {
+			return errors.New("injected I/O error")
+		}
+		return nil
+	}
+	t.Cleanup(func() { searchReadErrForTest = nil })
+	sum, err := fx.g.SearchSummary(context.Background(), dir, "a", DefaultSearchLimits, func(SearchMatch) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Unreadable != 1 {
+		t.Errorf("summary %+v: want one folder that could not be read completely", sum)
+	}
+	searchReadErrForTest = nil
+	if sum, _ := fx.g.SearchSummary(context.Background(), dir, "a", DefaultSearchLimits, func(SearchMatch) error { return nil }); sum.Unreadable != 0 {
+		t.Errorf("summary %+v without errors", sum)
 	}
 }

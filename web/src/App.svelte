@@ -480,9 +480,14 @@
     // Once replaced or cleared, this search delivers nothing more (searchrun.ts).
     stopSearch = startSearch((onRows, signal) => streamSearch(path, query, matchCase, onRows, signal), {
       rows: (all) => (searchRows = all),
-      done: (truncated) => {
+      done: (d) => {
         searching = false;
-        if (truncated) searchNote = 'Stopped early: too many results or too many items to scan. Narrow the search.';
+        searchNote = [
+          d.truncated ? 'Stopped early: too many results or too many items to scan. Narrow the search.' : '',
+          d.incomplete ? 'Some folders could not be read completely, so matches may be missing.' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
       },
       error: (e) => {
         searching = false;

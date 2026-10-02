@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Row } from './api.ts';
+import type { Row, SearchDone } from './api.ts';
 import { startSearch, type SearchSink } from './searchrun.ts';
 
 const row = (name: string): Row => ({ name, isDir: false, size: 1, modTime: '2026-01-01T00:00:00Z', mode: 0o644 });
@@ -9,25 +9,25 @@ const tick = (ms: number) => new Promise((res) => setTimeout(res, ms));
 /** A search stream the test drives: send rows, then finish or fail. */
 function controlled() {
   let onRows!: (r: Row[]) => void;
-  let finish!: (v: { visited: number; truncated: boolean }) => void;
+  let finish!: (v: SearchDone) => void;
   let fail!: (e: unknown) => void;
   let signal!: AbortSignal;
   const stream = (on: (r: Row[]) => void, s: AbortSignal) => {
     onRows = on;
     signal = s;
-    return new Promise<{ visited: number; truncated: boolean }>((res, rej) => {
+    return new Promise<SearchDone>((res, rej) => {
       finish = res;
       fail = rej;
     });
   };
-  return { stream, send: (r: Row[]) => onRows(r), finish: (t = false) => finish({ visited: 0, truncated: t }), fail: (e: unknown) => fail(e), aborted: () => signal.aborted };
+  return { stream, send: (r: Row[]) => onRows(r), finish: (t = false) => finish({ visited: 0, truncated: t, incomplete: false }), fail: (e: unknown) => fail(e), aborted: () => signal.aborted };
 }
 
 function recorder() {
   const log: string[] = [];
   const sink: SearchSink = {
     rows: (r) => log.push('rows:' + r.map((x) => x.name).join(',')),
-    done: (t) => log.push('done:' + t),
+    done: (d) => log.push('done:' + d.truncated),
     error: (e) => log.push('error:' + String(e)),
   };
   return { log, sink };

@@ -3,16 +3,16 @@
 // (replaced, cleared, or navigated away from) nothing of it is ever delivered
 // again, including a batch waiting on the flush timer.
 
-import type { Row } from './api.ts';
+import type { Row, SearchDone } from './api.ts';
 
 export interface SearchSink {
   /** All rows so far (a new array each time). */
   rows(all: Row[]): void;
-  done(truncated: boolean): void;
+  done(d: SearchDone): void;
   error(e: unknown): void;
 }
 
-export type SearchStream = (onRows: (rows: Row[]) => void, signal: AbortSignal) => Promise<{ truncated: boolean }>;
+export type SearchStream = (onRows: (rows: Row[]) => void, signal: AbortSignal) => Promise<SearchDone>;
 
 /**
  * Runs stream, delivering to sink: the first batch at once, later ones at most
@@ -45,7 +45,7 @@ export function startSearch(stream: SearchStream, sink: SearchSink, flushMs = 12
     (d) => {
       if (!live) return;
       end();
-      sink.done(d.truncated);
+      sink.done(d);
     },
     (e) => {
       if (!live) return;
