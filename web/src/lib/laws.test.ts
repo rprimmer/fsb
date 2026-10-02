@@ -19,7 +19,7 @@ function rng(seed: number) {
 const R = rng(42);
 const pick = <T>(a: T[]): T => a[Math.floor(R() * a.length)];
 
-const NAMES = ['a', 'A', 'b', '.a', '.B', '1', '10', '2', 'file2', 'file10', 'Straße', 'strasse', 'éa', 'éa', 'ﬁle', 'file', 'z z', 'Ω', 'ω'];
+const NAMES = ['a', 'A', 'b', '.a', '.B', '1', '10', '2', 'file2', 'file10', 'file1', 'file01', 'file001', 'a01', 'a1', 'Straße', 'strasse', 'éa', 'éa', 'ﬁle', 'file', 'z z', 'Ω', 'ω'];
 const TIMES = ['2026-01-01T00:00:00Z', '2026-06-01T12:00:00.123456789+02:00', '0001-01-01T00:00:00Z', 'not a date', '', '2026-01-01T00:00:00Z'];
 
 function randomRows(n: number): Row[] {

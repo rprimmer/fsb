@@ -30,6 +30,7 @@ const timeOf = (e: Row) => {
 };
 
 const cmp = (a: number, b: number) => (a < b ? -1 : a > b ? 1 : 0);
+const rawCompare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export function compareRows(a: Row, b: Row, o: SortOptions): number {
   if (o.foldersFirst && a.isDir !== b.isDir) return a.isDir ? -1 : 1;
@@ -48,8 +49,10 @@ export function compareRows(a: Row, b: Row, o: SortOptions): number {
       c = names.compare(kindOf(a), kindOf(b));
       break;
   }
-  // Ties fall back to the name (then to the exact name), so the order is stable and total.
-  if (c === 0) c = names.compare(nameOf(a), nameOf(b)) || exact.compare(nameOf(a), nameOf(b));
+  // Ties fall back to the name, then the exact name, then the raw code units
+  // (both collators compare numbers by value, so "file1" and "file01" are
+  // equal to them), so the order is total and independent of input order.
+  if (c === 0) c = names.compare(nameOf(a), nameOf(b)) || exact.compare(nameOf(a), nameOf(b)) || rawCompare(nameOf(a), nameOf(b));
   return o.asc ? c : -c;
 }
 

@@ -85,3 +85,13 @@ test('the input is not modified', () => {
   sortRows(rows, { key: 'name', asc: true, foldersFirst: false });
   assert.deepEqual(rows.map((r) => r.name), ['b', 'a']);
 });
+
+test('numeric spellings that collate equal still sort the same whatever the input order', () => {
+  const names = ['file1', 'file01', 'file001'];
+  for (const asc of [true, false]) {
+    const o: SortOptions = { key: 'name', asc, foldersFirst: false };
+    const a = sortRows(names.map((n) => row(n)), o).map((r) => r.name);
+    const b = sortRows([...names].reverse().map((n) => row(n)), o).map((r) => r.name);
+    assert.deepEqual(a, b, `asc=${asc}`);
+  }
+});
