@@ -39,6 +39,12 @@ func write(t testing.TB, path, content string) {
 
 func newEnv(t testing.TB, debug bool, coreMissing []string) *env {
 	t.Helper()
+	return newEnvWith(t, debug, coreMissing, nil)
+}
+
+// newEnvWith is newEnv with the server's Config adjusted by tweak, if non-nil.
+func newEnvWith(t testing.TB, debug bool, coreMissing []string, tweak func(*Config)) *env {
+	t.Helper()
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +70,11 @@ func newEnv(t testing.TB, debug bool, coreMissing []string) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(Config{Guard: g, Debug: debug, CoreDenyMissing: coreMissing, Home: home})
+	cfg := Config{Guard: g, Debug: debug, CoreDenyMissing: coreMissing, Home: home}
+	if tweak != nil {
+		tweak(&cfg)
+	}
+	srv, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

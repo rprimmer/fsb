@@ -115,6 +115,10 @@ export function previewURL(path: string): string {
   return apiPath(`api/preview?path=${q(path)}`);
 }
 
+export function quicklookURL(path: string): string {
+  return apiPath(`api/quicklook?path=${q(path)}`);
+}
+
 export function pdfURL(path: string): string {
   return apiPath(`api/pdf?path=${q(path)}`);
 }

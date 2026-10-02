@@ -199,6 +199,11 @@ export function makeFixture({ big = false } = {}) {
 
   const png = makePng();
   put(join(home, 'pics', 'gradient.png'), png);
+  put(join(home, 'office', 'letter.docx'), makeZip({
+    '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    '_rels/.rels': '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+    'word/document.xml': '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello from fsb</w:t></w:r></w:p></w:body></w:document>',
+  }));
   put(join(home, 'pics', 'no-extension'), png);
 
   const xattrs = setXattr(join(work, 'data.json'), 'com.example.note', 'hello from an xattr');
@@ -209,7 +214,7 @@ export function makeFixture({ big = false } = {}) {
     for (let i = 1; i <= 100_000; i++) writeFileSync(join(home, 'big', `file-${i}`), '');
   }
   // What the home folder lists: .ssh and .aws are denied, node_modules is hidden.
-  const homeRows = [...(big ? ['big/'] : []), 'casetest/', 'pics/', 'spoof/', 'work/'];
+  const homeRows = [...(big ? ['big/'] : []), 'casetest/', 'office/', 'pics/', 'spoof/', 'work/'];
 
   // A special file: listed like any other entry, but never opened (guard.ErrNotRegular).
   // A pipe, not a socket, so it needs no short-path workaround for sun_path's OS limit.

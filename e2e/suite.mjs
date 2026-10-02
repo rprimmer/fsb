@@ -480,6 +480,21 @@ export function defineSuite({ label, launch }) {
       await waitFor(mdInfo, { message: 'the rendered view again' });
     });
 
+    test('shows the Quick Look picture of an Office document, sandboxed like an image', async () => {
+      await open(`${fx.home}/office`);
+      // letter.docx is already selected: opening a folder selects its first entry.
+      if (!(await previewOpen())) await d.key(' ');
+      const img = await waitFor(
+        () => d.eval(`const i = document.querySelector('.preview .pimg'); return i && i.complete && i.naturalWidth ? { src: i.getAttribute('src'), w: i.naturalWidth } : null`),
+        { message: 'the Quick Look picture to load', timeout: 15000 },
+      );
+      assert.match(img.src, /api\/quicklook\?path=/);
+      assert.ok(img.w > 50, `picture width ${img.w}`);
+      const headers = await d.eval(`const r = await fetch(${JSON.stringify('')} + document.querySelector('.preview .pimg').getAttribute('src'));
+        return { type: r.headers.get('content-type'), csp: r.headers.get('content-security-policy'), nosniff: r.headers.get('x-content-type-options') };`);
+      assert.deepEqual(headers, { type: 'image/png', csp: "sandbox; default-src 'none'", nosniff: 'nosniff' });
+    });
+
     test('previews an image through the sandboxed endpoint', async () => {
       await open(`${fx.home}/pics`);
       // gradient.png is already selected: opening a folder selects its first entry.

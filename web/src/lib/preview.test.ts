@@ -109,6 +109,12 @@ test('looksLikePdf goes by extension only as a hint', async () => {
   assert.equal(looksLikePdf('pdf'), false);
 });
 
+test('looksLikeQuickLook covers iWork and Office documents by extension', async () => {
+  const { looksLikeQuickLook } = await import('./preview.ts');
+  for (const n of ['a.numbers', 'a.Pages', 'a.key', 'a.docx', 'a.DOC', 'a.xlsx', 'a.xls', 'a.pptx', 'a.ppt']) assert.equal(looksLikeQuickLook(n), true, n);
+  for (const n of ['a.txt', 'a.pdf', 'a.mp4', 'docx', 'a.docx.txt']) assert.equal(looksLikeQuickLook(n), false, n);
+});
+
 test('looksLikeArchive is only a hint from the extension', async () => {
   const { looksLikeArchive } = await import('./preview.ts');
   for (const n of ['a.zip', 'a.TAR', 'a.tgz', 'a.tar.gz', 'a.jar']) assert.equal(looksLikeArchive(n), true, n);

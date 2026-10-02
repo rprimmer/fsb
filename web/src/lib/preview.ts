@@ -23,6 +23,16 @@ export function looksLikePdf(name: string): boolean {
   return extOf(name) === 'pdf';
 }
 
+const QUICKLOOK_EXT = new Set(['numbers', 'pages', 'key', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt']);
+
+/**
+ * Whether to ask the server for a Quick Look picture (iWork and Office
+ * documents, which may be files or packages). Only a hint: the server decides.
+ */
+export function looksLikeQuickLook(name: string): boolean {
+  return QUICKLOOK_EXT.has(extOf(name));
+}
+
 const ARCHIVE_EXT = new Set(['zip', 'jar', 'tar', 'tgz', 'gz']);
 
 /** Whether to try listing this as an archive. Only a hint: the server decides from the file's bytes. */

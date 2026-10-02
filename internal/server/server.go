@@ -4,6 +4,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/rprimmer/fsb/internal/guard"
 	"github.com/rprimmer/fsb/internal/httpguard"
+	"github.com/rprimmer/fsb/internal/quicklook"
 	"github.com/rprimmer/fsb/web"
 )
 
@@ -33,6 +35,9 @@ type Config struct {
 	// Go to path box.
 	Home   string
 	Logger *log.Logger
+	// Thumbnail draws a PNG picture of the document at a guard-checked real
+	// path (quicklook.Thumbnail when nil). Tests substitute their own.
+	Thumbnail func(ctx context.Context, path string, size int) ([]byte, error)
 }
 
 // Server serves the API.
@@ -46,6 +51,9 @@ func New(cfg Config) (*Server, error) {
 	auth, err := httpguard.NewAuth()
 	if err != nil {
 		return nil, err
+	}
+	if cfg.Thumbnail == nil {
+		cfg.Thumbnail = quicklook.Thumbnail
 	}
 	return &Server{cfg: cfg, auth: auth}, nil
 }
@@ -70,6 +78,7 @@ func (s *Server) Handler(port int) http.Handler {
 	mux.HandleFunc("GET /api/mdframe", s.mdframe)
 	mux.HandleFunc("GET /api/pdf", s.pdf)
 	mux.HandleFunc("GET /api/archive", s.archive)
+	mux.HandleFunc("GET /api/quicklook", s.quicklook)
 	mux.Handle("GET /", web.Handler()) // embedded frontend; unknown paths 404
 
 	var h http.Handler = mux
@@ -232,6 +241,40 @@ func (s *Server) pdf(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Security-Policy", "frame-ancestors 'self'; script-src 'none'")
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+}
+
+// thumbSize is the longer side, in pixels, of a Quick Look picture.
+const thumbSize = 1200
+
+// quicklook serves the picture macOS Quick Look draws of an iWork or Office
+// document (see guard.QuickLookTarget for what qualifies). It is served like
+// an image preview: a PNG made by fsb's own call, sandboxed. If the document
+// changed identity while Quick Look read it, the picture is discarded.
+func (s *Server) quicklook(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	real, same, err := s.cfg.Guard.QuickLookTarget(p)
+	if err != nil {
+		s.fail(w, p, err)
+		return
+	}
+	png, err := s.cfg.Thumbnail(r.Context(), real, thumbSize)
+	if err != nil {
+		if r.Context().Err() == nil {
+			s.logf("quicklook %q: %v", p, err)
+		}
+		s.fail(w, p, guard.ErrUnsupported)
+		return
+	}
+	if !same() {
+		s.fail(w, p, guard.ErrNotFound)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "image/png")
+	h.Set("Content-Disposition", "inline")
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	h.Set("Cache-Control", "no-store")
+	w.Write(png)
 }
 
 // archive lists the members of a zip, tar or tar.gz file. Nothing is extracted.

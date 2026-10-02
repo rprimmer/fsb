@@ -26,10 +26,10 @@
 
   import DOMPurify from 'dompurify';
 
-  import { ApiError, apiPath, getArchive, getHead, getMeta, pdfURL, previewURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
+  import { ApiError, apiPath, getArchive, getHead, getMeta, pdfURL, previewURL, quicklookURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
   import { basename, dirname, displayName, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
   import { fillImages, renderMarkdown } from './markdown';
-  import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, parseDelimited, plural, prettyJSON } from './preview';
+  import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, looksLikeQuickLook, parseDelimited, plural, prettyJSON } from './preview';
 
   const languages = {
     bash, c, cpp, css, diff, dockerfile, go, ini, java, javascript, json, kotlin, makefile,
@@ -55,7 +55,7 @@
   const HEAD_BYTES = 64 * 1024;
   const CSV_ROWS = 200;
 
-  type Mode = 'idle' | 'loading' | 'folder' | 'image' | 'pdf' | 'archive' | 'text' | 'binary' | 'empty' | 'dataless' | 'error';
+  type Mode = 'idle' | 'loading' | 'folder' | 'image' | 'quicklook' | 'pdf' | 'archive' | 'text' | 'binary' | 'empty' | 'dataless' | 'error';
 
   let mode = $state<Mode>('idle');
   let meta = $state<Meta | null>(null);
@@ -100,7 +100,9 @@
         .catch((err) => {
           if (!ctrl.signal.aborted) metaError = describe(err);
         });
-      if (e.isDir) mode = 'folder';
+      // iWork documents can be packages, which list as folders.
+      if (looksLikeQuickLook(e.name) && !e.broken) mode = 'quicklook';
+      else if (e.isDir) mode = 'folder';
       else if (e.broken) mode = 'error';
       else if (looksLikeImage(e.name)) mode = 'image';
       else if (looksLikePdf(e.name)) checkPdf(p, ctrl);
@@ -160,6 +162,18 @@
   // WebP): fall back to treating it as an ordinary file.
   function imageFailed() {
     if (!entry || !current || current.signal.aborted) return;
+    mode = 'loading';
+    loadHead(fullPath, current);
+  }
+
+  // No Quick Look picture (unsupported, denied, cloud-only, or Quick Look could
+  // not draw it): show what fsb would have shown without it.
+  function quicklookFailed() {
+    if (!entry || !current || current.signal.aborted) return;
+    if (entry.isDir) {
+      mode = 'folder';
+      return;
+    }
     mode = 'loading';
     loadHead(fullPath, current);
   }
@@ -319,6 +333,9 @@
         <p class="hint">Folder</p>
       {:else if mode === 'image'}
         <img class="pimg" src={previewURL(fullPath)} alt={entry.name} onerror={imageFailed} />
+      {:else if mode === 'quicklook'}
+        <img class="pimg" src={quicklookURL(fullPath)} alt={entry.name} onerror={quicklookFailed} />
+        <p class="note">Quick Look picture, as Finder shows it.</p>
       {:else if mode === 'pdf'}
         <!-- The pointer handlers only record where the pointer is (see frameMayHaveFocus); the frame itself is the interactive element. -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->

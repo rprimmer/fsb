@@ -33,9 +33,10 @@ only, prints a single-use address, opens it in your browser, and runs until you
 interrupt it.
 In the browser you can list folders, sort, filter and search by name, and
 preview
-files (text and source code, JSON, CSV, Markdown, images, PDFs, and the
+files (text and source code, JSON, CSV, Markdown, images, PDFs, the
 contents of
-zip and tar archives) without leaving the window.
+zip and tar archives, and the Quick Look picture of iWork and Office
+documents) without leaving the window.
 .PP
 .B fsb
 is read-only.
@@ -563,6 +564,22 @@ cloud-only file to
 be downloaded.
 A denied path is indistinguishable from a missing one.
 .PP
+For a Numbers, Pages, Word, Excel or PowerPoint document, the preview is the
+picture macOS draws of it, made by running
+.BR qlmanage (1)
+on that document after the same checks as any other preview.
+It is the one place
+.B fsb
+runs another program on your files.
+A document stored only in the cloud is not handed over, nor is a package
+document holding a symbolic link, a denied file, or a part stored only in the
+cloud.
+Keynote documents
+.RI ( .key )
+match the core deny rule
+.B *.key
+and are not shown at all.
+.PP
 Anything that runs as you can read the same files:
 .B fsb
 is not a sandbox against local malware.
@@ -646,6 +663,7 @@ A denied path can be answered slightly faster than a missing one.
 targets macOS; the interface is tested in Chrome and Safari.
 .SH SEE ALSO
 .BR open (1),
+.BR qlmanage (1),
 .BR gitignore (5)
 .PP
 The functional and design specifications and the security policy, in the
