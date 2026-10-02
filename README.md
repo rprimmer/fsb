@@ -4,7 +4,7 @@
 
 > **Status: 1.0, finished, and provided as-is.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See the [functional specification](specs/functional/) and the [design specification](specs/design/).
 >
-> This is a personal project, published in case it is useful to others. It is not actively maintained: please don't expect support, bug fixes or new features.
+> This is a personal project, published in case it is useful to others. It is not actively maintained: bug reports may be attended to, but there is no guarantee of support, fixes or new features.
 
 ### Keyboard
 
