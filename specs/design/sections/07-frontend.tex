@@ -58,7 +58,10 @@ request, which never falls back again, so every run ends in a terminal state aft
 requests.  (A Quick Look picture that fails falls back to that head request, or, for a package
 document, which lists as a folder, straight to the folder state.)  Every request started for a selection, including a fall back, shares one
 cancellation handle and is cancelled when the selection changes, so a late answer can never be
-shown for the wrong file.  The laws are in the algebraic specification.
+shown for the wrong file.  The complete transition table (states, events, next states and the
+request each transition starts) and the laws are in the algebraic specification, in its
+section on the preview state machine.  The code keeps the state in one variable set where each
+answer arrives, rather than in a table of its own.
 
 The Details panel (metadata and extended attributes) is a second, independent request
 against the same selection, and keeps its own error state rather than sharing the main

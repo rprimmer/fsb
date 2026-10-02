@@ -11,29 +11,76 @@ For a selected entry the preview pane is in one of the states
 \]
 The name of the entry gives a \emph{hint} $h\in\{\text{quicklook, image, pdf,
 archive, none}\}$; it is only a hint because the server decides (from the bytes,
-or for Quick Look from what Quick Look can draw).  Selecting
-an entry moves to $\mathsf{loading}$, after a short delay that keeps holding an
-arrow key from firing a request per row, and then:
-\begin{itemize}
-  \item with hint quicklook (checked first, because an iWork package lists as a
-        folder), and the entry is not a dangling link, the pane shows
-        $\mathsf{quicklook}$ and, if the picture fails to load, goes to
-        $\mathsf{folder}$ for a package or falls back to the head request for a
-        file;
-  \item a folder goes to $\mathsf{folder}$; a dangling link to $\mathsf{error}$;
-  \item with hint image, the pane shows $\mathsf{image}$ and, if the server
-        refuses the bytes (415), falls back to the head request;
-  \item with hint pdf, a one-byte range request asks the server; a
-        \code{200}/\code{206} of type \code{application/pdf} gives
-        $\mathsf{pdf}$, a \code{409} gives $\mathsf{dataless}$, anything else
-        falls back to the head request;
-  \item with hint archive, the listing request gives $\mathsf{archive}$, a
-        \code{409} gives $\mathsf{dataless}$, anything else falls back to the head
-        request;
-  \item otherwise the head request gives one of $\mathsf{text}$,
-        $\mathsf{binary}$, $\mathsf{empty}$, $\mathsf{dataless}$, or, on failure,
-        $\mathsf{error}$.
-\end{itemize}
+or for Quick Look from what Quick Look can draw).  The state $\mathsf{loading}$ is
+written below as four sub-states, because what the pane is waiting for differs:
+$\mathsf{loading}_{\mathrm{wait}}$, the short delay after a selection that keeps
+holding an arrow key from firing a request per row (120~ms), and
+$\mathsf{loading}_{\mathrm{pdf}}$, $\mathsf{loading}_{\mathrm{arc}}$ and
+$\mathsf{loading}_{\mathrm{head}}$, a request in flight.  The pane displays all four
+alike, as ``Loading''.
+
+\subsection{Transition table}
+\label{sec:state-table}
+
+Table~\ref{tab:preview} is the complete transition relation, read from
+\code{web/src/lib/Preview.svelte}.  The code has no table of its own: the state is
+one variable, set where each answer arrives, so this table is the place where all
+the transitions can be seen together.  Each row is a state, an event in it, the
+next state, and the request that the transition starts.  The details request
+(\code{api/meta}) is separate: it starts with every transition out of
+$\mathsf{loading}_{\mathrm{wait}}$, never changes the state, and has its own error
+message.
+
+\begin{center}
+\small
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.035\linewidth}>{\raggedright\arraybackslash}p{0.19\linewidth}>{\raggedright\arraybackslash}p{0.33\linewidth}>{\raggedright\arraybackslash}p{0.17\linewidth}>{\raggedright\arraybackslash}p{0.17\linewidth}@{}}
+\caption{Transitions of the preview pane.}\label{tab:preview}\\
+\toprule
+& State & Event & Next state & Request started \\
+\midrule
+\endfirsthead
+\toprule
+& State & Event & Next state & Request started \\
+\midrule
+\endhead
+T1 & any & the selection is cleared & $\mathsf{idle}$ & none \\
+T2 & any & an entry is selected & $\mathsf{loading}_{\mathrm{wait}}$ & none; everything started for the previous selection is cancelled \\
+\midrule
+T3 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; hint quicklook and not a broken link & $\mathsf{quicklook}$ & \code{api/quicklook} (as a picture) \\
+T4 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; otherwise a folder & $\mathsf{folder}$ & none \\
+T5 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; otherwise a broken link & $\mathsf{error}$ & none \\
+T6 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; otherwise hint image & $\mathsf{image}$ & \code{api/preview} (as a picture) \\
+T7 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; otherwise hint pdf & $\mathsf{loading}_{\mathrm{pdf}}$ & \code{api/pdf}, first byte only \\
+T8 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; otherwise hint archive & $\mathsf{loading}_{\mathrm{arc}}$ & \code{api/archive} \\
+T9 & $\mathsf{loading}_{\mathrm{wait}}$ & 120~ms pass; otherwise & $\mathsf{loading}_{\mathrm{head}}$ & \code{api/head} \\
+\midrule
+T10 & $\mathsf{quicklook}$ & the picture fails to load, and the entry is a folder (a package) & $\mathsf{folder}$ & none \\
+T11 & $\mathsf{quicklook}$ & the picture fails to load, and the entry is a file & $\mathsf{loading}_{\mathrm{head}}$ & \code{api/head} \\
+T12 & $\mathsf{image}$ & the picture fails to load & $\mathsf{loading}_{\mathrm{head}}$ & \code{api/head} \\
+\midrule
+T13 & $\mathsf{loading}_{\mathrm{pdf}}$ & answer 200 or 206 of type \code{application/pdf} & $\mathsf{pdf}$ & \code{api/pdf} (in a frame) \\
+T14 & $\mathsf{loading}_{\mathrm{pdf}}$ & answer 409 & $\mathsf{dataless}$ & none \\
+T15 & $\mathsf{loading}_{\mathrm{pdf}}$ & any other answer, or no answer & $\mathsf{loading}_{\mathrm{head}}$ & \code{api/head} \\
+\midrule
+T16 & $\mathsf{loading}_{\mathrm{arc}}$ & a listing & $\mathsf{archive}$ & none \\
+T17 & $\mathsf{loading}_{\mathrm{arc}}$ & answer 409 & $\mathsf{dataless}$ & none \\
+T18 & $\mathsf{loading}_{\mathrm{arc}}$ & any other answer, or no answer & $\mathsf{loading}_{\mathrm{head}}$ & \code{api/head} \\
+\midrule
+T19 & $\mathsf{loading}_{\mathrm{head}}$ & an answer of kind $k\in\{\text{text, binary, empty, dataless}\}$ & $\mathsf{text}$, $\mathsf{binary}$, $\mathsf{empty}$ or $\mathsf{dataless}$, as $k$ & none \\
+T20 & $\mathsf{loading}_{\mathrm{head}}$ & any failure & $\mathsf{error}$ & none \\
+\midrule
+T21 & any & an answer or a picture failure for a cancelled selection & unchanged & none \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+No other transition exists.  In particular, no row leaves $\mathsf{folder}$,
+$\mathsf{pdf}$, $\mathsf{archive}$, $\mathsf{text}$, $\mathsf{binary}$,
+$\mathsf{empty}$, $\mathsf{dataless}$ or $\mathsf{error}$ except T1 and T2 (a new
+selection), and no row enters $\mathsf{loading}_{\mathrm{head}}$ from
+$\mathsf{loading}_{\mathrm{head}}$.  $\mathsf{image}$ and $\mathsf{quicklook}$ are
+final unless their picture fails (T10--T12); a PDF the viewer cannot display stays in
+$\mathsf{pdf}$, the viewer reporting the problem itself.
 
 \subsection{Laws}
 
@@ -42,7 +89,10 @@ arrow key from firing a request per row, and then:
 From $\mathsf{loading}$ every run reaches a terminal state
 (folder, image, quicklook, pdf, archive, text, binary, empty, dataless, or error)
 after at most two requests: one hinted request and at most one fall back to the
-head request, which never falls back again.
+head request, which never falls back again.  In Table~\ref{tab:preview}: every path from
+$\mathsf{loading}_{\mathrm{wait}}$ passes through at most one of T3, T6, T7 or T8 and
+at most one entry into $\mathsf{loading}_{\mathrm{head}}$, from which T19 and T20 lead
+only to final states.
 \end{law}
 
 \begin{law}[Freshness]
@@ -50,7 +100,7 @@ head request, which never falls back again.
 The content shown always belongs to the entry that is currently selected: every
 request started for a selection, including the fall back after an image or a Quick
 Look picture fails to load, is cancelled when the selection changes, and a cancelled request never
-changes the state.
+changes the state.  (T2 and T21 in Table~\ref{tab:preview}.)
 \end{law}
 
 \begin{law}[Frame only after confirmation]
