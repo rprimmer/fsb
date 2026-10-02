@@ -588,6 +588,10 @@
       return;
     }
     const t = ev.target as HTMLElement | null;
+    // A control that handled the key itself (a resize handle, a column header)
+    // has the last word, and a focused resize handle keeps every key: it is
+    // never also a folder-navigation or preview key.
+    if (ev.defaultPrevented || t?.getAttribute('role') === 'separator') return;
     const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
     if (ev.altKey && !ev.metaKey && !ev.ctrlKey) {
       // Search/Go to path/Copy live on Alt+letter (rather than bare s/g/c) so every

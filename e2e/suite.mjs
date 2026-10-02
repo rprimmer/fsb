@@ -574,6 +574,23 @@ export function defineSuite({ label, launch }) {
       await waitFor(async () => (await columnWidths()).name === 60, { message: 'the minimum width' });
     });
 
+    test('keys on a resize handle only resize: the folder, selection and pane stay', async () => {
+      await open(fx.home);
+      if (!(await previewOpen())) await d.key(' ');
+      await selectByKeys('pics/');
+      const home = `${basename(fx.home)} - fsb`;
+      for (const handle of ['.head [data-col="name"] .resize', '.psplit']) {
+        await d.eval(`document.querySelector(${JSON.stringify(handle)}).focus()`);
+        for (const [key, opts] of [['ArrowLeft', {}], ['ArrowRight', {}], ['ArrowLeft', { shift: true }], ['ArrowRight', { shift: true }], ['Enter', {}], [' ', {}], ['Backspace', {}]]) {
+          await d.key(key, opts);
+          await new Promise((r) => setTimeout(r, 150)); // time for a navigation, if one were started
+          assert.equal(await title(), home, `${key} on ${handle} changed the folder`);
+          assert.equal(await d.eval(`return document.querySelector('.row.selected .name')?.textContent`), 'pics/', `${key} on ${handle} changed the selection`);
+          assert.equal(await previewOpen(), true, `${key} on ${handle} toggled the preview pane`);
+        }
+      }
+    });
+
     test('reorders columns with Alt+Arrow', async () => {
       await open(fx.work);
       assert.deepEqual(await columnOrder(), ['name', 'size', 'modTime', 'kind', 'mode']);
