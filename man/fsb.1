@@ -585,13 +585,16 @@ A denied path is indistinguishable from a missing one.
 For a Numbers, Pages, Word, Excel or PowerPoint document, the preview is the
 picture macOS draws of it, made by running
 .BR qlmanage (1)
-on that document after the same checks as any other preview.
-It is the one place
+on a private copy that
+.B fsb
+reads after the same checks as any other preview; it is the one place
 .B fsb
 runs another program on your files.
-A document stored only in the cloud is not handed over, nor is a package
-document holding a symbolic link, a denied file, or a part stored only in the
-cloud.
+Quick Look never sees your own file, so a Finder alias named like a document
+cannot lead it anywhere.
+A document stored only in the cloud is not copied, nor is a package document
+with a part stored only in the cloud; parts of a package that a listing would
+leave out (denied files, links) are left out of the copy.
 Keynote documents
 .RI ( .key )
 match the core deny rule

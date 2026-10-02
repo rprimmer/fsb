@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -27,13 +28,13 @@ var ErrUnavailable = errors.New("no Quick Look picture available")
 // slots bounds how many qlmanage processes run at once.
 var slots = make(chan struct{}, 2)
 
-// Thumbnail returns a PNG picture of the document at path, at most size pixels
-// on its longer side. path must be absolute and already checked by the guard;
-// it is passed to qlmanage as one argument, never through a shell.
-func Thumbnail(ctx context.Context, path string, size int) ([]byte, error) {
-	if !filepath.IsAbs(path) {
-		return nil, fmt.Errorf("quicklook: path %q is not absolute", path)
-	}
+// Thumbnail returns a PNG picture, at most size pixels on its longer side, of
+// the document that prepare places in the private folder it is given (it
+// returns the document's path there). Preparing and drawing both count
+// against the limit of simultaneous pictures, and the folder is removed
+// afterwards. An error from prepare is returned as it is. The path is passed
+// to qlmanage as one argument, never through a shell.
+func Thumbnail(ctx context.Context, size int, prepare func(dir string) (string, error)) ([]byte, error) {
 	select {
 	case slots <- struct{}{}:
 		defer func() { <-slots }()
@@ -45,10 +46,25 @@ func Thumbnail(ctx context.Context, path string, size int) ([]byte, error) {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
+	in := filepath.Join(dir, "in")
+	out := filepath.Join(dir, "out")
+	if err := os.Mkdir(in, 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.Mkdir(out, 0o700); err != nil {
+		return nil, err
+	}
+	path, err := prepare(in)
+	if err != nil {
+		return nil, err
+	}
+	if !filepath.IsAbs(path) || !strings.HasPrefix(path, in+"/") {
+		return nil, fmt.Errorf("quicklook: %q is not inside the private folder", path)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "qlmanage", "-t", "-s", fmt.Sprint(size), "-o", dir, path)
+	cmd := exec.CommandContext(ctx, "qlmanage", "-t", "-s", fmt.Sprint(size), "-o", out, path)
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -56,7 +72,7 @@ func Thumbnail(ctx context.Context, path string, size int) ([]byte, error) {
 		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	// qlmanage names the picture after the document; exactly one is expected.
-	names, err := filepath.Glob(filepath.Join(dir, "*.png"))
+	names, err := filepath.Glob(filepath.Join(out, "*.png"))
 	if err != nil || len(names) != 1 {
 		return nil, ErrUnavailable
 	}

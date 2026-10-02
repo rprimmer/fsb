@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,9 +42,11 @@ func TestThumbnailWithRealQuickLook(t *testing.T) {
 		t.Skip("qlmanage not available (not macOS)")
 	}
 	dir := t.TempDir()
-	doc := filepath.Join(dir, "it's a \"test\" -s 1.docx") // odd characters reach qlmanage as one argument
-	minimalDocx(t, doc)
-	png, err := Thumbnail(context.Background(), doc, 400)
+	png, err := Thumbnail(context.Background(), 400, func(in string) (string, error) {
+		doc := filepath.Join(in, "it's a \"test\" -s 1.docx") // odd characters reach qlmanage as one argument
+		minimalDocx(t, doc)
+		return doc, nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,17 +57,29 @@ func TestThumbnailWithRealQuickLook(t *testing.T) {
 	// qlmanage never finishes on something it cannot draw; it is stopped.
 	defer func(d time.Duration) { timeout = d }(timeout)
 	timeout = time.Second
-	junk := filepath.Join(dir, "junk.xlsx")
-	os.WriteFile(junk, []byte("not a spreadsheet"), 0o644)
 	start := time.Now()
-	if _, err := Thumbnail(context.Background(), junk, 400); err == nil {
+	if _, err := Thumbnail(context.Background(), 400, func(in string) (string, error) {
+		junk := filepath.Join(in, "junk.xlsx")
+		return junk, os.WriteFile(junk, []byte("not a spreadsheet"), 0o644)
+	}); err == nil {
 		t.Error("a junk document should have no picture")
 	}
 	if d := time.Since(start); d > 3*time.Second {
 		t.Errorf("took %v; qlmanage was not stopped at the time limit", d)
 	}
 
-	if _, err := Thumbnail(context.Background(), "relative.docx", 400); err == nil {
+	// Only a document inside the private folder is ever drawn.
+	outside := filepath.Join(dir, "elsewhere.docx")
+	minimalDocx(t, outside)
+	if _, err := Thumbnail(context.Background(), 400, func(string) (string, error) { return outside, nil }); err == nil {
+		t.Error("a document outside the private folder must be refused")
+	}
+	if _, err := Thumbnail(context.Background(), 400, func(string) (string, error) { return "relative.docx", nil }); err == nil {
 		t.Error("a relative path must be refused")
+	}
+	// An error from prepare is returned as it is.
+	sentinel := errors.New("refused by the guard")
+	if _, err := Thumbnail(context.Background(), 400, func(string) (string, error) { return "", sentinel }); err != sentinel {
+		t.Errorf("err = %v, want the prepare error", err)
 	}
 }

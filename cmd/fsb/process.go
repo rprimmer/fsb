@@ -14,16 +14,44 @@ import (
 // process describes a running program, as far as fsb's messages need it.
 type process struct {
 	pid     int
-	name    string // command name, without its folder
+	uid     int
+	name    string // command name as ps shows it, without its folder
 	started string // as ps prints it, e.g. "Fri Oct  2 06:08:27 2026"
 	tty     string // terminal, e.g. "ttys001"; "" if it has none
 }
 
-// isFsb reports whether p is an fsb: this program under its usual name or
-// under whatever name it was started by.
+// isFsb reports whether p is an fsb of this user: a process of the same user
+// whose executable file is named fsb, or has this program's own name. The name
+// ps shows is not used for this, because on macOS it is the process's argv[0],
+// which any program can set; the executable file is what the kernel loaded.
+// (Another program of the same user, copied under the name fsb, would still
+// pass; that user can signal it anyway.)
 func (p process) isFsb() bool {
-	exe, _ := os.Executable()
-	return p.name == "fsb" || (exe != "" && p.name == filepath.Base(exe))
+	if p.uid != os.Getuid() {
+		return false
+	}
+	path, ok := executablePath(p.pid)
+	if !ok {
+		return false
+	}
+	self, _ := os.Executable()
+	base := filepath.Base(path)
+	return base == "fsb" || (self != "" && base == filepath.Base(self))
+}
+
+// executablePath returns the file the process pid was started from.
+func executablePath(pid int) (string, bool) {
+	if p, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid)); err == nil { // Linux
+		return p, true
+	}
+	out, _ := exec.Command("lsof", "-nP", "-p", strconv.Itoa(pid), "-a", "-d", "txt", "-Fn").Output()
+	sc := bufio.NewScanner(bytes.NewReader(out))
+	for sc.Scan() {
+		if p, ok := strings.CutPrefix(sc.Text(), "n"); ok && p != "" {
+			return p, true // the first text file is the executable
+		}
+	}
+	return "", false
 }
 
 func (p process) String() string {
@@ -43,15 +71,19 @@ func lookupProcess(pid int) (process, bool) {
 		return process{}, false
 	}
 	// comm= last: it may contain spaces.
-	out, err := exec.Command("ps", "-o", "tty=,lstart=,comm=", "-p", strconv.Itoa(pid)).Output()
+	out, err := exec.Command("ps", "-o", "uid=,tty=,lstart=,comm=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
 		return process{}, false
 	}
 	f := strings.Fields(strings.TrimSpace(string(out)))
-	if len(f) < 7 { // tty, five lstart fields, command
+	if len(f) < 8 { // uid, tty, five lstart fields, command
 		return process{}, false
 	}
-	p := process{pid: pid, tty: f[0], started: strings.Join(f[1:6], " "), name: filepath.Base(strings.Join(f[6:], " "))}
+	uid, err := strconv.Atoi(f[0])
+	if err != nil {
+		return process{}, false
+	}
+	p := process{pid: pid, uid: uid, tty: f[1], started: strings.Join(f[2:7], " "), name: filepath.Base(strings.Join(f[7:], " "))}
 	if p.tty == "??" || p.tty == "?" || p.tty == "-" { // no terminal (macOS, Linux)
 		p.tty = ""
 	}

@@ -115,7 +115,7 @@ func writeLastPort(cfgDir string, port int) {
 	if os.MkdirAll(cfgDir, 0o700) != nil {
 		return
 	}
-	_ = os.WriteFile(filepath.Join(cfgDir, lastPortFile), []byte(strconv.Itoa(port)+"\n"), 0o600)
+	_ = writeOwnFile(filepath.Join(cfgDir, lastPortFile), strconv.Itoa(port)+"\n")
 }
 
 // choosePort binds the loopback listener and decides which port it uses.
@@ -167,6 +167,9 @@ func showRules(out io.Writer, kind, path string, set *rules.Set, coreMissing []s
 	}
 	if len(coreMissing) > 0 {
 		fmt.Fprintf(out, "# warning: core deny rule(s) missing, so these paths are browsable: %s\n", strings.Join(coreMissing, ", "))
+	}
+	if kind == "deny" {
+		fmt.Fprintln(out, "# also refused, though not a rule: any other name (hard link) of a denied file or of a file in a credential folder")
 	}
 	return nil
 }

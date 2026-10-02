@@ -35,9 +35,10 @@ type Config struct {
 	// Go to path box.
 	Home   string
 	Logger *log.Logger
-	// Thumbnail draws a PNG picture of the document at a guard-checked real
-	// path (quicklook.Thumbnail when nil). Tests substitute their own.
-	Thumbnail func(ctx context.Context, path string, size int) ([]byte, error)
+	// Thumbnail draws a PNG picture of the document that prepare places in the
+	// private folder it is given (quicklook.Thumbnail when nil). Tests
+	// substitute their own.
+	Thumbnail func(ctx context.Context, size int, prepare func(dir string) (string, error)) ([]byte, error)
 }
 
 // Server serves the API.
@@ -247,26 +248,26 @@ func (s *Server) pdf(w http.ResponseWriter, r *http.Request) {
 const thumbSize = 1200
 
 // quicklook serves the picture macOS Quick Look draws of an iWork or Office
-// document (see guard.QuickLookTarget for what qualifies). It is served like
-// an image preview: a PNG made by fsb's own call, sandboxed. If the document
-// changed identity while Quick Look read it, the picture is discarded.
+// document. Quick Look is given a private copy that the guard made (see
+// guard.CopyForQuickLook), never the user's own path. The picture is served
+// like an image preview: a PNG made by fsb's own call, sandboxed.
 func (s *Server) quicklook(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
-	real, same, err := s.cfg.Guard.QuickLookTarget(p)
-	if err != nil {
-		s.fail(w, p, err)
+	var guardErr error
+	png, err := s.cfg.Thumbnail(r.Context(), thumbSize, func(dir string) (string, error) {
+		doc, err := s.cfg.Guard.CopyForQuickLook(p, dir)
+		guardErr = err
+		return doc, err
+	})
+	if guardErr != nil {
+		s.fail(w, p, guardErr)
 		return
 	}
-	png, err := s.cfg.Thumbnail(r.Context(), real, thumbSize)
 	if err != nil {
 		if r.Context().Err() == nil {
 			s.logf("quicklook %q: %v", p, err)
 		}
 		s.fail(w, p, guard.ErrUnsupported)
-		return
-	}
-	if !same() {
-		s.fail(w, p, guard.ErrNotFound)
 		return
 	}
 	h := w.Header()

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // The real binary is built and run, since --background starts a second
@@ -141,5 +143,100 @@ func TestForegroundFsbOnTheUsualPortIsNamedAndStoppable(t *testing.T) {
 	}
 	if err := <-exited; err != nil {
 		t.Errorf("first fsb should exit cleanly on --stop: %v", err)
+	}
+}
+
+// buildFsb builds the binary and returns it with a fresh home and a runner.
+func buildFsb(t *testing.T) (home string, fsb func(...string) (string, error)) {
+	t.Helper()
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "fsb")
+	if out, err := exec.Command("go", "build", "-o", exe, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	home = filepath.Join(dir, "home")
+	if err := os.MkdirAll(filepath.Join(home, ".config", "fsb"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return home, func(args ...string) (string, error) {
+		cmd := exec.Command(exe, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+}
+
+// From the independent review: a process that only calls itself fsb (its
+// argv[0], which ps shows on macOS) must never be signaled by --stop, whether
+// it is named in the PID file or listening on the remembered port.
+func TestStopNeverSignalsAProcessThatOnlyCallsItselfFsb(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the binary")
+	}
+	home, fsb := buildFsb(t)
+	cfg := filepath.Join(home, ".config", "fsb")
+	survives := func(cmd *exec.Cmd, what string) {
+		t.Helper()
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		out, err := fsb("--stop")
+		select {
+		case e := <-done:
+			t.Errorf("%s was stopped (%v); --stop said: %v %s", what, e, err, out)
+		case <-time.After(time.Second):
+			cmd.Process.Kill()
+			<-done
+		}
+	}
+
+	imp := &exec.Cmd{Path: "/bin/sleep", Args: []string{"/opt/whatever/fsb", "60"}}
+	if err := imp.Start(); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(cfg, "pid"), []byte(strconv.Itoa(imp.Process.Pid)+"\n"), 0o600)
+	survives(imp, "a sleep named fsb, in the PID file")
+	os.Remove(filepath.Join(cfg, "pid"))
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	nc := &exec.Cmd{Path: "/usr/bin/nc", Args: []string{"fsb", "-l", "127.0.0.1", strconv.Itoa(port)}}
+	if err := nc.Start(); err != nil {
+		t.Skipf("nc: %v", err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	os.WriteFile(filepath.Join(cfg, "lastport"), []byte(strconv.Itoa(port)+"\n"), 0o600)
+	if out, _ := fsb("--status"); !strings.Contains(out, "not running") {
+		t.Errorf("--status took nc named fsb for fsb:\n%s", out)
+	}
+	survives(nc, "nc named fsb, on the remembered port")
+}
+
+// From the independent review: fsb's own files are never written through a
+// symbolic link, so a link planted in ~/.config/fsb cannot make it overwrite
+// another file.
+func TestOwnFilesAreNeverWrittenThroughASymlink(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the binary")
+	}
+	home, fsb := buildFsb(t)
+	cfg := filepath.Join(home, ".config", "fsb")
+	victims := map[string]string{}
+	for _, name := range []string{"background.log", "pid", "lastport"} {
+		v := filepath.Join(home, "victim-"+name)
+		os.WriteFile(v, []byte("IMPORTANT DATA\n"), 0o644)
+		os.Symlink(v, filepath.Join(cfg, name))
+		victims[name] = v
+	}
+	os.MkdirAll(filepath.Join(home, "docs"), 0o755)
+	t.Cleanup(func() { fsb("--stop") })
+	fsb("--background", "--no-open", filepath.Join(home, "docs"))
+	for name, v := range victims {
+		if b, _ := os.ReadFile(v); string(b) != "IMPORTANT DATA\n" {
+			t.Errorf("the target of a link named %s was overwritten: %q", name, b)
+		}
 	}
 }

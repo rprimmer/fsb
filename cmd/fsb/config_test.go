@@ -285,8 +285,17 @@ func TestShowRules(t *testing.T) {
 	if !strings.Contains(lines[0], "built-in defaults") {
 		t.Errorf("header should name the defaults: %q", lines[0])
 	}
-	if strings.Join(lines[1:], "\n") != strings.Join(rules.CoreDeny, "\n") {
-		t.Errorf("rules = %q, want the core rules", lines[1:])
+	var shown []string
+	for _, l := range lines[1:] {
+		if !strings.HasPrefix(l, "#") {
+			shown = append(shown, l)
+		}
+	}
+	if strings.Join(shown, "\n") != strings.Join(rules.CoreDeny, "\n") {
+		t.Errorf("rules = %q, want the core rules", shown)
+	}
+	if !strings.Contains(out.String(), "hard link") {
+		t.Error("the identity-based refusal of hard links should be mentioned")
 	}
 
 	// A file that drops a core rule: the file is named and the gap reported.

@@ -2,6 +2,7 @@ package guard
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,80 +17,124 @@ var quickLookTypes = map[string]bool{
 	".docx": true, ".doc": true, ".xlsx": true, ".xls": true, ".pptx": true, ".ppt": true,
 }
 
-// maxPackageEntries bounds the walk of a package document.
-const maxPackageEntries = 5000
+// Bounds on what one Quick Look copy may cost.
+const (
+	maxPackageEntries   = 5000
+	MaxQuickLookBytes   = 256 << 20
+	quickLookCopyPrefix = "document"
+)
 
-// ErrChanged reports that a file changed identity while it was being read
-// by another program.
-var ErrChanged = errors.New("changed while being read")
-
-// QuickLookTarget decides whether the document at p may be handed to Quick
-// Look, by path, for a picture of it. It applies every check Open does, and
-// returns the real path to hand over plus a function that reports whether that
-// path still names the same document, to be called once Quick Look is done: it
-// opens the document again by path, so a swap in between must void the result.
+// CopyForQuickLook copies the document at p into dir, which must be a fresh
+// private folder, and returns the path of the copy, for Quick Look to draw.
 //
-// The document must have one of the quickLookTypes extensions and must be on
-// disk: a cloud-only document, or a package with any cloud-only part, is
-// refused, since Quick Look would download it. A package is refused if
-// anything inside it is a symbolic link (Quick Look would follow it), is
-// denied by the rules, or is a hard link to a denied file.
-func (g *Guard) QuickLookTarget(p string) (string, func() bool, error) {
+// Quick Look is never given the user's own path, because it opens what it is
+// given by itself and resolves more than the guard can see: a Finder alias
+// named report.docx is a small regular file that Quick Look follows to its
+// target, which may be denied or outside the roots. A copy holds only bytes
+// that the guard itself read, through descriptors it verified, without
+// extended attributes or resource forks, so there is nothing left to follow,
+// and nothing can be swapped in between the check and the drawing.
+//
+// The document must have one of the quickLookTypes extensions, must pass every
+// check of Open, and must be on disk (a cloud-only document, or a package with
+// a cloud-only part, is refused, since reading it would download it). In a
+// package (a folder), every file is opened through the guard as well; a part
+// that is denied, a symbolic link, a hard link to a denied file, outside the
+// package or not a regular file is left out of the copy, exactly as a listing
+// leaves it out, so the answer does not reveal it. A document larger than
+// MaxQuickLookBytes, or a package with more than maxPackageEntries entries, is
+// refused as unsupported.
+func (g *Guard) CopyForQuickLook(p, dir string) (string, error) {
 	f, fi, real, err := g.open(p)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	f.Close()
-	if !quickLookTypes[strings.ToLower(filepath.Ext(real))] {
-		return "", nil, ErrUnsupported
+	defer f.Close()
+	ext := strings.ToLower(filepath.Ext(real))
+	if !quickLookTypes[ext] {
+		return "", ErrUnsupported
 	}
 	if err := refuseDataless(fi); err != nil {
-		return "", nil, err
+		return "", err
 	}
-	if fi.IsDir() {
-		if err := g.checkPackage(real); err != nil {
-			return "", nil, err
+	dst := filepath.Join(dir, quickLookCopyPrefix+ext)
+	budget := int64(MaxQuickLookBytes)
+	if !fi.IsDir() {
+		if !fi.Mode().IsRegular() {
+			return "", ErrUnsupported
 		}
-	} else if !fi.Mode().IsRegular() {
-		return "", nil, ErrUnsupported
+		return dst, copyBounded(f, dst, &budget)
 	}
-	same := func() bool {
-		f2, fi2, real2, err := g.open(p)
-		if err != nil {
-			return false
-		}
-		f2.Close()
-		return real2 == real && os.SameFile(fi, fi2) && fi2.ModTime().Equal(fi.ModTime()) && fi2.Size() == fi.Size()
-	}
-	return real, same, nil
+	return dst, g.copyPackage(real, dst, &budget)
 }
 
-// checkPackage walks a package document without following links.
-func (g *Guard) checkPackage(root string) error {
+// copyPackage copies the visible files of the package at root into dst.
+func (g *Guard) copyPackage(root, dst string, budget *int64) error {
+	if err := os.Mkdir(dst, 0o700); err != nil {
+		return err
+	}
 	n := 0
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return mapErr(err)
 		}
-		if n++; n > maxPackageEntries {
-			return ErrUnsupported
-		}
 		if path == root {
 			return nil
 		}
-		if d.Type()&fs.ModeSymlink != 0 || !(d.IsDir() || d.Type().IsRegular()) {
+		if n++; n > maxPackageEntries {
 			return ErrUnsupported
 		}
-		if r := g.deny.Match(path, d.IsDir()); r.Matched {
-			return &DeniedError{Path: path, Rule: r.Rule}
+		rel, err := filepath.Rel(root, path)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+			return ErrUnsupported
 		}
-		fi, err := d.Info()
-		if err != nil {
-			return mapErr(err)
+		switch {
+		case d.IsDir():
+			if r := g.deny.Match(path, true); r.Matched {
+				return filepath.SkipDir
+			}
+			return os.Mkdir(filepath.Join(dst, rel), 0o700)
+		case !d.Type().IsRegular():
+			return nil // a symbolic link, socket or device: left out
 		}
-		if g.hardLinkToDenied(fi) {
-			return &DeniedError{Path: path, Rule: "hard link to a denied file"}
+		// Opened through the guard, by its full path, so deny rules, roots and
+		// hard links are decided on what is actually opened, even if a folder
+		// on the way was swapped for a link after the walk listed it.
+		f, fi, real, err := g.open(path)
+		var denied *DeniedError
+		switch {
+		case errors.As(err, &denied), errors.Is(err, ErrNotFound), errors.Is(err, ErrNotRegular), errors.Is(err, ErrPermission):
+			return nil // left out, as a listing leaves it out
+		case err != nil:
+			return err
 		}
-		return refuseDataless(fi)
+		defer f.Close()
+		if !strings.HasPrefix(real, root+"/") || !fi.Mode().IsRegular() {
+			return nil
+		}
+		if err := refuseDataless(fi); err != nil {
+			return err
+		}
+		return copyBounded(f, filepath.Join(dst, rel), budget)
 	})
+}
+
+// copyBounded copies src into a new file at dst, charging budget, and refuses
+// once the budget is exhausted.
+func copyBounded(src io.Reader, dst string, budget *int64) error {
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	n, err := io.Copy(out, io.LimitReader(src, *budget+1))
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return mapErr(err)
+	}
+	if *budget -= n; *budget < 0 {
+		return ErrUnsupported
+	}
+	return nil
 }

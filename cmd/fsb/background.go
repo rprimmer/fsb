@@ -67,7 +67,7 @@ func childMain(args []string) int {
 	if home, err := os.UserHomeDir(); err == nil {
 		dir := filepath.Join(home, ".config", "fsb")
 		if os.MkdirAll(dir, 0o700) == nil {
-			if f, err := os.OpenFile(filepath.Join(dir, backgroundLog), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600); err == nil {
+			if f, err := openOwnFile(filepath.Join(dir, backgroundLog)); err == nil {
 				log = f
 			}
 		}
@@ -127,16 +127,66 @@ func startBackground(cfgDir string, args []string, stdout io.Writer) error {
 // main exits with failure without printing it again.
 type errAlreadyReported struct{ error }
 
-// writePID records this process as the background fsb.
+// writePID records this process as the background fsb: its number, and when
+// it started, so that a number later reused by another process is not
+// mistaken for it.
 func writePID(cfgDir string) error {
-	return os.WriteFile(filepath.Join(cfgDir, pidFile), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600)
+	started := ""
+	if p, ok := lookupProcess(os.Getpid()); ok {
+		started = p.started
+	}
+	return writeOwnFile(filepath.Join(cfgDir, pidFile), strconv.Itoa(os.Getpid())+"\n"+started+"\n")
+}
+
+// readPID returns the process number and start time recorded by writePID.
+func readPID(cfgDir string) (pid int, started string, ok bool) {
+	data, err := os.ReadFile(filepath.Join(cfgDir, pidFile))
+	if err != nil {
+		return 0, "", false
+	}
+	lines := strings.SplitN(string(data), "\n", 3)
+	pid, err = strconv.Atoi(strings.TrimSpace(lines[0]))
+	if err != nil {
+		return 0, "", false
+	}
+	if len(lines) > 1 {
+		started = strings.TrimSpace(lines[1])
+	}
+	return pid, started, true
+}
+
+// openOwnFile opens one of fsb's own files for writing, empty, with mode 0600
+// whether or not it existed. It never follows a symbolic link: whatever could
+// plant one in ~/.config/fsb must not make fsb overwrite the link's target.
+func openOwnFile(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+// writeOwnFile replaces the contents of one of fsb's own files (openOwnFile).
+func writeOwnFile(path, content string) error {
+	f, err := openOwnFile(path)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // removePID removes the PID file if it still names this process.
 func removePID(cfgDir string) {
-	p := filepath.Join(cfgDir, pidFile)
-	if data, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(data)) == strconv.Itoa(os.Getpid()) {
-		os.Remove(p)
+	if pid, _, ok := readPID(cfgDir); ok && pid == os.Getpid() {
+		os.Remove(filepath.Join(cfgDir, pidFile))
 	}
 }
 
@@ -146,11 +196,9 @@ func removePID(cfgDir string) {
 // gone, or whose number now belongs to some other program, does not count, and
 // neither does a program other than fsb holding the port.
 func findRunning(cfgDir string) (p process, background, ok bool) {
-	if data, err := os.ReadFile(filepath.Join(cfgDir, pidFile)); err == nil {
-		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-			if p, ok := lookupProcess(pid); ok && p.isFsb() {
-				return p, true, true
-			}
+	if pid, started, ok := readPID(cfgDir); ok {
+		if p, ok := lookupProcess(pid); ok && p.started == started && p.isFsb() {
+			return p, true, true
 		}
 	}
 	if port := readLastPort(cfgDir); port != 0 {
