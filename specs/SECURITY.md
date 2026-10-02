@@ -60,4 +60,4 @@ None of this is a guarantee. It is a record of what has been checked. Before wid
 
 ## Reporting a vulnerability
 
-The project is not yet public. When it is, please use GitHub's private vulnerability reporting for this repository rather than a public issue.
+fsb is provided as-is and is not actively maintained, so there is no private reporting channel and no promise of a fix. If you find a vulnerability, consider it a reason not to use fsb for the affected purpose. If you open an issue, please describe the problem without a working exploit.

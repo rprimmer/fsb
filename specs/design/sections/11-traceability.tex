@@ -132,7 +132,8 @@ Req. & Coverage \\
 \fq{NFR-5} & \code{go.sum} is committed and pinned; a vulnerability scan runs in \code{.github/workflows/ci.yml} (never yet executed remotely; see Section~\ref{sec:untested}). \\
 \fq{NFR-6} & Keyboard operability is exercised throughout the end-to-end suite; semantic markup and \code{prefers-color-scheme} are not checked by any automated test (visual/manual only). \\
 \fq{FUT-1}--\fq{FUT-6} & Not applicable: none of this is implemented in this version (Section~10.2 of the functional specification). \\
-\fq{DST-1}, \fq{DST-2}, \fq{DST-3} & Not applicable: no release has been made (Section~\ref{sec:untested}). \\
+\fq{DST-1}, \fq{DST-2} & Verified by hand at release: the public repository and its license, the version tag, and \code{go install \ldots@latest} producing a working \code{fsb} (Section~\ref{sec:untested}). \\
+\fq{DST-3} & Not applicable: nothing to provide. \\
 \fq{DST-4} & Partially: the README and this design specification state the security model and the deny-rule costs; the permission-prompt note is written but not exercised by any test (it depends on the user's own TCC state). \\
 \fq{DST-5} & Verified by hand: default layout, a custom \code{MANDIR}/\code{BINDIR}, \code{PREFIX}, \code{DESTDIR} staging, and \code{uninstall}, on the machine of Section~\ref{sec:environment} (2026-09-21). Not exercised by an automated test. \\
 \bottomrule

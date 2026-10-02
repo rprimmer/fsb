@@ -2,7 +2,9 @@
 
 `fsb` (filesystem browser): a read-only, local-only web view of your filesystem. One Go binary serves a browser UI on `127.0.0.1`; nothing is ever written, and nothing is reachable from the network.
 
-> **Status: M2 (walk), first cut.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See the [functional specification](specs/functional/) and the [design specification](specs/design/).
+> **Status: 1.0, finished, and provided as-is.** Browse, sort, filter, search and preview from a virtualized listing in your browser, on top of the security core (path guard, rule matcher, localhost protections). See the [functional specification](specs/functional/) and the [design specification](specs/design/).
+>
+> This is a personal project, published in case it is useful to others. It is not actively maintained: please don't expect support, bug fixes or new features.
 
 ### Keyboard
 
@@ -34,14 +36,16 @@ The UI lists directories with 100,000+ entries: the API streams the listing in c
 
 ## Quick start
 
+`fsb` runs on macOS and is installed from source; it needs [Go](https://go.dev/dl/) 1.26 or later. There are no prebuilt binaries and no Homebrew formula. A program you build yourself is not quarantined, so macOS does not ask to verify it.
+
 ```sh
-go build -o fsb ./cmd/fsb
-./fsb --init        # write ~/.config/fsb/{ignore,deny}
-./fsb --show-deny   # print the deny rules in effect (--show-ignore: the hide rules)
-./fsb               # serve $HOME read-only, print a single-use URL
+go install github.com/rprimmer/fsb/cmd/fsb@latest   # installs fsb into $(go env GOPATH)/bin
+fsb --init          # write ~/.config/fsb/{ignore,deny}
+fsb --show-deny     # print the deny rules in effect (--show-ignore: the hide rules)
+fsb                 # serve $HOME read-only, print a single-use URL
 ```
 
-To install the program and its manual page:
+To install the program and its manual page from a clone of this repository:
 
 ```sh
 make install                                   # /usr/local/bin/fsb and /usr/local/share/man/man1/fsb.1

@@ -91,12 +91,12 @@ document; they are gathered here so a reader does not have to hunt for them.
         author and an assistant.}  The two ``independent reviews'' recorded in
         Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant
         with access to the source but none to the author's reasoning, not by a third
-        party, and not by a professional security firm.  A penetration test by an
-        independent party is planned before release and has not happened.
-  \item \textbf{No release has been made.}  \fq{DST-1} through \fq{DST-3} (the public
-        repository, signed and notarized binaries, the Homebrew formula) do not exist
-        yet, so nothing about code signing, notarization, Gatekeeper, or the actual
-        download and install experience for another user has been tested.
+        party, and not by a professional security firm.  No penetration test by an
+        independent party was done; the owner decided against one.
+  \item \textbf{Installing on another machine.}  The release is source only
+        (\fq{DST-2}), so there is no signing, notarization or Gatekeeper behavior to test,
+        but \code{go install} from the public repository was tried only once, on the
+        machine of Section~\ref{sec:environment}, right after release.
   \item \textbf{Vulnerability scanning runs on every push, not on a schedule.}
         \code{govulncheck} and \code{npm audit} run in continuous integration, and
         Dependabot watches the dependencies; nothing rescans an unchanged commit when a

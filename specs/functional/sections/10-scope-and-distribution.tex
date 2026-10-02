@@ -50,8 +50,10 @@ The program shall be published in a public repository under the MIT license.
 \end{req}
 
 \begin{req}{DST-2}
-Releases shall provide binaries for macOS on Apple silicon and Intel, with checksums,
-signed and notarized where practical, and installation with \code{go install}.
+Releases are source releases: a version tag in the public repository, installed with
+\code{go install github.com/rprimmer/fsb/cmd/fsb@latest} or built with \code{make
+install} from a clone.  No prebuilt binaries are provided, so none needs signing or
+notarization; a program built locally is not quarantined by macOS.
 \end{req}
 
 \begin{req}{DST-5}
@@ -62,7 +64,8 @@ packaging.  The manual page goes in the \code{man1} folder of \code{MANDIR}.
 \end{req}
 
 \begin{req}{DST-3}
-A Homebrew formula shall follow once the walk stage is stable.
+No Homebrew formula is provided.  (Planned earlier; withdrawn, because maintaining
+one is ongoing work for a project that is finished.)
 \end{req}
 
 \begin{req}{DST-4}
@@ -71,4 +74,5 @@ and that macOS may ask for permission to read Documents, Desktop, Downloads and
 external volumes the first time.
 \end{req}
 
-Packaging is done last, when everything else is settled.  No release has been made.
+Version 1.0 is released as source (\rid{DST-2}), and the project is provided as-is: it
+is finished and not actively maintained.
