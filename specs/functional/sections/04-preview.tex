@@ -83,8 +83,8 @@ directory that claims more entries than it holds cannot make \texttt{fsb} alloca
 for them, and a zip64 directory is honored whenever it is present.  A plain tar is
 listed by skipping each member's body, so the work does not grow with the size of
 its contents.  Listing stops when the request is abandoned.  Member names are
-displayed as text with control and Unicode formatting characters replaced, cut at
-4{,}096 bytes, and are never used as paths.  A file that has an archive name but
+displayed as text with control and Unicode formatting characters replaced, cut
+after 4{,}096 bytes, with an ellipsis added, and are never used as paths.  A file that has an archive name but
 is not one is shown as ordinary text or as a binary file.
 \end{req}
 
@@ -106,7 +106,7 @@ a note saying so.  It is subject to every rule of an ordinary preview.  Quick Lo
 draws a private copy that \texttt{fsb} reads, never the user's own file, so it
 cannot follow a Finder alias.  A cloud-only document, or a package with a cloud-only
 part, is not copied; parts of a package that a listing leaves out (denied files,
-links, hard links to denied files) are left out of the copy.  Copying is given 20 seconds and drawing 5; both stop when the request is
+links, hard links to denied files) are left out of the copy.  Copying is given 20 seconds and drawing 5; both are canceled when the request is
 abandoned.  The 20 seconds is a cooperative limit: it is checked between reads and
 once more when a read returns, so work that ran out of time fails instead of
 succeeding, but it cannot interrupt a read that the file system is itself holding up.  When there is no picture, the pane shows what it would

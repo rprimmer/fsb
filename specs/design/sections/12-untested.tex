@@ -24,7 +24,7 @@ document; they are gathered here so a reader does not have to hunt for them.
         interaction.}  The narrow-window column behavior (\fq{LST-11}) was written to
         a requirement, not exercised at a phone-sized viewport.
   \item \textbf{A second machine, a second user account, or a network-mounted
-        volume.}  Every test ran as one user on one machine.  Cross-user permission
+        volume.}  Apart from the hosted runners of continuous integration (Section~\ref{sec:verification}), every test ran as one user on one machine.  Cross-user permission
         boundaries (distinct from the deny rules) are provided by the operating system
         and were not separately exercised.
 \end{itemize}
@@ -35,8 +35,10 @@ document; they are gathered here so a reader does not have to hunt for them.
   \item \textbf{The 100{,}000-file scale test} (\fq{LST-2}) is opt-in
         (\code{FSB\_E2E\_BIG=1}).  It runs in continuous integration, on Linux, where the
         first run (2026-10-02) drew the first rows of 100{,}000 entries after 118~ms with
-        35 rows in the page.  On macOS it was run by hand once, on 2026-09-20, which is
-        what the functional specification's limits section reports.
+        35 rows in the page.  On macOS it was run by hand on 2026-09-20 (which is what the
+        functional specification's limits section reports) and again, locally, by the
+        independent reviews of 2026-10-02 (first rows after 80~ms, 36 rows in the page);
+        those are dated measurements on one machine, not a standing result.
   \item \textbf{\code{TestRootContainmentIsByIdentityNotSpelling}} (\fq{ROOT-1}) is
         skipped unless the environment variable \code{FSB\_CASE\_SENSITIVE\_VOLUME}
         names a folder on a case-sensitive volume.  It was run once, manually, against a

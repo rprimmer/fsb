@@ -46,7 +46,10 @@ nothing had ever exercised the errno either produces, and the Details-panel race
 preview that fails, which no test happened to select.  All four were found by using the
 running application, not by any automated layer, which is itself a reason to keep doing
 that rather than treating the test suite as the last word; Finding~21 was found while
-fixing them, by reading the surrounding code rather than by any test.  An independent
-review was done three times, by an assistant (Section~\ref{sec:untested}), the second and
-third finding defects in the fixes of the one before (Section~\ref{sec:history}); a
-professional penetration test was not done.
+fixing them, by reading the surrounding code rather than by any test.  Independent
+reviews were done by an assistant (Section~\ref{sec:untested}) in two sequences: in
+September, of Quick Look, background mode and process control; and in October, of the whole
+code, as an external review, then of its fixes (which found two further hard-link
+bypasses), then of those fixes (which found seven defects, several in the fixes
+themselves), and finally of that round, which found nothing new
+(Section~\ref{sec:history}).  A professional penetration test was not done.

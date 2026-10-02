@@ -131,7 +131,7 @@ Req. & Coverage \\
 \fq{LIM-1} & Each limit has a citation under its own feature above (\fq{SRC-2}, \fq{SRC-6}, \fq{PRV-3}, \fq{PRV-7}, \fq{PRV-9}, \fq{PRV-12}, \fq{RUL-6}, \fq{LST-11}); \code{web} pane-width and column-width clamping in \code{prefs.test.ts}/\code{columns.test.ts}. \\
 \fq{LIM-2} & \code{TestSearchLimitsAndCancellation}, \code{TestListArchiveIsBounded}. \\
 \fq{NFR-1}--\fq{NFR-4}, \fq{NFR-7} & \emph{Measured}, not continuously tested: the figures in the functional specification are one-time measurements on the machine of Section~\ref{sec:environment} (2026-09-20/21), not asserted by a test that would fail if they regressed. \\
-\fq{NFR-5} & \code{go.sum} is committed and pinned; a vulnerability scan runs in \code{.github/workflows/ci.yml} (never yet executed remotely; see Section~\ref{sec:untested}). \\
+\fq{NFR-5} & \code{go.sum} is committed and pinned; a vulnerability scan runs in \code{.github/workflows/ci.yml}, which first ran on a hosted runner on 2026-10-02; the commits made since (pinned actions, the pinned scanner version) have not yet run there (see Section~\ref{sec:untested}). \\
 \fq{NFR-6} & Keyboard operability is exercised throughout the end-to-end suite; semantic markup and \code{prefers-color-scheme} are not checked by any automated test (visual/manual only). \\
 \fq{FUT-1}--\fq{FUT-6} & Not applicable: none of this is implemented in this version (Section~10.2 of the functional specification). \\
 \fq{DST-1}, \fq{DST-2} & Verified by hand at release: the public repository and its license, the version tag, and \code{go install \ldots@latest} producing a working \code{fsb} (Section~\ref{sec:untested}). \\

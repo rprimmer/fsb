@@ -87,8 +87,10 @@ tar, or a gzip stream that contains a tar.  The limits of \fq{LIM-1} bound a hos
 \begin{itemize}
   \item A zip's directory is read by the guard itself, record by record, rather than by the
         standard library, which would build the whole directory in memory before any limit
-        could count it.  Reading stops at 200{,}000 entries or 64~MiB of directory and the
-        listing says so; a directory whose own count disagrees with what it holds is refused.
+        could count it.  Reading stops at 200{,}000 entries or once 64~MiB of directory have been read,
+        and the listing says so; the byte total is checked between records, so the last
+        record may cross it by at most its own length (a bounded overrun, not an exact
+        limit); a directory whose own count disagrees with what it holds is refused.
         A zip64 end-of-directory locator is honored whenever it is present (a first version
         compared a 16-bit count with 200{,}000, a test that could never be true).  A fuzz
         test compares this reader with the standard library's wherever both accept an
@@ -102,8 +104,8 @@ tar, or a gzip stream that contains a tar.  The limits of \fq{LIM-1} bound a hos
         listing that ends because the budget was spent exactly at a member boundary says it
         was cut short.  All archive listing stops when the request is abandoned.
   \item Member names are untrusted: control characters, Unicode formatting characters (such as
-        bidirectional overrides) and invalid UTF-8 are replaced, a name is cut at 4{,}096 bytes
-        after that, and names are only ever displayed, never used as paths.
+        bidirectional overrides) and invalid UTF-8 are replaced, a name is cut after 4{,}096 bytes
+        and an ellipsis added (so at most 4{,}099 bytes are shown), and names are only ever displayed, never used as paths.
 \end{itemize}
 
 \subsection{Rendered Markdown}

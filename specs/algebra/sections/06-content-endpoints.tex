@@ -35,17 +35,25 @@ implicitly: the guard reports it as not downloaded before any read.
 \begin{law}[Archive listing discloses names only]
 \label{law:archive-names}
 The archive listing contains, for each member, its name, size, type and date,
-and never any member data; names are displayed as text with control characters
-and invalid UTF-8 replaced, and are never used as paths.
+and never any member data; names are displayed as text with control characters,
+Unicode formatting characters and invalid UTF-8 replaced, are cut to a bounded
+prefix (4{,}096 bytes, then an ellipsis), and are never used as paths.
 \Tests{guard/archive_test.go::TestListArchiveNamesAreDefanged; server/archive_test.go}
 \end{law}
 
 \begin{law}[Archive listing is bounded]
 \label{law:archive-bounded}
-For any file, listing scans at most $E$ tar entries and streams at most $D$
-decompressed bytes, refuses a zip whose directory claims more than $E$ entries,
-returns at most $S$ entries, and reports when a limit stopped it.
-\Tests{guard/archive_test.go::TestListArchiveIsBounded, TestListArchiveStopsAtTheDecompressionLimit}
+For any file, listing examines at most $E$ tar entries or zip directory records,
+streams at most $D$ decompressed bytes of a compressed tar, reads at most $B$
+bytes of a zip directory, returns at most $S$ entries, and reports (as
+\emph{incomplete}) when a scan limit stopped it.  A \emph{valid} archive that
+exceeds a scan limit is listed up to the limit and marked incomplete; it is not
+refused.  A zip whose directory was read in full is refused if its record count
+disagrees with the archive's end record, which can be checked only then.  The
+byte bound $B$ is checked between records, so the last record may cross it by at
+most one record's length, and the work stays bounded.  A plain tar is read by
+skipping each member's body, so its cost does not grow with member sizes.
+\Tests{guard/archive\_test.go::TestListArchiveIsBounded, TestListArchiveStopsAtTheDecompressionLimit, TestZipEntryLimitHoldsForValidArchives, TestZipDirectoryByteBudget, TestZipWithAMisleadingCountIsRefused, TestTarGzLimitAtAHeaderBoundaryIsIncomplete, TestPlainTarListingStillSeeksPastMemberBodies}
 \end{law}
 
 \begin{law}[Inline PDF is framed only by the app]

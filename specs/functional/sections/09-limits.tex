@@ -23,8 +23,8 @@ Extended attributes shown / largest value shown & 64 / 4~KB \\
 Markdown images per file / size of each / fetched at once & 20 / 5~MB / 4 \\
 Archive entries shown & 1{,}000 \\
 Tar entries scanned / decompressed bytes read (tar.gz) & 200{,}000 / 512~MiB \\
-Zip: entries read / bytes of its directory read & 200{,}000 / 64~MiB \\
-Archive member name kept & 4{,}096 bytes \\
+Zip: entries read / bytes of its directory, at which reading stops (checked between records, so the last may cross it) & 200{,}000 / 64~MiB \\
+Archive member name: bytes kept, then an ellipsis (3 bytes) & 4{,}096 \\
 Column width & 60 to 900 pixels \\
 Preview pane width & 240 pixels to the window's width less 320 \\
 Quick Look: time to copy / time per picture / pictures drawn at once & 20 seconds / 5 seconds / 2 (\rid{PRV-12}) \\

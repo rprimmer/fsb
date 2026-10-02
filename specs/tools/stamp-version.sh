@@ -8,7 +8,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 version=${1:?usage: stamp-version.sh VERSION}
-commit=$(git log -1 --format=%h -- .. ':(exclude)specs')
+commit=$(git log -1 --format=%h -- .. ':(exclude,top)specs')
 date=$(git log -1 --format=%cd --date=format:'%B %-d, %Y' "$commit")
 cat > common/version.tex <<TEX
 % Written by tools/stamp-version.sh; do not edit by hand.

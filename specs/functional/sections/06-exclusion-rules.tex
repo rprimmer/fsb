@@ -75,9 +75,9 @@ found short of names is owed one more walk, which is spent only when that walk
 starts; if it still finds fewer names than links, the file stays refused until
 something changes.  A listing or a search reuses one verdict about a file for at most
 one second (so a folder of many names of one file costs one check, not one per
-name); after that the recorded names are checked again.  The interval bounds how
-stale a name or size shown in a response that runs long can be; it does not retract
-entries already sent, and a request to open the file never uses it.  A denied name
+name); after that the recorded names are checked again.  This is a memo reuse interval, not a guarantee about the age of everything the
+user sees: entries already sent are not retracted, and a request to open the file never
+uses the memo.  A denied name
 that lies outside every root and every credential location is not detected.
 \end{req}
 

@@ -13,9 +13,23 @@ reduced to one alias spelling, and let $\rho=\Real(c)$ be the real location of
 what is actually opened.  The type $t$ is the type of the opened object.  Then
 \[
   \Ok(p)\;\iff\;
-  \InRoots(\rho)\ \land\ \neg\Match(\Deny,\rho,t)\ \land\ \neg\Match(\Deny,c,t).
+  \InRoots(\rho)\ \land\ \neg\Match(\Deny,\rho,t)\ \land\ \neg\Match(\Deny,c,t)
+  \ \land\ \Elig(o),
 \]
+where $o$ is the opened object and $\Elig(o)$ is the hard-link condition: it holds
+unless $o$ is a regular file with $n>1$ names, in which case it holds iff the
+index accounts for all of them \emph{now}.  That means that the index is ready,
+that it found $n$ distinct names (by folder identity and folded name), that no
+deny rule matches the real path of any of them, and that each is still a real
+path to $o$ (same device and inode, no symbolic link along it).  If the index is
+not ready, or any part cannot be established, $\Elig(o)$ is false: unknown means
+refused.  Identity is (device, inode); no content is read.
 \end{definition}
+
+Without $\Elig$ the formula would be a path-and-root predicate only.  An allowed
+\code{ordinary.txt} that has a second name \code{.env} satisfies the first three
+conjuncts and is nevertheless refused, which is the point of the fourth
+(Law~\ref{law:linked}).
 
 The check is made on the \emph{real} location (so a symbolic link cannot lead
 into a denied place), and also on the \emph{spelled} location (so a link
@@ -30,9 +44,15 @@ it contains an entry $e$ of $d$ exactly when $\Visible(d,e)$:
 \begin{align*}
   \Visible(d,e)\iff{}& \neg\Match(\Deny,\rho_d\cdot e,t)\ \land\
       \neg\MatchBelow(\Hide,\rho_d,\rho_d\cdot e,t)\\
-  &\land\ (e\text{ a symbolic link}\Rightarrow\Ok\text{-target}(e)),
+  &\land\ (e\text{ a symbolic link}\Rightarrow\Ok\text{-target}(e))\ \land\
+      \Elig_\tau(e),
 \end{align*}
-where $\rho_d=\Real(d)$: children are judged by where the directory really is,
+where $\Elig_\tau$ is $\Elig$ with one difference: within a single listing or
+search a verdict about a file may be reused for at most $\tau=1$ second, after
+which the names are checked again.  A listing is therefore a snapshot whose
+hard-link verdicts can be up to $\tau$ old; $\Open$ always evaluates $\Elig$
+afresh,
+and $\rho_d=\Real(d)$: children are judged by where the directory really is,
 not by the link it was reached through.  $\Search(d,q)$ walks breadth-first from
 $d$, entering only visible unlinked directories whose real location is still the
 name they were queued under, and reports the visible entries whose folded name
@@ -85,15 +105,21 @@ denied folder, which must not answer 403.
 \begin{law}[Listed implies openable]
 \label{law:listed-open}
 If $e$ is listed in $\List(d)$ and is not a dangling link, then $\Open(d\cdot e)$
-succeeds.  (The converse is false by design: hidden entries are not listed but
-can be opened.)
+succeeds, \emph{provided the file system does not change between the two
+operations and the operating system's own access and type conditions hold}
+(permissions, a regular file or folder).  This is a snapshot property: within
+$\tau$ of a change, a listing may still show a multi-name file that a fresh
+$\Open$ refuses (the \emph{Hard links} boundary).  The converse is false by
+design: hidden entries are not listed but can be opened.
 \Tests{guard/laws_test.go::TestLawListedImpliesOpenable}
 \end{law}
 
 \begin{law}[Found implies listed]
 \label{law:found-listed}
-If $\Search$ reports $m$, then $m$ is an entry of $\List(\Parent(m))$.  Search
-therefore cannot show what browsing would not.
+If $\Search$ reports $m$, then $m$ is an entry of $\List(\Parent(m))$, for a
+file system that does not change between the two observations (and, for
+multi-name files, to within $\tau$).  Search therefore cannot show what browsing
+would not, because both go through one function.
 \Tests{guard/laws_test.go::TestLawSearchResultsAreListed}
 \end{law}
 
@@ -107,8 +133,10 @@ are cosmetic and never restrict direct access.
 \begin{law}[Containment]
 \label{law:containment}
 $\Ok(p)\Rightarrow\exists r\in\Roots:\ \Real(p)\text{ is }r\text{ or lies beneath }r$,
-comparing folded text (so root membership respects the same equivalence as the
-rules).
+where ``is $r$ or lies beneath $r$'' is the identity relation $\InRoots$ of
+Law~\ref{law:root-identity}, not a comparison of spellings.  (Folding belongs to
+the name and rule model, where over-matching is safe; it is not used for this
+\emph{allow} decision.)
 \Tests{guard/guard_test.go; guard/firmlink_darwin_test.go}
 \end{law}
 
