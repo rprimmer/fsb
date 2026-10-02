@@ -2,6 +2,7 @@ package guard
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"io"
 	"strings"
@@ -29,7 +30,10 @@ const (
 	maxCommentLen = 65535
 )
 
-func listZip(f io.ReaderAt, size int64) (ArchiveListing, error) {
+func listZip(ctx context.Context, f io.ReaderAt, size int64) (ArchiveListing, error) {
+	if err := ctx.Err(); err != nil {
+		return ArchiveListing{}, err
+	}
 	start, dirSize, count, zip64, err := findZipDir(f, size)
 	if err != nil {
 		return ArchiveListing{}, err
@@ -47,6 +51,11 @@ func listZip(f io.ReaderAt, size int64) (ArchiveListing, error) {
 	var read int64
 	var rec [dirRecordLen]byte
 	for read < dirSize {
+		if l.Total%1024 == 0 {
+			if err := ctx.Err(); err != nil {
+				return ArchiveListing{}, err
+			}
+		}
 		if l.Total >= archiveMaxScanned || read >= archiveMaxZipDir {
 			l.Incomplete = true
 			return l, nil

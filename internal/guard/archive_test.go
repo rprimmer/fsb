@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -323,7 +324,7 @@ func TestZipWrittenToAPipeLists(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		l, err := listZip(bytes.NewReader(b), int64(len(b)))
+		l, err := listZip(context.Background(), bytes.NewReader(b), int64(len(b)))
 		if err != nil || l.Total != len(zr.File) || l.Entries[0].Name != zr.File[0].Name {
 			t.Errorf("%s: %+v %v; archive/zip has %d", f, l, err, len(zr.File))
 		}

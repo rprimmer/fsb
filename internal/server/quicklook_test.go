@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"image/png"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rprimmer/fsb/internal/quicklook"
 	"golang.org/x/sys/unix"
@@ -240,4 +242,24 @@ func hasInk(t *testing.T, data string) bool {
 		}
 	}
 	return false
+}
+
+// Copying a document for Quick Look has its own time limit; when it runs out
+// the answer is the same as for a document Quick Look cannot draw.
+func TestQuickLookCopyHasATimeLimit(t *testing.T) {
+	old := quickLookCopyTimeout
+	quickLookCopyTimeout = time.Nanosecond
+	defer func() { quickLookCopyTimeout = old }()
+	var got []handedOver
+	e := newEnvWith(t, false, nil, func(c *Config) { c.Thumbnail = fakeQuickLook(t, &got) })
+	doc := filepath.Join(e.home, "proj", "report.docx")
+	write(t, doc, "PK fake docx")
+	resp, err := e.client.Get(e.base + "/api/quicklook?path=" + url.QueryEscape(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnsupportedMediaType || len(got) != 0 {
+		t.Errorf("status = %d, handed over %d; want 415 and nothing drawn", resp.StatusCode, len(got))
+	}
 }

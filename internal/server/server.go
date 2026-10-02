@@ -250,6 +250,10 @@ func (s *Server) pdf(w http.ResponseWriter, r *http.Request) {
 // thumbSize is the longer side, in pixels, of a Quick Look picture.
 const thumbSize = 1200
 
+// quickLookCopyTimeout bounds copying a document for Quick Look (at most
+// guard.MaxQuickLookBytes); drawing it has its own limit in package quicklook.
+var quickLookCopyTimeout = 20 * time.Second
+
 // quicklook serves the picture macOS Quick Look draws of an iWork or Office
 // document. Quick Look is given a private copy that the guard made (see
 // guard.CopyForQuickLook), never the user's own path. The picture is served
@@ -258,10 +262,18 @@ func (s *Server) quicklook(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	var guardErr error
 	png, err := s.cfg.Thumbnail(r.Context(), thumbSize, func(dir string) (string, error) {
-		doc, err := s.cfg.Guard.CopyForQuickLook(p, dir)
+		// Copying has its own time limit (drawing has Quick Look's), and both
+		// stop when the request is abandoned.
+		ctx, cancel := context.WithTimeout(r.Context(), quickLookCopyTimeout)
+		defer cancel()
+		doc, err := s.cfg.Guard.CopyForQuickLookContext(ctx, p, dir)
 		guardErr = err
 		return doc, err
 	})
+	if errors.Is(guardErr, context.DeadlineExceeded) {
+		s.logf("quicklook %q: copying took longer than %v", p, quickLookCopyTimeout)
+		guardErr = guard.ErrUnsupported // no picture, as for one Quick Look cannot draw
+	}
 	if guardErr != nil {
 		s.fail(w, p, guardErr)
 		return
@@ -284,7 +296,7 @@ func (s *Server) quicklook(w http.ResponseWriter, r *http.Request) {
 // archive lists the members of a zip, tar or tar.gz file. Nothing is extracted.
 func (s *Server) archive(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
-	l, err := s.cfg.Guard.ListArchive(p)
+	l, err := s.cfg.Guard.ListArchiveContext(r.Context(), p)
 	if err != nil {
 		s.fail(w, p, err)
 		return

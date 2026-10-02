@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"io"
 	"strings"
@@ -59,6 +60,11 @@ type ArchiveListing struct {
 // Member names are untrusted: control characters are replaced, and they are
 // only ever displayed, never used as paths.
 func (g *Guard) ListArchive(p string) (ArchiveListing, error) {
+	return g.ListArchiveContext(context.Background(), p)
+}
+
+// ListArchiveContext is ListArchive, stopping with ctx's error when ctx ends.
+func (g *Guard) ListArchiveContext(ctx context.Context, p string) (ArchiveListing, error) {
 	f, fi, err := g.Open(p)
 	if err != nil {
 		return ArchiveListing{}, err
@@ -77,33 +83,39 @@ func (g *Guard) ListArchive(p string) (ArchiveListing, error) {
 
 	switch {
 	case bytes.HasPrefix(b, []byte("PK\x03\x04")) || bytes.HasPrefix(b, []byte("PK\x05\x06")):
-		return listZip(f, fi.Size())
+		return listZip(ctx, f, fi.Size())
 
 	case len(b) >= 2 && b[0] == 0x1f && b[1] == 0x8b:
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return fail(err)
 		}
-		zr, err := gzip.NewReader(bufio.NewReader(f))
+		zr, err := gzip.NewReader(bufio.NewReader(ctxReader{ctx, f}))
 		if err != nil {
+			if cerr := ctx.Err(); cerr != nil {
+				return ArchiveListing{}, cerr
+			}
 			return ArchiveListing{}, ErrUnsupported
 		}
 		defer zr.Close()
-		return listTar(&io.LimitedReader{R: zr, N: archiveMaxDecompress}, "tar.gz")
+		return listTar(ctx, &io.LimitedReader{R: zr, N: archiveMaxDecompress}, "tar.gz")
 
 	case n >= 262 && string(b[257:262]) == "ustar":
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return fail(err)
 		}
-		return listTar(f, "tar")
+		return listTar(ctx, ctxReader{ctx, f}, "tar")
 	}
 	return ArchiveListing{}, ErrUnsupported
 }
 
-func listTar(r io.Reader, format string) (ArchiveListing, error) {
+func listTar(ctx context.Context, r io.Reader, format string) (ArchiveListing, error) {
 	l := ArchiveListing{Format: format}
 	tr := tar.NewReader(r)
 	lim, _ := r.(*io.LimitedReader)
 	for {
+		if err := ctx.Err(); err != nil {
+			return ArchiveListing{}, err
+		}
 		h, err := tr.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -111,6 +123,9 @@ func listTar(r io.Reader, format string) (ArchiveListing, error) {
 				// which tar cannot tell apart: count the latter as incomplete.
 				l.Incomplete = lim != nil && lim.N <= 0
 				break
+			}
+			if cerr := ctx.Err(); cerr != nil {
+				return ArchiveListing{}, cerr // abandoned, not damaged
 			}
 			// A limit hit while streaming, or a damaged tail: report what we have.
 			if l.Total == 0 {

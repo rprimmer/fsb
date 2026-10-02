@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -45,6 +46,16 @@ const (
 // MaxQuickLookBytes, or a package with more than maxPackageEntries entries, is
 // refused as unsupported.
 func (g *Guard) CopyForQuickLook(p, dir string) (string, error) {
+	return g.CopyForQuickLookContext(context.Background(), p, dir)
+}
+
+// CopyForQuickLookContext is CopyForQuickLook, stopping with ctx's error as
+// soon as ctx ends (the request is abandoned, or its time is up), however
+// slow the storage, rather than running on to the size limits.
+func (g *Guard) CopyForQuickLookContext(ctx context.Context, p, dir string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	f, fi, real, err := g.open(p)
 	if err != nil {
 		return "", err
@@ -63,18 +74,21 @@ func (g *Guard) CopyForQuickLook(p, dir string) (string, error) {
 		if !fi.Mode().IsRegular() {
 			return "", ErrUnsupported
 		}
-		return dst, copyBounded(f, dst, &budget)
+		return dst, copyBounded(ctx, f, dst, &budget)
 	}
-	return dst, g.copyPackage(real, dst, &budget)
+	return dst, g.copyPackage(ctx, real, dst, &budget)
 }
 
 // copyPackage copies the visible files of the package at root into dst.
-func (g *Guard) copyPackage(root, dst string, budget *int64) error {
+func (g *Guard) copyPackage(ctx context.Context, root, dst string, budget *int64) error {
 	if err := os.Mkdir(dst, 0o700); err != nil {
 		return err
 	}
 	n := 0
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			return mapErr(err)
 		}
@@ -124,18 +138,18 @@ func (g *Guard) copyPackage(root, dst string, budget *int64) error {
 		if err := refuseDataless(fi); err != nil {
 			return err
 		}
-		return copyBounded(f, filepath.Join(dst, rel), budget)
+		return copyBounded(ctx, f, filepath.Join(dst, rel), budget)
 	})
 }
 
 // copyBounded copies src into a new file at dst, charging budget, and refuses
-// once the budget is exhausted.
-func copyBounded(src io.Reader, dst string, budget *int64) error {
+// once the budget is exhausted. It stops when ctx ends.
+func copyBounded(ctx context.Context, src io.Reader, dst string, budget *int64) error {
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
-	n, err := io.Copy(out, io.LimitReader(src, *budget+1))
+	n, err := io.Copy(out, io.LimitReader(ctxReader{ctx, src}, *budget+1))
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}
@@ -146,4 +160,18 @@ func copyBounded(src io.Reader, dst string, budget *int64) error {
 		return ErrUnsupported
 	}
 	return nil
+}
+
+// ctxReader reads from r until ctx ends, then fails with ctx's error, so a
+// copy or a decompression on slow storage stops when it is no longer wanted.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }

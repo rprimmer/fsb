@@ -3,6 +3,7 @@ package guard
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"os"
 	"testing"
 )
@@ -20,7 +21,7 @@ func FuzzListZipAgreesWithArchiveZip(f *testing.F) {
 		}
 	}
 	f.Fuzz(func(t *testing.T, b []byte) {
-		got, err := listZip(bytes.NewReader(b), int64(len(b)))
+		got, err := listZip(context.Background(), bytes.NewReader(b), int64(len(b)))
 		zr, zerr := zip.NewReader(bytes.NewReader(b), int64(len(b)))
 		if err != nil || zerr != nil || got.Incomplete {
 			return // only compare where both read the whole directory
