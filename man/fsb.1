@@ -16,6 +16,10 @@ fsb \- filesystem browser: a read-only, local-only web view of your files
 .br
 .B fsb \-\-init
 .br
+.B fsb
+.RB [ \-\-show\-deny ]
+.RB [ \-\-show\-ignore ]
+.br
 .B fsb \-h
 .SH DESCRIPTION
 .B fsb
@@ -126,6 +130,18 @@ Write the default rule files to
 and exit.
 The folder is created with mode 0700 and each file with mode 0600.
 A file that already exists is left unchanged and reported.
+.TP
+.B \-\-show\-deny
+Print the deny rules in effect, one per line, and exit without serving.
+A first comment line names their source: the deny file, or the built-in core
+rules when there is no file.
+A final comment line names any core rule the file leaves out.
+.TP
+.B \-\-show\-ignore
+Print the ignore rules in effect in the same way, and exit.
+Given together with
+.BR \-\-show\-deny ,
+both lists are printed, deny first.
 .TP
 .B \-h ", " \-\-help
 Print a usage summary and exit with status 0.

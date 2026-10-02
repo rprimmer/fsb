@@ -69,6 +69,7 @@
   let sortAsc = $state(true);
   let userSorted = $state(false);
   let filterInput: HTMLInputElement | undefined;
+  let gridEl: HTMLElement | undefined = $state();
   let colMenu: HTMLDetailsElement | undefined;
   let searchEl: HTMLInputElement | undefined;
   let goEl: HTMLInputElement | undefined;
@@ -1014,6 +1015,7 @@
       class="grid"
       role="grid"
       tabindex="0"
+      bind:this={gridEl}
       aria-label="Files"
       aria-rowcount={visible.length}
       aria-activedescendant={selectedIdx >= 0 ? `row-${selectedIdx}` : undefined}
@@ -1133,6 +1135,7 @@
       fullPath={selectedRow ? rowPath(selectedRow) : ''}
       onclose={() => { showPreview = false; savePrefs(); }}
       oncopy={copyText}
+      onrefocus={() => gridEl?.focus()}
     />
   {/if}
 </div>

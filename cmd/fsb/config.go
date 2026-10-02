@@ -149,3 +149,24 @@ func choosePort(cfgDir string, port int, explicit bool) (net.Listener, error) {
 	writeLastPort(cfgDir, ln.Addr().(*net.TCPAddr).Port)
 	return ln, nil
 }
+
+// showRules prints the rules of one kind that fsb would apply, one per line,
+// after a comment line saying where they come from: the user's file if it
+// exists, otherwise the built-in defaults. For deny rules it also names any
+// core rule the file leaves out, as fsb warns at startup.
+func showRules(out io.Writer, kind, path string, set *rules.Set, coreMissing []string) error {
+	src := path
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		src = "built-in defaults; " + path + " does not exist (fsb --init writes it)"
+	} else if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "# %s rules in effect (%s)\n", kind, src)
+	for _, t := range set.Texts() {
+		fmt.Fprintln(out, t)
+	}
+	if len(coreMissing) > 0 {
+		fmt.Fprintf(out, "# warning: core deny rule(s) missing, so these paths are browsable: %s\n", strings.Join(coreMissing, ", "))
+	}
+	return nil
+}

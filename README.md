@@ -37,6 +37,7 @@ The UI lists directories with 100,000+ entries: the API streams the listing in c
 ```sh
 go build -o fsb ./cmd/fsb
 ./fsb --init        # write ~/.config/fsb/{ignore,deny}
+./fsb --show-deny   # print the deny rules in effect (--show-ignore: the hide rules)
 ./fsb               # serve $HOME read-only, print a single-use URL
 ```
 

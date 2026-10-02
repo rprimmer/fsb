@@ -405,6 +405,11 @@ export function defineSuite({ label, launch }) {
       assert.deepEqual(h, { type: 'application/pdf', xfo: 'SAMEORIGIN', csp: "frame-ancestors 'self'; script-src 'none'", nosniff: 'nosniff', head: '%PDF-' });
       assert.equal(await d.eval(`return document.querySelector('.preview iframe.pdfframe').hasAttribute('sandbox')`), false);
 
+      // A viewer that grabs focus on its own (Chrome's does, for a password
+      // field) must not strand the keyboard: focus comes back to the list.
+      await d.eval(`document.querySelector('.preview iframe.pdfframe').focus()`);
+      await waitFor(() => d.eval(`return document.activeElement?.getAttribute('role') === 'grid'`), { message: 'focus back on the file list' });
+
       // Not a PDF by its bytes: never framed, shown as ordinary text instead.
       const fake = await preview('fake.pdf');
       assert.equal(await d.eval(`return !!document.querySelector('.preview iframe')`), false);

@@ -46,9 +46,11 @@
     fullPath: string;
     onclose: () => void;
     oncopy: (text: string) => void;
+    /** Gives the keyboard back to the file list. */
+    onrefocus: () => void;
   }
 
-  let { entry, fullPath, onclose, oncopy }: Props = $props();
+  let { entry, fullPath, onclose, oncopy, onrefocus }: Props = $props();
 
   const HEAD_BYTES = 64 * 1024;
   const CSV_ROWS = 200;
@@ -279,9 +281,24 @@
       ? parseDelimited(head.text, format === 'csv' ? ',' : '\t', CSV_ROWS)
       : null,
   );
+
+  // The browser's PDF viewer focuses its password field when it opens an
+  // encrypted PDF, and once focus is inside the frame no key reaches this page,
+  // so arrowing through a folder would stop dead on that file. Focus is taken
+  // back unless the user moved it there themselves: by clicking in the frame
+  // (the pointer is over it) or by tabbing into it.
+  let pdfFrame = $state<HTMLIFrameElement | undefined>();
+  let pointerOnFrame = false;
+  let lastKeyWasTab = false;
+  function frameMayHaveFocus() {
+    // activeElement becomes the frame only after the window's blur event.
+    setTimeout(() => {
+      if (pdfFrame && document.activeElement === pdfFrame && !pointerOnFrame && !lastKeyWasTab) onrefocus();
+    }, 0);
+  }
 </script>
 
-<svelte:window onmessage={onMessage} />
+<svelte:window onmessage={onMessage} onkeydowncapture={(ev) => (lastKeyWasTab = ev.key === 'Tab')} onblur={frameMayHaveFocus} />
 
 <aside class="preview" aria-label="Preview">
   <header class="phead">
@@ -303,7 +320,17 @@
       {:else if mode === 'image'}
         <img class="pimg" src={previewURL(fullPath)} alt={entry.name} onerror={imageFailed} />
       {:else if mode === 'pdf'}
-        <iframe class="pdfframe" title="PDF preview" src={pdfURL(fullPath)} referrerpolicy="no-referrer"></iframe>
+        <!-- The pointer handlers only record where the pointer is (see frameMayHaveFocus); the frame itself is the interactive element. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <iframe
+          class="pdfframe"
+          title="PDF preview"
+          src={pdfURL(fullPath)}
+          referrerpolicy="no-referrer"
+          bind:this={pdfFrame}
+          onpointerenter={() => (pointerOnFrame = true)}
+          onpointerleave={() => (pointerOnFrame = false)}
+        ></iframe>
       {:else if mode === 'archive' && archive}
         <div class="tablewrap">
           <table class="csv archive" aria-label="Archive contents">

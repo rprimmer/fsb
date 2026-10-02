@@ -547,3 +547,29 @@ func TestNewValidatesRoots(t *testing.T) {
 		t.Error("a file root should be an error")
 	}
 }
+
+// The same folder given twice (`fsb --root ~` adds home to the default root of
+// home) must be served once: the UI keys its root list by path, and a
+// duplicate there broke the page so every folder looked empty.
+func TestNewDropsDuplicateRoots(t *testing.T) {
+	base := t.TempDir()
+	a := filepath.Join(base, "a")
+	if err := os.MkdirAll(a, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(a, filepath.Join(base, "link")); err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(base, "b")
+	if err := os.MkdirAll(b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	g, err := New([]string{a, a + "/", filepath.Join(base, "link"), b, a}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{RealPath(a), RealPath(b)}
+	if got := g.Roots(); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("Roots() = %q, want %q", got, want)
+	}
+}

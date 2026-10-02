@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -95,6 +96,10 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 		}
 		if !fi.IsDir() {
 			return nil, fmt.Errorf("root %q is not a directory", r)
+		}
+		// The same folder given twice, under any spelling, is served once.
+		if slices.ContainsFunc(g.rootInfo, func(o os.FileInfo) bool { return os.SameFile(o, fi) }) {
+			continue
 		}
 		g.roots = append(g.roots, canonPath(real))
 		g.rootInfo = append(g.rootInfo, fi)

@@ -69,6 +69,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		noOpen     = fs.Bool("no-open", false, "do not open the browser; just print the URL")
 		browser    = fs.String("browser", "", `macOS application to open the URL in, e.g. "Google Chrome" (default: your default browser)`)
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
+		showDeny   = fs.Bool("show-deny", false, "print the deny rules in effect, and where they come from, and exit")
+		showIgnore = fs.Bool("show-ignore", false, "print the ignore (hide) rules in effect, and where they come from, and exit")
 		sysRoot    = fs.Bool("allow-system-root", false, "allow / as a root")
 		portFlag   = fs.Int("port", 0, "use exactly this port for this run only (0 lets the OS choose); without this flag, fsb reuses the port it last used successfully, so the browser's stored preferences (column widths, the preview pane's width) survive a restart, and falls back to a free port the first time there is nothing to reuse yet")
 	)
@@ -108,21 +110,37 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return initConfig(cfgDir, stdout)
 	}
 
+	// A malformed rules file is fatal: never start with weaker rules than the
+	// user wrote.
+	denyPath, ignorePath := filepath.Join(cfgDir, "deny"), filepath.Join(cfgDir, "ignore")
+	deny, coreMissing, err := rules.LoadDeny(denyPath, home)
+	if err != nil {
+		return fmt.Errorf("deny rules: %w", err)
+	}
+	hide, err := rules.LoadIgnore(ignorePath, home)
+	if err != nil {
+		return fmt.Errorf("ignore rules: %w", err)
+	}
+	if *showDeny || *showIgnore {
+		if *showDeny {
+			if err := showRules(stdout, "deny", denyPath, deny, coreMissing); err != nil {
+				return err
+			}
+		}
+		if *showIgnore {
+			if *showDeny {
+				fmt.Fprintln(stdout)
+			}
+			return showRules(stdout, "ignore", ignorePath, hide, nil)
+		}
+		return nil
+	}
+
 	roots, err := resolveRoots(home, fs.Arg(0), extraRoots, *sysRoot)
 	if err != nil {
 		return err
 	}
 
-	// A malformed rules file is fatal: never start with weaker rules than the
-	// user wrote.
-	deny, coreMissing, err := rules.LoadDeny(filepath.Join(cfgDir, "deny"), home)
-	if err != nil {
-		return fmt.Errorf("deny rules: %w", err)
-	}
-	hide, err := rules.LoadIgnore(filepath.Join(cfgDir, "ignore"), home)
-	if err != nil {
-		return fmt.Errorf("ignore rules: %w", err)
-	}
 	g, err := guard.New(roots, deny, hide)
 	if err != nil {
 		return err

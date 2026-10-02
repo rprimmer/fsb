@@ -267,3 +267,59 @@ func TestChoosePortAutoFailsLoudlyWhenTheRememberedPortIsTaken(t *testing.T) {
 		t.Errorf("got %d, want the original %d preserved", got, taken)
 	}
 }
+
+func TestShowRules(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deny")
+
+	// No file: the built-in core rules, said to be the defaults.
+	set, missing, err := rules.LoadDeny(path, "/Users/u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := showRules(&out, "deny", path, set, missing); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if !strings.Contains(lines[0], "built-in defaults") {
+		t.Errorf("header should name the defaults: %q", lines[0])
+	}
+	if strings.Join(lines[1:], "\n") != strings.Join(rules.CoreDeny, "\n") {
+		t.Errorf("rules = %q, want the core rules", lines[1:])
+	}
+
+	// A file that drops a core rule: the file is named and the gap reported.
+	write := func(s string) {
+		if err := os.WriteFile(path, []byte(s), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("# comment\n.ssh/\n~/private/\n")
+	set, missing, err = rules.LoadDeny(path, "/Users/u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := showRules(&out, "deny", path, set, missing); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "("+path+")") || !strings.Contains(s, "\n.ssh/\n~/private/\n") || strings.Contains(s, "# comment") {
+		t.Errorf("file rules shown wrongly:\n%s", s)
+	}
+	if !strings.Contains(s, "core deny rule(s) missing") || !strings.Contains(s, ".aws/") {
+		t.Errorf("missing core rules not reported:\n%s", s)
+	}
+}
+
+func TestRunShowIgnoreExitsWithoutServing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var out, errb bytes.Buffer
+	if err := run([]string{"--show-ignore"}, &out, &errb); err != nil {
+		t.Fatalf("run: %v (%s)", err, errb.String())
+	}
+	if !strings.Contains(out.String(), "# ignore rules in effect") || !strings.Contains(out.String(), "node_modules/") || strings.Contains(out.String(), "serving") {
+		t.Errorf("unexpected output:\n%s", out.String())
+	}
+}
