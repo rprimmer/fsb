@@ -551,9 +551,15 @@ seconds
 for a home folder of 700,000 files); until it is ready, files that have
 several names
 are refused.
-So is a file with several names that changed (a name added, renamed or
-removed, or its contents written) since shortly before the index last looked,
-until the index is refreshed; refreshes are at least 15 seconds apart.
+After that, a file with several names is served only if the index has found
+every one of its names, none is denied, and each is still that file, with no
+symbolic link along its path, when it is used.
+A file with a name outside the roots and the credential folders, or in a
+folder
+.B fsb
+cannot read, is therefore refused, as is one whose names changed (a link
+added or removed, or a file or folder renamed or moved) until the index is
+refreshed; refreshes are at least 15 seconds apart.
 .SH ENVIRONMENT
 .TP
 .B HOME
@@ -703,8 +709,8 @@ Shown in the interface for a path outside every root; start
 with a different path, or add
 .BR \-\-root .
 .SH LIMITATIONS
-A hard link whose denied name lies outside every root and outside the credential
-folders is not detected.
+A file with several names is refused when one of its names lies outside every
+root and outside the credential folders, even if no name is denied.
 Rule files are read at startup only.
 A denied path can be answered slightly faster than a missing one.
 .B fsb

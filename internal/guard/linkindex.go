@@ -2,6 +2,7 @@ package guard
 
 import (
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -21,15 +22,25 @@ import (
 // home folder, so it is built in the background (StartLinkIndex, called at
 // startup) and never on the path of a request.
 //
-// What the index says about a file is trusted only if the file's names cannot
-// have changed since before the walk began: its change time (ctime), which
-// every link, unlink and rename updates and which no ordinary process can set,
-// must be earlier than the walk's start and the same now. Then the walk saw all
-// its names that lie where it looks. Anything else (the index is not ready yet,
-// the file is new, or it changed before or during the walk or since) is refused
-// until a walk has looked again: guessing "allowed" would defeat the point.
+// A file with several names is served only when the index accounts for every
+// one of them, now: the walk found as many distinct names as the file has
+// links, none is denied, and on each use every recorded name is still a real
+// path (no symbolic link along it) to this very file. Nothing about the file
+// itself is trusted to reveal a change: renaming or moving a folder renames
+// the files in it without touching them. Anything else (the index is not
+// ready, a name lies where the walk does not look or could not read, or the
+// names changed) is refused until a walk has looked again; guessing "allowed"
+// would defeat the point.
 
 type fileID struct{ dev, ino uint64 }
+
+// nameKey identifies one name of a file: the folder holding it and the name in
+// that folder. Two paths can spell one name (a firmlink, a folder walked
+// twice); two names never share a key.
+type nameKey struct {
+	dir  fileID
+	base string
+}
 
 // linkIndex maps a file's identity to what the last walk saw of it.
 type linkIndex struct {
@@ -37,28 +48,23 @@ type linkIndex struct {
 	byID      map[fileID]linkEntry
 	ready     bool          // a walk has completed
 	building  bool          // a walk is running
-	complete  bool          // the last walk was not cut short by a limit
-	startedAt time.Time     // when the last completed walk started
 	lastStart time.Time     // when the last walk (running or not) started
 	lastTook  time.Duration // how long the last completed walk took
 }
 
 // linkEntry is what a walk saw of a file with several names.
 type linkEntry struct {
-	names   []string
-	nlink   uint64
-	ctime   int64 // nanoseconds
-	trusted bool  // its names were stable throughout the walk
-	denied  bool  // a deny rule matches one of its names
+	names  []string // real paths, one per distinct name
+	denied bool     // a deny rule matches one of them
 }
 
-// defaultCtimeMargin allows for file systems that store whole (or even pairs
-// of) seconds: a ctime must be this much earlier than a walk's start to count
-// as before it.
-const defaultCtimeMargin = 2 * time.Second
+// linkMemo remembers decisions within one listing or search, so a folder
+// holding many names of one file costs one check, not one per name.
+type linkMemo map[fileID]bool
 
 // Limits of an index walk. It runs in the background, so they only need to keep
-// a pathological tree from running forever.
+// a pathological tree from running forever. Files whose names lie beyond the
+// limit are refused.
 const (
 	defaultLinkWalkMax   = 20_000_000
 	defaultLinkWalkTime  = 10 * time.Minute
@@ -73,6 +79,11 @@ func (g *Guard) Protect(paths ...string) {
 	g.links.mu.Lock()
 	defer g.links.mu.Unlock()
 	for _, p := range paths {
+		// Recorded names must be real paths, so resolve symbolic links
+		// (such as /var on macOS) where the location exists.
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			p = real
+		}
 		g.protect = append(g.protect, canonPath(p))
 	}
 	g.links.ready = false // the next walk includes the new locations
@@ -85,71 +96,108 @@ func (g *Guard) StartLinkIndex() {
 	g.startWalkLocked()
 }
 
-// stamp is the identity, link count and change time of a regular file.
-type stamp struct {
-	id    fileID
-	nlink uint64
-	ctime int64
-}
-
-func stampOf(fi fs.FileInfo) (stamp, bool) {
+func idOf(fi fs.FileInfo) (id fileID, nlink uint64, ok bool) {
 	st, isStat := fi.Sys().(*syscall.Stat_t)
-	if !isStat || !fi.Mode().IsRegular() {
-		return stamp{}, false
+	if !isStat {
+		return fileID{}, 0, false
 	}
-	return stamp{fileID{uint64(st.Dev), st.Ino}, uint64(st.Nlink), ctimeOf(st)}, true
+	return fileID{uint64(st.Dev), st.Ino}, uint64(st.Nlink), true
 }
 
 // hardLinkToDenied reports whether fi, a file about to be served or listed, has
-// another name that a deny rule matches, or cannot yet be shown not to.
-func (g *Guard) hardLinkToDenied(fi fs.FileInfo) bool {
-	st, ok := stampOf(fi)
-	if !ok || st.nlink < 2 {
+// another name that a deny rule matches, or cannot be shown not to.
+func (g *Guard) hardLinkToDenied(fi fs.FileInfo) bool { return g.hardLinkToDeniedMemo(fi, nil) }
+
+// hardLinkToDeniedMemo is hardLinkToDenied, remembering decisions in memo
+// (which may be nil) for the rest of one listing or search.
+func (g *Guard) hardLinkToDeniedMemo(fi fs.FileInfo, memo linkMemo) bool {
+	id, nlink, ok := idOf(fi)
+	if !ok || !fi.Mode().IsRegular() || nlink < 2 {
 		return false
 	}
-	idx := &g.links
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	if !idx.ready {
-		g.startWalkLocked()
+	if v, ok := memo[id]; ok {
+		return v
 	}
+	v := g.judgeLinked(id, nlink)
+	if memo != nil {
+		memo[id] = v
+	}
+	return v
+}
+
+func (g *Guard) judgeLinked(id fileID, nlink uint64) bool {
+	idx := &g.links
 	for walked := false; ; walked = true {
-		if idx.ready {
-			if denied, decided := idx.decide(st, g.linkCtimeMargin); decided {
-				return denied
-			}
+		idx.mu.Lock()
+		if !idx.ready {
+			g.startWalkLocked()
 		}
-		// Undecided: refuse, unless a walk may run now (with linkSync, tests,
-		// it completes here and the file is decided again). Walks are spaced
-		// by at least twice the time the last one took, so a huge tree cannot
-		// keep the machine busy walking.
-		if walked || time.Since(idx.lastStart) < max(g.linkRebuildMin, 2*idx.lastTook) {
+		ready := idx.ready
+		e, known := idx.byID[id]
+		idx.mu.Unlock()
+		if !ready {
+			return true // still walking (never the case when linkSync is set)
+		}
+		if known && uint64(len(e.names)) == nlink && namesStillName(id, e.names) {
+			return e.denied
+		}
+		// Not accounted for: refuse, unless a walk may run now (with linkSync,
+		// tests, it completes here and the file is judged again). Walks are
+		// spaced by at least twice the time the last one took, so a huge tree
+		// cannot keep the machine busy walking.
+		idx.mu.Lock()
+		canWalk := !walked && time.Since(idx.lastStart) >= max(g.linkRebuildMin, 2*idx.lastTook)
+		if canWalk {
+			g.startWalkLocked()
+		}
+		idx.mu.Unlock()
+		if !canWalk {
 			return true
 		}
-		g.startWalkLocked()
 	}
 }
 
-// decide judges a file by the index, if the index can vouch for it. Caller
-// holds the lock.
-func (idx *linkIndex) decide(st stamp, margin time.Duration) (denied, decided bool) {
-	e, known := idx.byID[st.id]
-	if known {
-		if e.trusted && e.nlink == st.nlink && e.ctime == st.ctime {
-			return e.denied, true
+// namesStillName reports whether every recorded name is, now, a distinct name
+// of the file id: a real path (no symbolic link along it, so where it appears
+// to be is where it is) whose last component is this file.
+func namesStillName(id fileID, names []string) bool {
+	keys := make(map[nameKey]bool, len(names))
+	for _, n := range names {
+		fi, err := os.Lstat(n)
+		if err != nil || !fi.Mode().IsRegular() {
+			return false
 		}
-		return false, false // changed during or since the walk
+		if got, _, ok := idOf(fi); !ok || got != id {
+			return false
+		}
+		if real, err := filepath.EvalSymlinks(n); err != nil || real != n {
+			return false
+		}
+		k, ok := nameKeyOf(n)
+		if !ok || keys[k] {
+			return false
+		}
+		keys[k] = true
 	}
-	if !idx.complete {
-		return false, true // a walk cut short by its limits: documented as not covered
+	return true
+}
+
+func nameKeyOf(p string) (nameKey, bool) {
+	di, err := os.Lstat(filepath.Dir(p))
+	if err != nil || !di.IsDir() {
+		return nameKey{}, false
 	}
-	// Unknown to a complete walk. If the file has not changed since before
-	// that walk began, it had these several names throughout, so none of them
-	// lies where the walk looks: none is under a root or a protected location.
-	if st.ctime < idx.startedAt.Add(-margin).UnixNano() {
-		return false, true
+	dir, _, ok := idOf(di)
+	return nameKey{dir, filepath.Base(p)}, ok
+}
+
+func (g *Guard) anyDenied(names []string) bool {
+	for _, n := range names {
+		if g.deny.Match(canonPath(n), false).Matched {
+			return true
+		}
 	}
-	return false, false
+	return false
 }
 
 // startWalkLocked starts a walk unless one is running. Caller holds the lock.
@@ -162,90 +210,97 @@ func (g *Guard) startWalkLocked() {
 	idx.building = true
 	idx.lastStart = time.Now()
 	started := idx.lastStart
-	finish := func(byID map[fileID]linkEntry, complete bool) {
-		before := started.Add(-g.linkCtimeMargin).UnixNano()
+	finish := func(byID map[fileID]linkEntry) {
 		for id, e := range byID {
-			e.trusted = e.nlink != 0 && e.ctime < before
 			e.denied = g.anyDenied(e.names)
 			byID[id] = e
 		}
-		idx.byID, idx.complete, idx.ready, idx.startedAt, idx.building = byID, complete, true, started, false
+		idx.byID, idx.ready, idx.building = byID, true, false
 		idx.lastTook = time.Since(started)
 	}
 	locations := append(append([]string(nil), g.roots...), g.protect...)
 	if g.linkSync {
-		byID, complete := g.walkLinks(locations)
-		finish(byID, complete)
+		finish(g.walkLinks(locations))
 		return
 	}
 	go func() {
-		byID, complete := g.walkLinks(locations)
+		byID := g.walkLinks(locations)
 		idx.mu.Lock()
-		finish(byID, complete)
+		finish(byID)
 		idx.mu.Unlock()
 	}()
 }
 
 // walkLinks visits every file under the roots and protected locations and
-// returns the names of those that have more than one.
-func (g *Guard) walkLinks(locations []string) (map[fileID]linkEntry, bool) {
+// returns the distinct names of those that have more than one. Folders it
+// cannot read, or does not reach within its limits, leave names unfound, and
+// a file with unfound names is refused.
+func (g *Guard) walkLinks(locations []string) map[fileID]linkEntry {
 	if g.linkWalkHook != nil {
 		g.linkWalkHook()
 	}
 	byID := map[fileID]linkEntry{}
+	dirs := map[string]fileID{} // folders visited, by path
+	seenNames := map[nameKey]bool{}
 	seen := 0
 	deadline := time.Now().Add(g.linkWalkTime)
-	complete := true
 	for _, root := range locations {
+		stop := false
 		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
-				return nil // unreadable: skip it
+				return nil // unreadable: its names stay unfound
 			}
 			if seen++; seen > g.linkWalkMax || (seen%1024 == 0 && time.Now().After(deadline)) {
-				complete = false
+				stop = true
 				return filepath.SkipAll
-			}
-			if d.IsDir() {
-				// A dataless (cloud-only) folder is never enumerated: that could
-				// make its provider download it. Its contents are not on this
-				// disk, so they hold no other name of a file that is, and the
-				// walk still counts as complete.
-				if info, err := d.Info(); err != nil || isDataless(info) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !d.Type().IsRegular() {
-				return nil // symlinks, devices: only regular files have hard links that matter
 			}
 			info, err := d.Info()
 			if err != nil {
 				return nil
 			}
-			if st, ok := stampOf(info); ok && st.nlink > 1 {
-				e, seen := byID[st.id]
-				if !seen {
-					e.nlink, e.ctime = st.nlink, st.ctime
-				} else if e.nlink != st.nlink || e.ctime != st.ctime {
-					e.nlink = 0 // it changed while walking: not to be trusted
+			if d.IsDir() {
+				// A dataless (cloud-only) folder is never enumerated: that could
+				// make its provider download it. Its contents are not on this
+				// disk, so they hold no other name of a file that is.
+				if isDataless(info) {
+					return filepath.SkipDir
 				}
-				e.names = append(e.names, canonPath(p))
-				byID[st.id] = e
-				if g.linkVisitHook != nil {
-					g.linkVisitHook(p)
+				if id, _, ok := idOf(info); ok {
+					dirs[p] = id
 				}
+				return nil
+			}
+			if !info.Mode().IsRegular() {
+				return nil // symlinks, devices: only regular files have hard links that matter
+			}
+			id, nlink, ok := idOf(info)
+			if !ok || nlink < 2 {
+				return nil
+			}
+			dir, known := dirs[filepath.Dir(p)]
+			if !known {
+				k, ok := nameKeyOf(p) // a location that is itself a file
+				if !ok {
+					return nil
+				}
+				dir = k.dir
+			}
+			key := nameKey{dir, d.Name()}
+			if seenNames[key] {
+				return nil // the same name reached another way
+			}
+			seenNames[key] = true
+			e := byID[id]
+			e.names = append(e.names, p)
+			byID[id] = e
+			if g.linkVisitHook != nil {
+				g.linkVisitHook(p)
 			}
 			return nil
 		})
-	}
-	return byID, complete
-}
-
-func (g *Guard) anyDenied(names []string) bool {
-	for _, n := range names {
-		if g.deny.Match(n, false).Matched {
-			return true
+		if stop {
+			break
 		}
 	}
-	return false
+	return byID
 }

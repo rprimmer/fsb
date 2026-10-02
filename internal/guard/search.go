@@ -97,6 +97,7 @@ func (g *Guard) search(ctx context.Context, root, query string, lim SearchLimits
 
 	queue := []string{root}
 	results, examined := 0, 0
+	memo := linkMemo{}
 	for len(queue) > 0 {
 		if err := ctx.Err(); err != nil {
 			return visited, truncated, err
@@ -125,7 +126,7 @@ func (g *Guard) search(ctx context.Context, root, query string, lim SearchLimits
 					return visited, true, nil
 				}
 				examined++
-				e, ok := g.entry(dir, de)
+				e, ok := g.entry(dir, de, memo)
 				if !ok {
 					continue
 				}

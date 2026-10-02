@@ -66,16 +66,15 @@ type Guard struct {
 	protect  []string      // extra locations searched for other names of a file (see Protect)
 
 	// Hard-link detection (see linkindex.go). The limits are fields so tests can change them.
-	links           linkIndex
-	linkRebuildMin  time.Duration
-	linkWalkMax     int
-	linkWalkTime    time.Duration
-	linkCtimeMargin time.Duration // see defaultCtimeMargin
-	linkSync        bool          // walk on the caller's goroutine (tests)
-	linkWalkHook    func()        // called when a walk starts (tests)
-	linkVisitHook   func(string)  // called after a walk records a file (tests)
-	deny            *rules.Set
-	hide            *rules.Set
+	links          linkIndex
+	linkRebuildMin time.Duration
+	linkWalkMax    int
+	linkWalkTime   time.Duration
+	linkSync       bool         // walk on the caller's goroutine (tests)
+	linkWalkHook   func()       // called when a walk starts (tests)
+	linkVisitHook  func(string) // called after a walk records a file (tests)
+	deny           *rules.Set
+	hide           *rules.Set
 }
 
 // New creates a Guard. Each root must exist and is resolved to its real path.
@@ -83,7 +82,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 	if len(roots) == 0 {
 		return nil, errors.New("at least one root is required")
 	}
-	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime, linkCtimeMargin: defaultCtimeMargin}
+	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime}
 	for _, r := range roots {
 		if !filepath.IsAbs(r) {
 			return nil, fmt.Errorf("root %q is not absolute", r)
@@ -361,11 +360,12 @@ func (g *Guard) ListFunc(p string, batch int, fn func([]Entry) error) error {
 	}
 	// dir is the real location: children are judged by where they really are,
 	// not by the symlink (or alias) the directory was reached through.
+	memo := linkMemo{}
 	for {
 		des, err := f.ReadDir(batch)
 		out := make([]Entry, 0, len(des))
 		for _, de := range des {
-			if e, ok := g.entry(dir, de); ok {
+			if e, ok := g.entry(dir, de, memo); ok {
 				out = append(out, e)
 			}
 		}
@@ -385,7 +385,7 @@ func (g *Guard) ListFunc(p string, batch int, fn func([]Entry) error) error {
 
 // entry builds the listing entry for de, or reports false if it must not be
 // shown (vanished, denied, hidden, or a symlink to a denied/outside target).
-func (g *Guard) entry(dir string, de fs.DirEntry) (Entry, bool) {
+func (g *Guard) entry(dir string, de fs.DirEntry, memo linkMemo) (Entry, bool) {
 	info, err := de.Info()
 	if err != nil {
 		return Entry{}, false // vanished between ReadDir and Info
@@ -422,7 +422,7 @@ func (g *Guard) entry(dir string, de fs.DirEntry) (Entry, bool) {
 			subject = rfi
 		}
 	}
-	if g.hardLinkToDenied(subject) {
+	if g.hardLinkToDeniedMemo(subject, memo) {
 		return Entry{}, false
 	}
 	// dir itself already passed Open's checks, so only the child matters.

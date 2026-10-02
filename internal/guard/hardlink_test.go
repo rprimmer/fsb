@@ -92,24 +92,43 @@ func TestHardLinkCreatedAfterTheIndexWasBuiltIsStillFound(t *testing.T) {
 	}
 }
 
-// The other name may be outside the served roots. Locations named with Protect
-// are searched too, which is how the credential folders of every home are covered.
-func TestHardLinkToAFileOutsideTheRootsIsFoundThroughProtect(t *testing.T) {
+// A file with a name the walk cannot see (outside every root and protected
+// location) is refused: the index serves a file only when it has found every
+// one of its names. Protect extends where it looks, so an ordinary file linked
+// from a protected location is served again.
+func TestHardLinkWithANameOutsideEveryLocationIsRefused(t *testing.T) {
 	fx := newFixture(t)
 	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
-	outsideSecret := filepath.Join(fx.outside, ".ssh", "id_rsa") // its own path is denied by rule everywhere
-	write(t, outsideSecret, "SECRET")
-	link(t, outsideSecret, filepath.Join(fx.home, "proj", "innocent.txt"))
-	// The roots alone cannot see the other name.
-	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "innocent.txt")); err != nil {
-		t.Fatalf("precondition: the other name is outside every root and unprotected: %v", err)
-	} else {
-		f.Close()
+	outside := filepath.Join(fx.outside, "shared", "notes.txt")
+	write(t, outside, "ordinary")
+	link(t, outside, filepath.Join(fx.home, "proj", "innocent.txt"))
+	if openOK(fx.g, filepath.Join(fx.home, "proj", "innocent.txt")) {
+		t.Error("served although one of its names was never seen")
 	}
+	fx.g.Protect(filepath.Join(fx.outside, "shared"))
+	if !openOK(fx.g, filepath.Join(fx.home, "proj", "innocent.txt")) {
+		t.Error("every name is now seen and none is denied: it must be served")
+	}
+	secret := filepath.Join(fx.outside, ".ssh", "id_rsa")
+	write(t, secret, "SECRET")
+	link(t, secret, filepath.Join(fx.home, "proj", "key.txt"))
 	fx.g.Protect(filepath.Join(fx.outside, ".ssh"))
-	if f, _, err := fx.g.Open(filepath.Join(fx.home, "proj", "innocent.txt")); err == nil {
-		f.Close()
+	if openOK(fx.g, filepath.Join(fx.home, "proj", "key.txt")) {
 		t.Error("a name for a protected credential file was served")
+	}
+}
+
+// A location walked twice (a protected folder inside a root) must not count
+// one name twice: two sightings of one name are not two names.
+func TestANameSeenTwiceIsCountedOnce(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	inner := filepath.Join(fx.home, "proj", "inner")
+	write(t, filepath.Join(inner, "a.txt"), "SECRET")
+	link(t, filepath.Join(inner, "a.txt"), filepath.Join(fx.outside, ".env")) // outside every location
+	fx.g.Protect(inner)                                                         // inner is now walked twice
+	if openOK(fx.g, filepath.Join(inner, "a.txt")) {
+		t.Error("a.txt was served: its one visible name was counted as both of its names")
 	}
 }
 
@@ -378,24 +397,133 @@ func TestManyNamesOfOneFileListQuickly(t *testing.T) {
 	}
 }
 
-// On a file system with whole-second timestamps a link made just after a walk
-// began can carry a ctime earlier than the start. So a ctime counts as "before
-// the walk" only with a margin, and a link made just before is refused until a
-// later walk.
-func TestCtimeMarginRefusesLinksMadeJustBeforeAWalk(t *testing.T) {
+// From the second independent review: renaming or moving a folder changes the
+// names of the files inside it without changing anything about the files.
+
+func TestRenamingAFolderIntoADeniedNameIsSeen(t *testing.T) {
 	fx := newFixture(t)
-	fx.g.linkSync, fx.g.linkCtimeMargin = true, defaultCtimeMargin
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
 	proj := filepath.Join(fx.home, "proj")
-	write(t, filepath.Join(proj, "x.txt"), "x")
-	link(t, filepath.Join(proj, "x.txt"), filepath.Join(proj, "y.txt"))
-	if openOK(fx.g, filepath.Join(proj, "y.txt")) {
-		t.Error("a pair linked within the margin before the walk was trusted")
+	write(t, filepath.Join(proj, "sub", "token"), "SECRET")
+	link(t, filepath.Join(proj, "sub", "token"), filepath.Join(proj, "a.txt"))
+	if !openOK(fx.g, filepath.Join(proj, "a.txt")) {
+		t.Fatal("setup: a.txt should be served")
 	}
-	fx.g.linkCtimeMargin = 0 // as if the margin had passed
-	fx.g.links.mu.Lock()
-	fx.g.links.lastStart = time.Time{}
-	fx.g.links.mu.Unlock()
-	if !openOK(fx.g, filepath.Join(proj, "y.txt")) {
-		t.Error("the pair must be served once a walk began after it changed")
+	if err := os.Rename(filepath.Join(proj, "sub"), filepath.Join(proj, ".env")); err != nil {
+		t.Fatal(err)
+	}
+	if openOK(fx.g, filepath.Join(proj, "a.txt")) {
+		t.Error("a.txt is another name of proj/.env/token but was served")
+	}
+}
+
+func TestAFolderMovedInFromOutsideTheRootsIsSeen(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	d := filepath.Join(fx.outside, "d")
+	write(t, filepath.Join(d, ".env"), "SECRET")
+	link(t, filepath.Join(d, ".env"), filepath.Join(d, "notes.txt"))
+	write(t, filepath.Join(fx.home, "proj", "p.txt"), "x")
+	link(t, filepath.Join(fx.home, "proj", "p.txt"), filepath.Join(fx.home, "proj", "q.txt"))
+	openOK(fx.g, filepath.Join(fx.home, "proj", "q.txt")) // a complete walk before the move
+	if err := os.Rename(d, filepath.Join(fx.home, "proj", "d")); err != nil {
+		t.Fatal(err)
+	}
+	if openOK(fx.g, filepath.Join(fx.home, "proj", "d", "notes.txt")) {
+		t.Error("notes.txt (other name: proj/d/.env) was served")
+	}
+	es, _ := fx.g.List(filepath.Join(fx.home, "proj", "d"))
+	for _, e := range es {
+		if e.Name == "notes.txt" {
+			t.Error("notes.txt was listed")
+		}
+	}
+}
+
+func TestAFolderMovedDuringTheWalkIsSeen(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	write(t, filepath.Join(fx.home, "aaa", "x.txt"), "SECRET")
+	if err := os.MkdirAll(filepath.Join(fx.home, "zzz", "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link(t, filepath.Join(fx.home, "aaa", "x.txt"), filepath.Join(fx.home, "zzz", "sub", ".env"))
+	moved := false
+	fx.g.linkVisitHook = func(p string) {
+		if !moved && filepath.Base(p) == "x.txt" {
+			moved = true
+			if err := os.Rename(filepath.Join(fx.home, "zzz", "sub"), filepath.Join(fx.home, "aaa", "sub")); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	if openOK(fx.g, filepath.Join(fx.home, "aaa", "x.txt")) {
+		t.Error("x.txt was served though aaa/sub/.env is another name")
+	}
+}
+
+// A folder the walk cannot read (permissions, or macOS privacy protection)
+// may hold another name of a file, so its files cannot be vouched for.
+func TestAnUnreadableFolderLeavesItsNamesUnseen(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	proj := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(proj, "locked", ".env"), "SECRET")
+	link(t, filepath.Join(proj, "locked", ".env"), filepath.Join(proj, "a.txt"))
+	if err := os.Chmod(filepath.Join(proj, "locked"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(proj, "locked"), 0o755) })
+	if openOK(fx.g, filepath.Join(proj, "a.txt")) {
+		t.Error("a.txt was served; its other name lies in a folder the walk could not read")
+	}
+}
+
+// A recorded path still leads to the file if a folder along it is replaced by
+// a symbolic link to where the folder went; but the file's name is then
+// where the folder went, which may be denied. Recorded names must be real paths.
+func TestAFolderReplacedByASymlinkIsSeen(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	proj := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(proj, "dir", "sub", "x"), "SECRET")
+	link(t, filepath.Join(proj, "dir", "sub", "x"), filepath.Join(proj, "a.txt"))
+	if !openOK(fx.g, filepath.Join(proj, "a.txt")) {
+		t.Fatal("setup: a.txt should be served")
+	}
+	if err := os.MkdirAll(filepath.Join(fx.home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(fx.home, ".ssh", "dir")
+	if err := os.Rename(filepath.Join(proj, "dir"), moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, filepath.Join(proj, "dir")); err != nil {
+		t.Fatal(err)
+	}
+	if openOK(fx.g, filepath.Join(proj, "a.txt")) {
+		t.Error("a.txt is another name of .ssh/dir/sub/x but was served")
+	}
+}
+
+// A recorded name that now holds a different file is not a name of this one:
+// here y.txt is replaced and the file gains a denied name instead, keeping
+// its link count.
+func TestARecordedNameNowHoldingAnotherFileIsSeen(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	proj := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(proj, "x.txt"), "SECRET")
+	link(t, filepath.Join(proj, "x.txt"), filepath.Join(proj, "y.txt"))
+	if !openOK(fx.g, filepath.Join(proj, "x.txt")) {
+		t.Fatal("setup: x.txt should be served")
+	}
+	if err := os.Remove(filepath.Join(proj, "y.txt")); err != nil {
+		t.Fatal(err)
+	}
+	link(t, filepath.Join(proj, "x.txt"), filepath.Join(proj, ".env"))
+	write(t, filepath.Join(proj, "y.txt"), "another file")
+	if openOK(fx.g, filepath.Join(proj, "x.txt")) {
+		t.Error("x.txt is another name of proj/.env but was served")
 	}
 }
