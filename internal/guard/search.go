@@ -24,7 +24,7 @@ type SearchMatch struct {
 // SearchOptions bounds a search and says how names are compared.
 type SearchOptions struct {
 	MaxResults int
-	MaxVisited int
+	MaxVisited int // entries examined, visible or not
 	// MatchCase makes the comparison case-sensitive. Names and the query are
 	// still compared after Unicode normalization, because macOS may store an
 	// accented name in a different form than the user types.
@@ -72,7 +72,7 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 	}
 
 	queue := []string{root}
-	results := 0
+	results, examined := 0, 0
 	for len(queue) > 0 {
 		if err := ctx.Err(); err != nil {
 			return visited, truncated, err
@@ -93,10 +93,14 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 		for {
 			des, rerr := d.ReadDir(512)
 			for _, de := range des {
-				if visited >= lim.MaxVisited {
+				// The budget counts every entry examined, including those
+				// rejected below, since it bounds the work; visited, which is
+				// reported, counts only the visible ones.
+				if examined >= lim.MaxVisited {
 					d.Close()
 					return visited, true, nil
 				}
+				examined++
 				e, ok := g.entry(dir, de)
 				if !ok {
 					continue
