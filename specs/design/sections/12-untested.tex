@@ -97,10 +97,10 @@ document; they are gathered here so a reader does not have to hunt for them.
         (\fq{DST-2}), so there is no signing, notarization or Gatekeeper behavior to test,
         but \code{go install} from the public repository was tried only once, on the
         machine of Section~\ref{sec:environment}, right after release.
-  \item \textbf{Vulnerability scanning runs on every push, not on a schedule.}
-        \code{govulncheck} and \code{npm audit} run in continuous integration; nothing
-        rescans an unchanged commit when a new advisory is published, and no automated
-        dependency updates are proposed.
+  \item \textbf{Vulnerability scanning.}  \code{govulncheck} and \code{npm audit} run in
+        continuous integration on every push, and GitHub's Dependabot alerts flag a
+        dependency when a new advisory names it.  No automated dependency updates are
+        proposed, and nobody is committed to acting on an alert.
 \end{itemize}
 
 \subsection{What this does not mean}
