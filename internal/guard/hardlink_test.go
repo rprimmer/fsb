@@ -301,3 +301,101 @@ func TestRenamingTheDeniedNameAwayIsServedAfterARebuild(t *testing.T) {
 		t.Error("an ordinary pair must be served once the index has seen it")
 	}
 }
+
+// From the independent review of f28c274. A file that had a single name while
+// a walk ran is not in the index; that must not be read as "its other names are
+// where the walker cannot see", once it has a second name again.
+func TestFileWithOneNameDuringTheWalkIsNotExempted(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkSync = true
+	proj, work := filepath.Join(fx.home, "proj"), filepath.Join(fx.home, "work")
+	write(t, filepath.Join(proj, "x.txt"), "x")
+	link(t, filepath.Join(proj, "x.txt"), filepath.Join(proj, "y.txt"))
+	if !openOK(fx.g, filepath.Join(proj, "y.txt")) {
+		t.Fatal("build")
+	}
+	write(t, filepath.Join(work, ".env"), "SECRET")
+	alias := filepath.Join(proj, "alias.txt")
+	link(t, filepath.Join(work, ".env"), alias)
+	if openOK(fx.g, alias) {
+		t.Fatal("served at once")
+	}
+	if err := os.Remove(alias); err != nil { // .env has one name while the next walk runs
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(proj, "p1"), "p")
+	link(t, filepath.Join(proj, "p1"), filepath.Join(proj, "p2"))
+	fx.g.links.mu.Lock()
+	fx.g.links.lastStart = time.Time{}
+	fx.g.links.mu.Unlock()
+	openOK(fx.g, filepath.Join(proj, "p1")) // an unverified file starts the walk
+	link(t, filepath.Join(work, ".env"), alias)
+	if openOK(fx.g, alias) {
+		t.Error("another name for work/.env was served")
+	}
+}
+
+// From the same review: names changed while the walk runs, so that it records
+// too few of them with the right count. The hook makes the change right after
+// the walk has looked at a.txt (".env" sorts before it, "zzz" after).
+func TestNamesChangedDuringTheWalkAreNotTrusted(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkSync = true
+	proj := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(proj, "a.txt"), "SECRET-TO-BE")
+	link(t, filepath.Join(proj, "a.txt"), filepath.Join(proj, "zzz_m.txt"))
+	fx.g.linkVisitHook = func(p string) {
+		if filepath.Base(p) == "a.txt" {
+			link(t, filepath.Join(proj, "a.txt"), filepath.Join(proj, ".env"))
+			os.Remove(filepath.Join(proj, "zzz_m.txt"))
+		}
+	}
+	fx.g.StartLinkIndex()
+	fx.g.linkVisitHook = nil
+	if openOK(fx.g, filepath.Join(proj, "a.txt")) {
+		t.Error("a.txt was served although it is another name for proj/.env")
+	}
+}
+
+// Deciding a file with many names must not cost work for every name each time
+// (a backup tree made with cp -al has one name per snapshot).
+func TestManyNamesOfOneFileListQuickly(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkSync = true
+	d := filepath.Join(fx.home, "proj", "many")
+	write(t, filepath.Join(d, "0"), "x")
+	for i := 1; i < 500; i++ {
+		link(t, filepath.Join(d, "0"), filepath.Join(d, itoa(i)))
+	}
+	openOK(fx.g, filepath.Join(d, "0")) // builds the index
+	t0 := time.Now()
+	es, err := fx.g.List(d)
+	if err != nil || len(es) != 500 {
+		t.Fatalf("%d entries, %v", len(es), err)
+	}
+	if took := time.Since(t0); took > 2*time.Second {
+		t.Errorf("listing 500 names of one file took %v", took)
+	}
+}
+
+// On a file system with whole-second timestamps a link made just after a walk
+// began can carry a ctime earlier than the start. So a ctime counts as "before
+// the walk" only with a margin, and a link made just before is refused until a
+// later walk.
+func TestCtimeMarginRefusesLinksMadeJustBeforeAWalk(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkSync, fx.g.linkCtimeMargin = true, defaultCtimeMargin
+	proj := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(proj, "x.txt"), "x")
+	link(t, filepath.Join(proj, "x.txt"), filepath.Join(proj, "y.txt"))
+	if openOK(fx.g, filepath.Join(proj, "y.txt")) {
+		t.Error("a pair linked within the margin before the walk was trusted")
+	}
+	fx.g.linkCtimeMargin = 0 // as if the margin had passed
+	fx.g.links.mu.Lock()
+	fx.g.links.lastStart = time.Time{}
+	fx.g.links.mu.Unlock()
+	if !openOK(fx.g, filepath.Join(proj, "y.txt")) {
+		t.Error("the pair must be served once a walk began after it changed")
+	}
+}

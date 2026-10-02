@@ -66,14 +66,16 @@ type Guard struct {
 	protect  []string      // extra locations searched for other names of a file (see Protect)
 
 	// Hard-link detection (see linkindex.go). The limits are fields so tests can change them.
-	links          linkIndex
-	linkRebuildMin time.Duration
-	linkWalkMax    int
-	linkWalkTime   time.Duration
-	linkSync       bool   // walk on the caller's goroutine (tests)
-	linkWalkHook   func() // called when a walk starts (tests)
-	deny           *rules.Set
-	hide           *rules.Set
+	links           linkIndex
+	linkRebuildMin  time.Duration
+	linkWalkMax     int
+	linkWalkTime    time.Duration
+	linkCtimeMargin time.Duration // see defaultCtimeMargin
+	linkSync        bool          // walk on the caller's goroutine (tests)
+	linkWalkHook    func()        // called when a walk starts (tests)
+	linkVisitHook   func(string)  // called after a walk records a file (tests)
+	deny            *rules.Set
+	hide            *rules.Set
 }
 
 // New creates a Guard. Each root must exist and is resolved to its real path.
@@ -81,7 +83,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 	if len(roots) == 0 {
 		return nil, errors.New("at least one root is required")
 	}
-	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime}
+	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime, linkCtimeMargin: defaultCtimeMargin}
 	for _, r := range roots {
 		if !filepath.IsAbs(r) {
 			return nil, fmt.Errorf("root %q is not absolute", r)

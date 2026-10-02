@@ -74,6 +74,10 @@ func newFixture(t testing.TB) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Tests make links and walk at once; the margin for file systems with
+	// coarse timestamps would refuse all of them (APFS keeps nanoseconds).
+	// TestCtimeMarginRefusesLinksMadeJustBeforeAWalk covers the margin.
+	g.linkCtimeMargin = 0
 	return &fixture{home: home, outside: outside, g: g}
 }
 

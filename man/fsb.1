@@ -551,9 +551,9 @@ seconds
 for a home folder of 700,000 files); until it is ready, files that have
 several names
 are refused.
-So is a file with several names that the index has not seen, or whose names
-have changed since it last looked (a name added, renamed or removed), until
-the index is refreshed; refreshes are at least 15 seconds apart.
+So is a file with several names that changed (a name added, renamed or
+removed, or its contents written) since shortly before the index last looked,
+until the index is refreshed; refreshes are at least 15 seconds apart.
 .SH ENVIRONMENT
 .TP
 .B HOME
