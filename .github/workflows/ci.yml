@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+# Actions are pinned to reviewed commits (the version is in each comment) and
+# Node and govulncheck to exact versions, so a run is reproducible without
+# upkeep. Update them by hand, deliberately.
+
 jobs:
   test:
     strategy:
@@ -15,8 +19,8 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -32,15 +36,17 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - name: dependency audit (packages that ship in dist)
-        run: npm audit --omit=dev --audit-level=high
+      # The whole graph: Svelte and Vite are dev dependencies, yet Svelte's runtime
+      # is compiled into dist and Vite builds it.
+      - name: dependency audit
+        run: npm audit --audit-level=high
       - run: npm test
       - run: npx svelte-check --tsconfig ./tsconfig.json
       - name: build
@@ -51,13 +57,13 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
       - name: Chrome browser tests (including the 100,000-file test)
         env:
           CI: 'true'
@@ -66,7 +72,7 @@ jobs:
         run: node --test --test-reporter=spec e2e/chrome.test.mjs
       - name: Keep screenshots of failures
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-screenshots
           path: e2e/artifacts/
@@ -75,14 +81,16 @@ jobs:
   fuzz:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # Short runs on every push; the seed corpora also run as ordinary tests above.
       # Run them longer locally: go test ./internal/guard -run '^$' -fuzz FuzzGuardNeverExposesSecrets -fuzztime 5m
       - name: fuzz the path guard (secrets must never surface)
         run: go test ./internal/guard -run '^$' -fuzz '^FuzzGuardNeverExposesSecrets$' -fuzztime 30s
+      - name: fuzz the zip directory reader (agrees with archive/zip)
+        run: go test ./internal/guard -run '^$' -fuzz '^FuzzListZipAgreesWithArchiveZip$' -fuzztime 20s
       - name: fuzz the rule matcher
         run: |
           go test ./internal/rules -run '^$' -fuzz '^FuzzDenyMatchesEverythingUnderADeniedDirectory$' -fuzztime 15s
@@ -95,7 +103,7 @@ jobs:
         run: go test ./internal/server -run '^$' -fuzz '^FuzzPathParameter$' -fuzztime 30s
       - name: keep any failing input
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-failures
           path: internal/**/testdata/fuzz/
@@ -104,9 +112,9 @@ jobs:
   vuln:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
