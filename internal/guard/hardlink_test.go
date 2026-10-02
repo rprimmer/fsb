@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -645,5 +646,66 @@ func TestAPairMadeDuringAWalkIsServedAfterOneMoreWalk(t *testing.T) {
 	fx.g.links.mu.Unlock()
 	if !openOK(fx.g, filepath.Join(root, "z", "a")) {
 		t.Error("an ordinary pair must be served once a walk has seen both names")
+	}
+}
+
+// A decision remembered within one listing must not outlive a rename that
+// leaves the link count unchanged: here one of two names is renamed to a denied
+// name between batches, and the other must no longer be listed once the memo's
+// short freshness window has passed.
+func TestAListingNoticesARenameIntoADeniedNameBetweenBatches(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	fx.g.linkMemoTTL = 20 * time.Millisecond
+	d := filepath.Join(fx.home, "proj", "pair")
+	write(t, filepath.Join(d, "a"), "SECRET-TO-BE")
+	link(t, filepath.Join(d, "a"), filepath.Join(d, "b"))
+	openOK(fx.g, filepath.Join(d, "a")) // builds the index
+	var listed []string
+	err := fx.g.ListFunc(d, 1, func(es []Entry) error {
+		if len(listed) == 0 {
+			time.Sleep(60 * time.Millisecond)
+			if err := os.Rename(filepath.Join(d, es[0].Name), filepath.Join(fx.home, ".env")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, e := range es {
+			listed = append(listed, e.Name)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) > 1 {
+		t.Errorf("listed %v: the second name was listed after the first became a denied name", listed)
+	}
+}
+
+// The same for a recursive search.
+func TestASearchNoticesARenameIntoADeniedNameBetweenResults(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	fx.g.linkMemoTTL = 20 * time.Millisecond
+	d := filepath.Join(fx.home, "proj", "pair")
+	write(t, filepath.Join(d, "a.txt"), "SECRET-TO-BE")
+	link(t, filepath.Join(d, "a.txt"), filepath.Join(d, "b.txt"))
+	openOK(fx.g, filepath.Join(d, "a.txt")) // builds the index
+	var found []string
+	_, _, err := fx.g.Search(context.Background(), d, "txt", SearchOptions{MaxResults: 10, MaxVisited: 100}, func(m SearchMatch) error {
+		if len(found) == 0 {
+			time.Sleep(60 * time.Millisecond)
+			if err := os.Rename(m.Path, filepath.Join(fx.home, ".env")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		found = append(found, m.Name)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) > 1 {
+		t.Errorf("found %v: the second name was reported after the first became a denied name", found)
 	}
 }

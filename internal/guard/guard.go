@@ -68,6 +68,7 @@ type Guard struct {
 	// Hard-link detection (see linkindex.go). The limits are fields so tests can change them.
 	links          linkIndex
 	linkRebuildMin time.Duration
+	linkMemoTTL    time.Duration
 	linkWalkMax    int
 	linkWalkTime   time.Duration
 	linkSync       bool         // walk on the caller's goroutine (tests)
@@ -82,7 +83,7 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 	if len(roots) == 0 {
 		return nil, errors.New("at least one root is required")
 	}
-	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime}
+	g := &Guard{deny: deny, hide: hide, linkRebuildMin: defaultLinkRebuildIn, linkMemoTTL: defaultLinkMemoTTL, linkWalkMax: defaultLinkWalkMax, linkWalkTime: defaultLinkWalkTime}
 	for _, r := range roots {
 		if !filepath.IsAbs(r) {
 			return nil, fmt.Errorf("root %q is not absolute", r)

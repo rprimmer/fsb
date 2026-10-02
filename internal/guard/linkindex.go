@@ -68,12 +68,20 @@ type linkEntry struct {
 
 // linkMemo remembers decisions within one listing or search, so a folder
 // holding many names of one file costs one check, not one per name. It is
-// keyed by link count too, so a name added meanwhile is noticed.
-type linkMemo map[linkMemoKey]bool
+// keyed by link count too, so a name added meanwhile is noticed. A decision is
+// reused only for linkMemoTTL (see there): a rename that leaves the count
+// unchanged, such as one of two names moved onto a denied name, would
+// otherwise stay hidden from a listing or search that runs for a long time.
+type linkMemo map[linkMemoKey]linkVerdict
 
 type linkMemoKey struct {
 	id    fileID
 	nlink uint64
+}
+
+type linkVerdict struct {
+	denied bool
+	at     time.Time
 }
 
 // Limits of an index walk. It runs in the background, so they only need to keep
@@ -83,6 +91,11 @@ const (
 	defaultLinkWalkMax   = 20_000_000
 	defaultLinkWalkTime  = 10 * time.Minute
 	defaultLinkRebuildIn = 15 * time.Second // minimum time between walks
+	// How long a decision in a linkMemo is reused. It bounds how stale a
+	// listing's or a search's verdict about a multi-name file can be: after
+	// this, the recorded names are checked again. A folder of many names of one
+	// file therefore costs one check per file per window, not one per name.
+	defaultLinkMemoTTL = time.Second
 )
 
 // Protect names locations (folders or files, such as ~/.ssh) whose files must
@@ -130,14 +143,14 @@ func (g *Guard) hardLinkToDeniedMemo(fi fs.FileInfo, memo linkMemo) bool {
 		return false
 	}
 	key := linkMemoKey{id, nlink}
-	if v, ok := memo[key]; ok {
-		return v
+	if v, ok := memo[key]; ok && time.Since(v.at) < g.linkMemoTTL {
+		return v.denied
 	}
-	v := g.judgeLinked(id, nlink)
+	denied := g.judgeLinked(id, nlink)
 	if memo != nil {
-		memo[key] = v
+		memo[key] = linkVerdict{denied, time.Now()}
 	}
-	return v
+	return denied
 }
 
 func (g *Guard) judgeLinked(id fileID, nlink uint64) bool {
