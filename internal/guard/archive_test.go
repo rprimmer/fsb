@@ -288,3 +288,22 @@ func TestZipModTime(t *testing.T) {
 		t.Fatalf("%v %v, want %v", l.Entries, err, when)
 	}
 }
+
+// When the decompression limit falls exactly between two members, the tar
+// reader sees a clean end of stream. That must still be reported as
+// incomplete, not as the whole archive.
+func TestTarGzLimitAtAHeaderBoundaryIsIncomplete(t *testing.T) {
+	old := archiveMaxDecompress
+	archiveMaxDecompress = 1024 // one 512-byte header plus one padded data block
+	defer func() { archiveMaxDecompress = old }()
+	fx := newFixture(t)
+	p := filepath.Join(fx.home, "arch", "two.tgz")
+	put(t, p, gz(makeTar(t, "a.txt", "b.txt")))
+	l, err := fx.g.ListArchive(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Total != 2 && !l.Incomplete {
+		t.Errorf("total=%d incomplete=%v: a partial listing looks complete", l.Total, l.Incomplete)
+	}
+}

@@ -106,6 +106,9 @@ func listTar(r io.Reader, format string) (ArchiveListing, error) {
 		h, err := tr.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				// The end of the stream, or of our budget at a member boundary,
+				// which tar cannot tell apart: count the latter as incomplete.
+				l.Incomplete = lim != nil && lim.N <= 0
 				break
 			}
 			// A limit hit while streaming, or a damaged tail: report what we have.
