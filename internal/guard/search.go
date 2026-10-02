@@ -105,9 +105,18 @@ func (g *Guard) search(ctx context.Context, root, query string, lim SearchLimits
 		dir := queue[0]
 		queue = queue[1:]
 
-		d, di, err := g.Open(dir)
+		d, di, realDir, err := g.open(dir)
 		if err != nil {
 			continue // unreadable, vanished, or denied since listing: skip it
+		}
+		if realDir != canonPath(dir) {
+			// The folder queued under this name is not where it is now: a
+			// symbolic link took its place (or one above it). Its entries
+			// would be judged, and reported, under a name that is not their
+			// real location, so it is not entered.
+			d.Close()
+			*unreadable++
+			continue
 		}
 		if !di.IsDir() || refuseDataless(di) != nil {
 			// TOCTOU (no longer a directory) or dataless since listing: skip it,

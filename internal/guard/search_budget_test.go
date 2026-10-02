@@ -3,7 +3,9 @@ package guard
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -69,5 +71,51 @@ func TestSearchReportsFoldersThatCouldNotBeReadCompletely(t *testing.T) {
 	searchReadErrForTest = nil
 	if sum, _ := fx.g.SearchSummary(context.Background(), dir, "a", DefaultSearchLimits, func(SearchMatch) error { return nil }); sum.Unreadable != 0 {
 		t.Errorf("summary %+v without errors", sum)
+	}
+}
+
+// A directory queued for searching can be replaced, before it is reached, by a
+// symlink to somewhere whose children are judged differently. The search must
+// not descend through the substitute: its children would be judged, and
+// reported, under the queued name rather than where they really are.
+func TestSearchDoesNotDescendIntoAQueuedDirectoryReplacedByASymlink(t *testing.T) {
+	fx := newFixture(t)
+	root := filepath.Join(fx.home, "r")
+	write(t, filepath.Join(root, "public", "normal.txt"), "ok")
+	write(t, filepath.Join(root, "target", "secret.txt"), "SECRET")
+	write(t, filepath.Join(root, "trigger.txt"), "go")
+	fx.g.deny = userDeny(t, fx.home, filepath.Join(root, "target", "secret.txt")+"\n")
+
+	// Swap the directory once the root's entries (so "public") are queued, and
+	// before the queue is consumed.
+	swapped := false
+	searchReadErrForTest = func(dir string) error {
+		if dir == root && !swapped {
+			swapped = true
+			if err := os.Rename(filepath.Join(root, "public"), filepath.Join(root, "public-moved")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(root, "target"), filepath.Join(root, "public")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return nil
+	}
+	t.Cleanup(func() { searchReadErrForTest = nil })
+	var found []string
+	_, _, err := fx.g.Search(context.Background(), root, "txt", SearchOptions{MaxResults: 100, MaxVisited: 1000}, func(m SearchMatch) error {
+		found = append(found, m.Path)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !swapped {
+		t.Fatal("the swap never ran")
+	}
+	for _, p := range found {
+		if strings.HasSuffix(p, "secret.txt") {
+			t.Errorf("reported %s: a name denied at its real location was reached through a replaced directory", p)
+		}
 	}
 }
