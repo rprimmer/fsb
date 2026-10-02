@@ -93,6 +93,15 @@ func (g *Guard) copyPackage(root, dst string, budget *int64) error {
 			if r := g.deny.Match(path, true); r.Matched {
 				return filepath.SkipDir
 			}
+			// Checked before WalkDir reads the folder: a cloud-only part
+			// refuses the whole package, as a cloud-only file in it does.
+			info, err := d.Info()
+			if err != nil {
+				return mapErr(err)
+			}
+			if err := refuseDataless(info); err != nil {
+				return err
+			}
 			return os.Mkdir(filepath.Join(dst, rel), 0o700)
 		case !d.Type().IsRegular():
 			return nil // a symbolic link, socket or device: left out

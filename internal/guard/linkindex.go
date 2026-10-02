@@ -231,8 +231,18 @@ func (g *Guard) walkLinks() (map[fileID]linkEntry, bool) {
 				complete = false
 				return filepath.SkipAll
 			}
+			if d.IsDir() {
+				// A dataless (cloud-only) folder is never enumerated: that could
+				// make its provider download it. Its contents are not on this
+				// disk, so they hold no other name of a file that is, and the
+				// walk still counts as complete.
+				if info, err := d.Info(); err != nil || isDataless(info) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 			if !d.Type().IsRegular() {
-				return nil // directories, symlinks, devices: only regular files have hard links that matter
+				return nil // symlinks, devices: only regular files have hard links that matter
 			}
 			info, err := d.Info()
 			if err != nil {

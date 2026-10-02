@@ -11,6 +11,9 @@ import (
 const sfDataless = 0x40000000
 
 func isDataless(fi fs.FileInfo) bool {
+	if datalessForTest != nil {
+		return datalessForTest(fi)
+	}
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	return ok && st.Flags&sfDataless != 0
 }
