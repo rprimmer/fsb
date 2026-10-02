@@ -386,3 +386,35 @@ func TestSearchEndpointMatchCase(t *testing.T) {
 		}
 	}
 }
+
+// A folder that cannot be opened leaves the search incomplete, and the done
+// record the browser reads says so (it shows a warning); otherwise the results
+// would look like a complete negative.
+func TestSearchDoneRecordSaysIncompleteForAFolderThatCannotBeOpened(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permissions do not apply to root")
+	}
+	e := newEnv(t, false, nil)
+	root := filepath.Join(e.home, "searchme")
+	write(t, filepath.Join(root, "open", "needle.txt"), "x")
+	write(t, filepath.Join(root, "locked", "needle.txt"), "x")
+	if err := os.Chmod(filepath.Join(root, "locked"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(root, "locked"), 0o755) })
+	code, body := e.getQuery(t, "/api/search", url.Values{"path": {root}, "q": {"needle"}})
+	if code != 200 {
+		t.Fatalf("status %d: %s", code, body)
+	}
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	var done struct {
+		Done       bool `json:"done"`
+		Incomplete bool `json:"incomplete"`
+	}
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &done); err != nil || !done.Done {
+		t.Fatalf("last line %q is not a done record", lines[len(lines)-1])
+	}
+	if !done.Incomplete {
+		t.Errorf("done record %q: want incomplete: true", lines[len(lines)-1])
+	}
+}

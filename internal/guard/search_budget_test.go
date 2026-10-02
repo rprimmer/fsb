@@ -119,3 +119,35 @@ func TestSearchDoesNotDescendIntoAQueuedDirectoryReplacedByASymlink(t *testing.T
 		}
 	}
 }
+
+// A folder that cannot be opened at all (permission denied) is just as
+// unsearched as one that fails partway, and must make the result incomplete.
+// A folder that has vanished, or is denied, must not: the first is not a loss
+// and the second must look exactly like a missing one.
+func TestSearchReportsAFolderItCouldNotOpen(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permissions do not apply to root")
+	}
+	fx := newFixture(t)
+	root := filepath.Join(fx.home, "r")
+	write(t, filepath.Join(root, "locked", "needle.txt"), "x")
+	write(t, filepath.Join(root, "open", "needle.txt"), "x")
+	if err := os.Chmod(filepath.Join(root, "locked"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(root, "locked"), 0o755) })
+	sum, err := fx.g.SearchSummary(context.Background(), root, "needle", DefaultSearchLimits, func(SearchMatch) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Unreadable != 1 {
+		t.Errorf("summary %+v: the folder that could not be opened was not reported", sum)
+	}
+
+	// A denied folder is not a loss: it is never searched, and must not show.
+	write(t, filepath.Join(fx.home, ".ssh", "needle.txt"), "x")
+	sum, _ = fx.g.SearchSummary(context.Background(), fx.home, "needle", DefaultSearchLimits, func(SearchMatch) error { return nil })
+	if sum.Unreadable != 1 { // only "locked"; the denied .ssh adds nothing
+		t.Errorf("summary %+v: a denied folder must not count as unreadable", sum)
+	}
+}

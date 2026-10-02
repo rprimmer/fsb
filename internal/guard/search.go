@@ -54,7 +54,7 @@ func (g *Guard) Search(ctx context.Context, root, query string, lim SearchLimits
 type SearchSummary struct {
 	Visited    int  // visible entries examined
 	Truncated  bool // a limit stopped the search early
-	Unreadable int  // folders that failed partway through being read
+	Unreadable int  // folders that could not be opened, or failed partway through being read
 }
 
 // searchReadErrForTest, when set, makes reading a folder fail after its first
@@ -107,7 +107,14 @@ func (g *Guard) search(ctx context.Context, root, query string, lim SearchLimits
 
 		d, di, realDir, err := g.open(dir)
 		if err != nil {
-			continue // unreadable, vanished, or denied since listing: skip it
+			// Vanished, or denied since it was listed: a denied folder must
+			// look exactly like a missing one, and neither is a loss. One that
+			// is there and allowed but cannot be opened (permissions, an I/O
+			// error) is searched by nobody, so the result is incomplete.
+			if !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrNotDir) && !errors.Is(err, ErrNotRegular) {
+				*unreadable++
+			}
+			continue
 		}
 		if realDir != canonPath(dir) {
 			// The folder queued under this name is not where it is now: a
