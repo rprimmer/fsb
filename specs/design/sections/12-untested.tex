@@ -13,9 +13,9 @@ document; they are gathered here so a reader does not have to hunt for them.
         macOS is the only supported platform (\fq{DST-4} is macOS-specific by design),
         but even within that, only one build and one architecture were tested.  Intel
         Macs, and Apple-silicon Macs other than the model listed, have not run any part
-        of this program.  Linux has never been tried, although nothing in the design is
-        obviously darwin-only outside \code{internal/guard/firmlink\_darwin.go},
-        \code{dataless\_darwin.go} and the xattr syscalls.
+        of this program.  On Linux, the Go tests and the Chrome end-to-end suite run in
+        continuous integration (on GitHub's hosted runners), but \texttt{fsb} has never
+        been used there by hand, and Quick Look previews do not exist there.
   \item \textbf{Firefox.}  Not installed on the test machine, not driven by any
         end-to-end test, and not opened by hand.  The interface uses no
         Chrome-only or Safari-only API knowingly, but this is design intent, not a
@@ -33,12 +33,10 @@ document; they are gathered here so a reader does not have to hunt for them.
 
 \begin{itemize}
   \item \textbf{The 100{,}000-file scale test} (\fq{LST-2}) is opt-in
-        (\code{FSB\_E2E\_BIG=1}).  It is included in \code{.github/workflows/ci.yml},
-        but that workflow (Section~\ref{sec:ci-never-run}) has never executed, so its
-        only run to date was a manual, one-time invocation on 2026-09-20, whose numbers
-        are what the functional specification's limits section reports.  It has not been rerun
-        since the features added afterward (rendered Markdown, PDF preview, archive
-        listing, the hard-link index, the path-prefix cookie scoping).
+        (\code{FSB\_E2E\_BIG=1}).  It runs in continuous integration, on Linux, where the
+        first run (2026-10-02) drew the first rows of 100{,}000 entries after 118~ms with
+        35 rows in the page.  On macOS it was run by hand once, on 2026-09-20, which is
+        what the functional specification's limits section reports.
   \item \textbf{\code{TestRootContainmentIsByIdentityNotSpelling}} (\fq{ROOT-1}) is
         skipped unless the environment variable \code{FSB\_CASE\_SENSITIVE\_VOLUME}
         names a folder on a case-sensitive volume.  It was run once, manually, against a
@@ -65,7 +63,13 @@ document; they are gathered here so a reader does not have to hunt for them.
         (logged by the suite as \emph{``safari did not complete a native drop \ldots;
         falling back to synthetic drag events''}); this has not been confirmed with an
         actual pointer drag in Safari.
-  \item \textbf{The clipboard} (\fq{LST-9}, \code{c} key).  The end-to-end driver
+  \item \textbf{Real cloud-only iWork and Office documents} (\fq{PRV-12}).  The
+        refusal is the same check as every other preview's and is tested the same
+        synthetic way; no real cloud-only document has been previewed.
+  \item \textbf{Encrypted PDFs} (\fq{PRV-8}).  The test moves the focus into the PDF
+        frame itself; a real encrypted PDF, whose viewer takes the focus, was tried only
+        by hand (by the user, 2026-10-02).
+  \item \textbf{The clipboard} (\fq{LST-9}, Alt+C).  The end-to-end driver
         cannot read the system clipboard back in every environment (logged as
         \emph{``clipboard contents not read back with this driver''}), so the copy
         action is exercised but the copied text is not always verified.
@@ -74,28 +78,29 @@ document; they are gathered here so a reader does not have to hunt for them.
 \subsection{Process and infrastructure}
 
 \begin{itemize}
-  \item \label{sec:ci-never-run}\textbf{Continuous integration has never run.}  The
-        repository has no remote, so \code{.github/workflows/ci.yml} has never executed
-        on a hosted runner.  Every result in this document comes from running the same
-        commands locally on the single machine of Section~\ref{sec:environment}.
-  \item \textbf{Safari's end-to-end suite does not run in CI even once it exists.}
+  \item \label{sec:ci-never-run}\textbf{Continuous integration is new.}  It first ran on
+        2026-10-02, when the repository was given a private remote; that run found three
+        problems (finding 28 of Section~\ref{sec:history}).  It runs the Go tests on
+        macOS and Linux, the front-end tests, fuzzing, \code{govulncheck}, \code{npm
+        audit}, and the Chrome suite on Linux, on every push.
+  \item \textbf{Safari's end-to-end suite does not run in CI.}
         \code{ci.yml} sets \code{FSB\_E2E\_SKIP\_SAFARI=1} for the hosted job, because a
         headless CI runner cannot drive Safari.  The Safari suite has been run only on
         this machine, by hand, each time a feature changed.
   \item \textbf{No independent review has been performed by anyone other than the
-        author and this assistant.}  The ``independent review'' recorded in
-        Section~\ref{sec:history} and \code{specs/SECURITY.md} was done by an assistant
-        with access to the source but working from a fresh reading of it each time, not
-        by a third party, and not by a professional security firm.  A penetration test
-        by an independent party is planned before wide release and has not happened.
+        author and an assistant.}  The two ``independent reviews'' recorded in
+        Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant
+        with access to the source but none to the author's reasoning, not by a third
+        party, and not by a professional security firm.  A penetration test by an
+        independent party is planned before release and has not happened.
   \item \textbf{No release has been made.}  \fq{DST-1} through \fq{DST-3} (the public
         repository, signed and notarized binaries, the Homebrew formula) do not exist
         yet, so nothing about code signing, notarization, Gatekeeper, or the actual
         download and install experience for another user has been tested.
-  \item \textbf{Dependency and vulnerability scanning has run locally, not on a
-        schedule.}  \code{govulncheck} and \code{npm audit} were run by hand during
-        development (Section~\ref{sec:verification}); neither runs on a timer or a
-        dependency-update trigger, because there is no hosted CI yet to run it.
+  \item \textbf{Vulnerability scanning runs on every push, not on a schedule.}
+        \code{govulncheck} and \code{npm audit} run in continuous integration, and
+        Dependabot watches the dependencies; nothing rescans an unchanged commit when a
+        new advisory is published.
 \end{itemize}
 
 \subsection{What this does not mean}
@@ -105,7 +110,7 @@ guard, the rule matcher, the HTTP middleware and the endpoints are exercised by 
 heaviest layer of testing this project has (Section~\ref{sec:verification}), including
 a differential test that asks the operating system itself, not \texttt{fsb}, which
 paths are the same file.  The gaps above are concentrated in exactly the places that
-testing is normally weakest anywhere: process (CI has never run), rare environments
+testing is normally weakest anywhere: process (CI is new), rare environments
 (a case-sensitive volume, real cloud placeholders, another OS), and interactions a
 test harness cannot fully simulate (a native drag, a system clipboard).  They are
 listed here so that a reader, in particular someone doing a pre-release review, knows

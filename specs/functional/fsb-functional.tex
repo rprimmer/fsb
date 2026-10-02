@@ -2,16 +2,18 @@
 
 \input{preamble}
 \input{../common/macros}
+\input{../common/version}
 
 \title{\texttt{fsb}: Functional Specification}
 \author{}
-\date{September 21, 2026 \\ Version 0.1 (draft)}
+\date{Version \fsbversion \\ \fsbcodedate \\ \small Describes the code at commit \texttt{\fsbcommit}}
 
 \begin{document}
 
 \maketitle
 \begin{abstract}
-\texttt{fsb} is a local-only, read-only web view of a filesystem: one program
+\texttt{fsb}, the filesystem browser, is a local-only, read-only web view of a
+filesystem: one program
 that serves a browser interface on the loopback address and never changes what it
 shows.  This document specifies its externally observable behavior: how it is
 started and configured, what it lists, searches and previews, which paths it

@@ -87,3 +87,10 @@ make overleaf   # regenerates dist/fsb-specs-overleaf.zip
 
 Each document also builds on its own: `make -C functional`, `make -C design`,
 `make -C algebra`.
+
+## Version stamp
+
+Each cover shows the version and the commit of the code it describes, from
+`common/version.tex`. Overleaf has no Git, so that file is generated locally and
+committed: run `specs/tools/stamp-version.sh "1.0"` (with the version) before
+building the PDFs or the Overleaf package for a release.

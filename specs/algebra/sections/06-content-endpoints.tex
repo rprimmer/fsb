@@ -4,7 +4,9 @@
 Three endpoints look inside a file: inline image preview, inline PDF, and
 archive listing.  Each is defined by a predicate on the file's \emph{bytes},
 never its name, and each factors through $\Open$, so Laws~\ref{law:absent}
-and~\ref{law:indist} apply to them unchanged.
+and~\ref{law:indist} apply to them unchanged.  A fourth, the Quick Look picture,
+hands bytes to another program; Law~\ref{law:quicklook} states what it may be
+given.
 
 \begin{definition}[Sniff]
 $\Sniff_{\mathrm{img}}$ accepts a byte sequence that begins with the PNG, JPEG,
@@ -54,6 +56,29 @@ The PDF response carries \code{X-Frame-Options: SAMEORIGIN} and
 policy that admits exactly its one script and one style by hash.
 \Tests{server/pdf_test.go; server/mdframe_test.go; web/mdframe_test.go; e2e PDF and Markdown tests}
 \end{law}
+
+\begin{law}[Quick Look sees only what $\Open$ serves]
+\label{law:quicklook}
+Let $C(p)$ be what Quick Look is given for a request on $p$.  $C(p)$ is defined
+only if $\Open(p)$ succeeds, the real path has an iWork or Office extension, and
+the file is not cloud-only.  For a file, $C(p)$ is a new file in a private folder
+whose bytes are those read from the descriptor $\Open(p)$ returned.  For a
+package, $C(p)$ is the set of pairs $(r, b)$ such that $\Open(p/r)$ succeeds on a
+regular file whose real path lies under the real path of $p$, and $b$ is the bytes
+read from that descriptor.  In both cases $C(p)$ carries no extended attributes and
+no resource fork, and it is never the path $p$ itself.  Hence every byte Quick Look
+reads is a byte some request could already read through $\Open$, and
+Law~\ref{law:absent} extends to it: no denied file and nothing outside the roots
+reaches it, whatever $p$ names (an alias, a link, a package with hidden parts).
+\Tests{server/quicklook_test.go (private copy, no extended attributes, package parts, a real Finder alias); server/fuzz_test.go::FuzzPathParameter (stand-in Quick Look echoes its input)}
+\end{law}
+
+\begin{boundary}[What Quick Look does with the copy]
+The law bounds Quick Look's \emph{input}, not its behavior: a flaw in Apple's
+generators, or a document that refers to something outside itself, is not
+modeled.  The independent review found no generator that loads local files named
+inside a document.
+\end{boundary}
 
 \begin{boundary}[PDF sandboxing]
 A CSP \code{sandbox} cannot be applied to a PDF, because browsers then refuse to

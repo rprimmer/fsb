@@ -2,11 +2,12 @@
 
 \input{preamble}
 \input{../common/macros}
+\input{../common/version}
 \input{macros}
 
 \title{An Algebraic Specification of \texttt{fsb}}
 \author{}
-\date{September 21, 2026}
+\date{Version \fsbversion \\ \fsbcodedate \\ \small Describes the code at commit \texttt{\fsbcommit}}
 
 \begin{document}
 
@@ -16,10 +17,12 @@ This document specifies the security-relevant core of \texttt{fsb}, a local,
 read-only web view of a filesystem, as a small set of algebraic laws: the rule
 matcher that implements the two exclusion tiers (hide and deny), the access
 decision that every endpoint must agree with, the content-typed endpoints
-(images, PDFs, archives), the pure frontend functions (ordering, filtering,
+(images, PDFs, archives, Quick Look pictures), the pure frontend functions (ordering, filtering,
 navigation, link resolution), and the preview state machine.  Each law is tied
 to an executable check.  Deriving the laws, and then auditing every place that compares names,
-exposed sixteen defects, eight of them bypasses or gaps in the access rules; they are recorded in Section~\ref{sec:findings}.
+exposed sixteen defects, eight of them bypasses or gaps in the access rules, and a
+later independent review of the Quick Look endpoint two more; they are recorded in
+Section~\ref{sec:findings}.
 \end{abstract}
 
 \tableofcontents

@@ -36,7 +36,11 @@ GO_ARCH=$(go env GOARCH)
 GO_MODS=$(go list -m all 2>/dev/null | tail -n +2)
 NODE_VER=$(node -v)
 NPM_VER=$(npm -v)
-NPM_PKGS=$(cd "$WEB" && npm ls --depth=0 2>/dev/null | tail -n +2 | sed 's/^[+`|\\ -]*//')
+# "name<TAB>version" per direct dependency, from npm's JSON (its tree text
+# changes between npm releases, and scoped names contain an @ of their own).
+NPM_PKGS=$(cd "$WEB" && npm ls --depth=0 --json 2>/dev/null | node -e '
+  const d = JSON.parse(require("fs").readFileSync(0, "utf8")).dependencies || {};
+  for (const n of Object.keys(d).sort()) console.log(n + "\t" + d[n].version);')
 PDFLATEX_VER=$(pdflatex --version 2>&1 | head -1)
 LATEXMK_VER=$(latexmk -v 2>&1 | head -2 | tail -1)
 MAKE_VER=$(make -v 2>&1 | head -1)
@@ -135,9 +139,9 @@ versions pinned in \code{web/package-lock.json}:
 Package & Version \\\\
 \midrule
 TEX
-printf '%s\n' "$NPM_PKGS" | while IFS='@' read -r pkg ver; do
+TAB=$(printf '\t')
+printf '%s\n' "$NPM_PKGS" | while IFS=$TAB read -r pkg ver; do
   [ -n "$pkg" ] || continue
-  case "$pkg" in @*) pkg=$(printf '%s' "$pkg" | sed 's/^@//'); pkg="@$pkg";; esac
   printf '\\code{%s} & \\code{%s} \\\\\n' "$(esc "$pkg")" "$(esc "$ver")"
 done
 cat <<TEX

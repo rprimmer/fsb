@@ -30,6 +30,13 @@ Commit the compiled front end & Build it in the Go build & Building the binary m
 Deny checks over-match; allow checks decide by identity & One equality for both & The two directions fail differently: over-matching a deny only blocks more, over-matching an allow serves the wrong folder. \\
 Refuse files with several names until the index is ready & Allow until known & The window in which a hard link to a secret is served must be zero, at the cost of a short unavailability. \\
 Hand-written manual page in roff & Generate it from Markdown & No build dependency, and the format users expect. \\
+Remember the last port; \code{--port} for one run only & A preferences file or endpoint on the server; a cookie; \code{--port} that is remembered & A server-side store needs a write path, breaking read-only by construction, and would be one file shared by concurrent instances. Cookies are not scoped by port, so one would either reset like local storage or reopen the cross-server leak the path prefix closes. A remembered \code{--port} would turn a one-off workaround into a permanent move to an empty set of preferences. \\
+Fail, naming the holder, when the remembered port is taken & Silently pick another port & A silent move looks exactly like losing every preference, with nothing to say why. \\
+Background mode by re-executing in a new session, with a handoff pipe & Tell users to run \code{fsb \&}; daemonize with a double fork & Job control is unfamiliar to many users and ties fsb to the terminal. Go cannot fork safely; a re-executed child that reports its own startup over a pipe lets the parent show the real error and leave nothing running. \\
+Identify a running fsb by owner, executable file and start time & By the command name \code{ps} shows & On macOS that name is the process's \code{argv[0]}, which any program can set (found by the independent review). \\
+Quick Look draws a private copy & Hand Quick Look the user's path, re-checking afterwards & Quick Look resolves Finder aliases that the guard cannot see, so a path that passed every check could still lead it to a denied file (found by the independent review). A copy made from a verified descriptor has nothing to follow and cannot be swapped. \\
+Quick Look chosen by extension & Sniff the bytes, as other previews do & Quick Look decides what a document is, and a package has no bytes of its own; the copy makes the name harmless. \\
+Leave denied parts out of a package's copy & Refuse the whole package & Refusing answered differently for a package with a hidden part than for a clean one, revealing what a listing hides. \\
 \bottomrule
 \end{longtable}
 \end{center}

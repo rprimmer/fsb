@@ -28,7 +28,22 @@ loaded from (\code{base}).  The components hold only what needs the DOM.
   \item[Names are displayed, not trusted.]  Characters that would disguise a name are replaced by
         visible markers for display only.  Names are always inserted as text, never as markup.
   \item[Preferences are optional.]  They are kept in local storage with every read guarded, and
-        every value falls back on its own.
+        every value falls back on its own.  Local storage is per origin, which includes the
+        port; that is why the server remembers its port (Section~\ref{sec:port}).
+  \item[The pane grows with the window.]  \code{clampPaneWidth} bounds the preview pane
+        between 240 pixels and the window's width less \code{RESERVED\_FOR\_LIST}
+        (320 pixels, matched by a CSS \code{max-width}), and the page tracks the window's
+        width live, so the pane can widen with the window and is narrowed if the window
+        shrinks.  An earlier fixed ceiling of 900 pixels was reported by the user as a
+        usability limit, not found by a test.
+  \item[Every letter types ahead.]  Search, Go to path and Copy are on Alt+S, Alt+G and
+        Alt+C, read by physical key (\code{KeyboardEvent.code}) because macOS changes the
+        character Option produces; so no plain letter is reserved and type-ahead
+        (\fq{KEY-3}) can reach every name.
+  \item[A click selects.]  A plain left click on a file name calls \code{preventDefault}, so
+        it selects the row instead of following the link's \code{download} attribute;
+        modified clicks and the context menu still reach the browser's own download
+        (\fq{MOUSE-1}).
   \item[No dynamic code.]  There is no use of \code{eval}, of \code{innerHTML}, or of any
         other markup sink except one: the output of the syntax highlighter, which escapes its
         input.
@@ -36,11 +51,12 @@ loaded from (\code{base}).  The components hold only what needs the DOM.
 
 \subsection{The preview pane as a state machine}
 
-For a selected entry the pane is in one of a few states (idle, loading, folder, image, PDF,
-archive, text, binary, empty, cloud-only, error).  A file name gives a \emph{hint}, the
+For a selected entry the pane is in one of a few states (idle, loading, folder, image, Quick
+Look picture, PDF, archive, text, binary, empty, cloud-only, error).  A file name gives a \emph{hint}, the
 server decides from the bytes, and a hint the server rejects falls back to the ordinary head
 request, which never falls back again, so every run ends in a terminal state after at most two
-requests.  Every request started for a selection, including a fall back, shares one
+requests.  (A Quick Look picture that fails falls back to that head request, or, for a package
+document, which lists as a folder, straight to the folder state.)  Every request started for a selection, including a fall back, shares one
 cancellation handle and is cancelled when the selection changes, so a late answer can never be
 shown for the wrong file.  The laws are in the algebraic specification.
 

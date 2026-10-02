@@ -140,6 +140,11 @@ internal error (Finding~19).
   \item[Sniffed endpoints] (image, PDF, archive) share one routine that opens the file,
         reads its first bytes, decides the kind from them, and rewinds; they differ only
         in the test applied (Section~\ref{sec:content}).
+  \item[Quick Look copy] (\code{CopyForQuickLook}) opens the document as above and copies
+        bytes from the verified descriptor into a private folder; in a package it opens every
+        part through the guard by full path, so each part is judged exactly as a direct
+        request for it would be (Section~\ref{sec:quicklook}).  It writes only into the
+        temporary folder it is given, never into the roots.
 \end{description}
 
 \subsection{Hard links}

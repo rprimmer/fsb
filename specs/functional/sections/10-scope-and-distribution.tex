@@ -33,7 +33,9 @@ Version-control status overlays.
 \begin{req}{FUT-5}
 ``Reveal in Finder'' and ``Open in editor'', restricted to a fixed list of actions,
 never building a command from a path.  Excluded from this version because they would
-make the server start local processes; ``Copy path'' covers the need meanwhile.
+make the server start local processes at the user's request; ``Copy path'' covers the
+need meanwhile.  The one process this version starts is Quick Look's \code{qlmanage},
+a fixed program run on a private copy (\rid{SEC-15}).
 \end{req}
 
 \begin{req}{FUT-6}

@@ -3,7 +3,9 @@
 
 Three endpoints look inside a file: inline images, inline PDFs, and archive listings.  Each is
 defined by a test on the file's \emph{leading bytes}, never its name, and each opens the file
-through the guard, so every property of Section~\ref{sec:guard} applies to it unchanged.
+through the guard, so every property of Section~\ref{sec:guard} applies to it unchanged.  A
+fourth, Quick Look pictures, is different in kind: macOS reads the document, not
+\texttt{fsb} (Section~\ref{sec:quicklook}).
 
 \subsection{Images}
 
@@ -21,6 +23,51 @@ protection is instead the byte check, framing headers that allow only the interf
 pages to embed it, a policy that forbids script in the response, and the browser's own PDF
 viewer, which runs in an isolated component of its own.  The interface asks first, with a
 one-byte range request, whether the file really is a PDF, and only then points a frame at it.
+
+A viewer may take the keyboard focus by itself (Chrome's does, for an encrypted PDF's
+password field), and once focus is inside the frame no key event reaches the interface.  The
+preview pane records whether the pointer is over the frame and whether the last key was Tab;
+when the window loses focus to the frame with neither, focus goes back to the list
+(\fq{PRV-8}).
+
+\subsection{Quick Look pictures}
+\label{sec:quicklook}
+
+For iWork and Office documents the preview is the PNG that Apple's \code{qlmanage -t}
+draws, which is what Finder shows.  This is the one place \texttt{fsb} hands a file to
+another program, and that program opens what it is given by itself, resolving more than the
+guard can see: a Finder alias is a small regular file, marked by its \code{FinderInfo}
+attribute, that Quick Look follows to its target.  An independent review showed that an
+alias named \code{report.docx} made Quick Look draw a file in a denied folder, and one
+outside the roots.  Quick Look is therefore never given the user's file.
+
+\begin{enumerate}
+  \item \textbf{A private copy.}  \code{guard.CopyForQuickLook} opens the document
+        exactly as every endpoint does (roots, deny rules before and after, hard links to
+        denied files), requires an iWork or Office extension on the real path, refuses a
+        cloud-only document, and copies the bytes, from the descriptor it verified, into a
+        fresh temporary folder that only the user can read.  A copy has no extended
+        attributes and no resource fork, so an alias's copy is just its bytes, which Quick
+        Look draws, at most, as a blank page; and nothing can be swapped between the check
+        and the drawing.
+  \item \textbf{Packages.}  A package document is walked without following links.  Every
+        file in it is opened through the guard by its full path, and must still lie inside
+        the package (a folder swapped for a link after the walk listed it leads elsewhere,
+        and is caught here).  A part that is denied, a link, a hard link to a denied file or
+        not a regular file is left out of the copy, as a listing leaves it out, so the
+        answer does not reveal it (the same review found that refusing the whole package
+        did); a cloud-only part refuses the package.
+  \item \textbf{Bounds.}  A copy is limited to 256~MB and 5{,}000 entries.  Copying and
+        drawing share two slots.  \code{qlmanage} never finishes on a document it cannot
+        draw, so it runs under a 5-second deadline and is killed when the browser abandons
+        the request.  Exactly one PNG under 20~MB must come out, or there is no picture.
+        The picture is served like an image (sandbox policy, \code{nosniff}) and never
+        cached, and the temporary folder is removed.
+\end{enumerate}
+
+Choosing by extension rather than by bytes (\fq{PRV-2}) is deliberate: Quick Look decides
+what the document is, and a package is a folder with no bytes of its own.  The extension only
+decides whether to ask.  Keynote's \code{.key} stays covered by the core rule \code{*.key}.
 
 \subsection{Archives}
 

@@ -89,10 +89,10 @@ bytes are of the corresponding kind (\rid{PRV-2}); any other file is answered 41
 \begin{req}{API-9}
 \code{api/quicklook} answers a PNG picture, sent like \code{api/preview} and never
 cached, for a document of one of the types of \rid{PRV-12}, file or package.  It is
-answered 415 for any other type and when Quick Look cannot draw the document in time,
-409 for a cloud-only document or package part, and 404 for a denied or missing
-document, a package with a denied part, or a document that changed while it was
-drawn.  It does not support range requests.
+answered 415 for any other type, for a document larger than 256~MB, and when Quick
+Look cannot draw the document in time; 409 for a cloud-only document or package part;
+and 404 for a denied or missing document.  A package answers the same whether or not
+it holds parts that a listing leaves out.  It does not support range requests.
 \end{req}
 
 \subsection{Status codes}

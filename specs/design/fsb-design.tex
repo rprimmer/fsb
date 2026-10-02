@@ -2,16 +2,18 @@
 
 \input{preamble}
 \input{../common/macros}
+\input{../common/version}
 
 \title{\texttt{fsb}: Design Specification}
 \author{}
-\date{September 21, 2026 \\ Version 0.1 (draft)}
+\date{Version \fsbversion \\ \fsbcodedate \\ \small Describes the code at commit \texttt{\fsbcommit}}
 
 \begin{document}
 
 \maketitle
 \begin{abstract}
-This document describes how \texttt{fsb} is built and why it was built that way:
+This document describes how \texttt{fsb}, the filesystem browser, is built and why
+it was built that way:
 its structure, the mechanism behind each guarantee in the functional specification,
 the alternatives that were considered and rejected, how the design is tested, and
 what it does not do.  It is written for people who maintain the program, review it, or

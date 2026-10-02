@@ -30,8 +30,10 @@ Algebra & The laws, and the defects found by stating them (Section~\ref{sec:hist
 On every change: formatting, vetting, the Go tests under the race detector, the front-end
 tests, type checking, a build whose output must equal the committed one, an audit of the
 packages that ship, the Chrome browser tests, and timed fuzzing of the four fuzz targets.
-A scan for known vulnerabilities in the Go modules runs as well.  (The workflow has not yet run
-on a hosted service, because the repository has no remote yet.)
+A scan for known vulnerabilities in the Go modules runs as well.  The Go tests run on macOS
+and Linux; the rest on Linux.  The workflow runs on GitHub's hosted runners for every push to
+a private repository; its first run (2026-10-02) found finding~28 of
+Section~\ref{sec:history}, and every run since has passed.
 
 \subsection{What testing does not establish}
 

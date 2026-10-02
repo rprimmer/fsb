@@ -13,6 +13,10 @@
         for denied names under the roots and for the credential locations; see the limits below.
   \item[R3: untrusted content in a page that holds a session.]  Markdown, PDF and archive names are
         rendered or shown; mitigated by the layers of Section~\ref{sec:content}.
+  \item[R5: another program reads the user's documents.]  Quick Look draws iWork and Office
+        documents with Apple's generators.  Mitigated by giving it only a private copy of what the
+        guard would serve, with bounds on size and time; residual: a flaw in a generator, as when
+        Finder shows the same picture.
   \item[R4: permission prompts.]  macOS asks permission the first time for Documents, Desktop,
         Downloads and external volumes; the documentation says so.
 \end{description}
@@ -30,6 +34,8 @@
         opened; an attacker who could rewrite that link during the call could learn the text of a denied
         path (not its contents).  Requires a same-user attacker.
   \item Rule files are read at startup only.
+  \item \code{--stop} would take another program of the same user for \texttt{fsb} if that
+        program's executable file were itself named \code{fsb}.
   \item Not yet tried with real cloud-placeholder files or in Firefox; a real mouse drag of a column
         header in Safari is unverified.
   \item The browser test for Safari occasionally fails in a run of tests that need a focused window,
@@ -86,12 +92,37 @@ In brief:
         closed what \code{Open} had just handed it.  The new dataless check would have
         turned this from a rare race into a routine leak, since a cloud-only subfolder
         hits the same code path on every walk that reaches one.
+  \item Found by the user: a root given twice (\code{--root \~{}} when the home folder is
+        already the default root) was served twice, and the interface, which keys its list of
+        roots by path, failed so that every folder looked empty.  Roots are now served once,
+        compared by identity.
+  \item Found by the user: Chrome's PDF viewer moves the focus to the password field of an
+        encrypted PDF, after which no key reached the interface, so arrowing through a folder
+        stopped dead on that file.  Focus now returns to the list unless the user clicked or
+        tabbed into the viewer.
+  \item Found by the second independent review (and confirmed): a Finder alias named like an
+        Office document made Quick Look draw the alias's target, which could be denied or outside
+        the roots.  Quick Look now draws a private copy (Section~\ref{sec:quicklook}).
+  \item Found by the same review: refusing a package document that held a denied part answered
+        differently from a clean package, revealing what a listing hides.  Such parts are now
+        left out of the copy.
+  \item Found by the same review: \code{--stop} took any process whose \code{argv[0]} ended in
+        \code{fsb} for \texttt{fsb}.  It now checks the owner, the executable file and the
+        recorded start time (Section~\ref{sec:port}).
+  \item Found by the same review: \texttt{fsb}'s own files in \code{\~{}/.config/fsb} were
+        written through symbolic links.  They are now opened without following links.
+  \item Found by the first run of continuous integration: the module named Go 1.26.0, whose
+        standard library has since had security fixes (reported by \code{govulncheck}); the
+        developer's machine happened to use a newer release.  The module now names the
+        toolchain (Go 1.27.1).  The same run found two tests that assumed macOS.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
 allow checks must decide by identity.  Findings 17, 18, 19 and 20 are a different lesson: an error path that
 no test happened to reach (no fixture had ever contained a real socket, a real cloud-only folder, or a
-selected file whose main preview fails) is still worth trying by hand.
+selected file whose main preview fails) is still worth trying by hand.  Finding 24 is a third: handing a
+path to another program hands over that program's idea of what the path means, which the guard cannot
+check; the safe input is bytes the guard has already read.
 
 \subsection{Milestones}
 
@@ -104,7 +135,7 @@ Milestone & Scope & Status \\
 M0 Skeleton & Repository, CI, guard, matcher, middleware & Done. \\
 M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file folder measured. Daily use by the author still to confirm. \\
 M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
-Hardening & The audits and defects of the preceding subsection & Done; a professional penetration test is planned near release. \\
+Hardening & The audits and defects of the preceding subsection & Done, including a second independent review (October 2026) and continuous integration on macOS and Linux; a professional penetration test is planned before release. \\
 M3 Public release & Documentation, releases, Homebrew formula & Not started; packaging is done last. \\
 M4 Run & The stage-three requirements of the functional specification & Reassess after real use. \\
 \bottomrule

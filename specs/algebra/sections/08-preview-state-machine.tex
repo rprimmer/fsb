@@ -6,14 +6,20 @@
 For a selected entry the preview pane is in one of the states
 \[
   \mathsf{idle},\ \mathsf{loading},\ \mathsf{folder},\ \mathsf{image},\
-  \mathsf{pdf},\ \mathsf{archive},\ \mathsf{text},\ \mathsf{binary},\
+  \mathsf{quicklook},\ \mathsf{pdf},\ \mathsf{archive},\ \mathsf{text},\ \mathsf{binary},\
   \mathsf{empty},\ \mathsf{dataless},\ \mathsf{error}.
 \]
-The name of the entry gives a \emph{hint} $h\in\{\text{image, pdf, archive,
-none}\}$; it is only a hint because the server decides from the bytes.  Selecting
+The name of the entry gives a \emph{hint} $h\in\{\text{quicklook, image, pdf,
+archive, none}\}$; it is only a hint because the server decides (from the bytes,
+or for Quick Look from what Quick Look can draw).  Selecting
 an entry moves to $\mathsf{loading}$, after a short delay that keeps holding an
 arrow key from firing a request per row, and then:
 \begin{itemize}
+  \item with hint quicklook (checked first, because an iWork package lists as a
+        folder), and the entry is not a dangling link, the pane shows
+        $\mathsf{quicklook}$ and, if the picture fails to load, goes to
+        $\mathsf{folder}$ for a package or falls back to the head request for a
+        file;
   \item a folder goes to $\mathsf{folder}$; a dangling link to $\mathsf{error}$;
   \item with hint image, the pane shows $\mathsf{image}$ and, if the server
         refuses the bytes (415), falls back to the head request;
@@ -34,16 +40,16 @@ arrow key from firing a request per row, and then:
 \begin{law}[Termination]
 \label{law:terminate}
 From $\mathsf{loading}$ every run reaches a terminal state
-(folder, image, pdf, archive, text, binary, empty, dataless, or error) after at
-most two requests: one hinted request and at most one fall back to the head
-request, which never falls back again.
+(folder, image, quicklook, pdf, archive, text, binary, empty, dataless, or error)
+after at most two requests: one hinted request and at most one fall back to the
+head request, which never falls back again.
 \end{law}
 
 \begin{law}[Freshness]
 \label{law:fresh}
 The content shown always belongs to the entry that is currently selected: every
-request started for a selection, including the fall back after an image fails to
-load, is cancelled when the selection changes, and a cancelled request never
+request started for a selection, including the fall back after an image or a Quick
+Look picture fails to load, is cancelled when the selection changes, and a cancelled request never
 changes the state.
 \end{law}
 

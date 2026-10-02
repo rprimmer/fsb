@@ -135,9 +135,12 @@ start is refused with a message naming it.  Output after startup (such as
 \code{--background} (from its process-number file, \rid{CFG-6}), or else an
 \texttt{fsb} started any other way that is listening on the port remembered in
 \rid{CFG-5}.  It sends \code{SIGTERM}, waits up to five seconds for the process to
-exit, and reports it.  A process-number file naming a process that has gone, or that
-is not \texttt{fsb}, is ignored; only a process that is \texttt{fsb} is ever
-signaled.
+exit, and reports it.  Only a process that is \texttt{fsb} is ever signaled: it must
+belong to the same user and have been started from an executable file named
+\texttt{fsb} (the name a process gives itself does not count), and a process taken
+from the process-number file must also have the start time recorded there.  Anything
+else is ignored, so a stale file whose number now belongs to another process is
+harmless.
 \end{req}
 
 \begin{req}{CLI-19}

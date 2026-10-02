@@ -95,11 +95,12 @@ A Numbers, Pages, Word, Excel or PowerPoint document (\code{.numbers},
 \code{.pages}, \code{.docx}, \code{.doc}, \code{.xlsx}, \code{.xls},
 \code{.pptx}, \code{.ppt}), whether a single file or a package folder, is shown as
 the picture of its first page that macOS Quick Look draws, as Finder shows it, with
-a note saying so.  It is subject to every rule of an ordinary preview, and also:
-a cloud-only document, or a package with any part that is cloud-only, a symbolic
-link, denied, or a hard link to a denied file, is not handed to Quick Look; and the
-picture is discarded if the document changed while it was being drawn.  Drawing is
-stopped after 5 seconds.  When there is no picture, the pane shows what it would
+a note saying so.  It is subject to every rule of an ordinary preview.  Quick Look
+draws a private copy that \texttt{fsb} reads, never the user's own file, so it
+cannot follow a Finder alias.  A cloud-only document, or a package with a cloud-only
+part, is not copied; parts of a package that a listing leaves out (denied files,
+links, hard links to denied files) are left out of the copy.  Drawing is stopped
+after 5 seconds.  When there is no picture, the pane shows what it would
 show without one (\rid{PRV-3}, or \emph{Folder} for a package).  Keynote documents
 (\code{.key}) are denied by a core rule (Section~\ref{sec:core}) and are not shown.
 \end{req}
