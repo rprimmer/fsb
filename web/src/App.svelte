@@ -53,6 +53,7 @@
   import { keyOf } from './lib/keys';
   import { DEFAULT_PANE_WIDTH, MIN_PANE_WIDTH, RESERVED_FOR_LIST, clampPaneWidth, parsePrefs } from './lib/prefs';
   import { firstLines, plural } from './lib/preview';
+  import { startSearch } from './lib/searchrun';
   import { sortRows } from './lib/sort';
 
   const LAYOUT_KEY = 'fsb.columns.v1';
@@ -273,7 +274,7 @@
   let searchInput = $state('');
   let searchRows = $state.raw<Row[]>([]);
   let searchNote = $state('');
-  let searchCtrl: AbortController | undefined;
+  let stopSearch: (() => void) | undefined;
   let selectedKey = $state('');
   let pendingSelect = '';
   let typeaheadBuf = '';
@@ -450,8 +451,8 @@
 
   // ---- search ----------------------------------------------------------------
   function clearSearch() {
-    searchCtrl?.abort();
-    searchCtrl = undefined;
+    stopSearch?.();
+    stopSearch = undefined;
     searchActive = false;
     searching = false;
     searchRows = [];
@@ -466,9 +467,7 @@
       clearSearch();
       return;
     }
-    searchCtrl?.abort();
-    const ctrl = new AbortController();
-    searchCtrl = ctrl;
+    stopSearch?.();
     searchActive = true;
     searching = true;
     searchRows = [];
@@ -478,41 +477,18 @@
     error = '';
     list?.reset();
 
-    let buf: Row[] = [];
-    let acc: Row[] = [];
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const flush = () => {
-      timer = undefined;
-      if (buf.length) {
-        acc = acc.concat(buf);
-        buf = [];
-        searchRows = acc;
-      }
-    };
-    streamSearch(
-      path,
-      query,
-      matchCase,
-      (rows) => {
-        buf.push(...rows);
-        if (acc.length === 0) flush();
-        else timer ??= setTimeout(flush, 120);
-      },
-      ctrl.signal,
-    )
-      .then((done) => {
-        clearTimeout(timer);
-        flush();
+    // Once replaced or cleared, this search delivers nothing more (searchrun.ts).
+    stopSearch = startSearch((onRows, signal) => streamSearch(path, query, matchCase, onRows, signal), {
+      rows: (all) => (searchRows = all),
+      done: (truncated) => {
         searching = false;
-        if (done.truncated) searchNote = 'Stopped early: too many results or too many items to scan. Narrow the search.';
-      })
-      .catch((e) => {
-        if (ctrl.signal.aborted) return;
-        clearTimeout(timer);
-        flush();
+        if (truncated) searchNote = 'Stopped early: too many results or too many items to scan. Narrow the search.';
+      },
+      error: (e) => {
         searching = false;
         error = describe(e);
-      });
+      },
+    });
   }
 
   // ---- hover peek ------------------------------------------------------------
