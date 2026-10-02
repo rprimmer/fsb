@@ -22,6 +22,12 @@ export function defineSuite({ label, launch }) {
 
     // ---- helpers -------------------------------------------------------------
     const rows = () => d.eval(`return [...document.querySelectorAll('.vrow .name')].map(n => n.textContent)`);
+    // The title changes as soon as a folder opens, but its rows stream in after;
+    // wait for them (a slow machine shows the gap), then compare.
+    const expectRows = async (want) => {
+      await waitFor(async () => JSON.stringify(await rows()) === JSON.stringify(want), { message: `rows ${JSON.stringify(want)}` }).catch(() => {});
+      assert.deepEqual(await rows(), want);
+    };
     const previewOpen = () => d.eval(`return !!document.querySelector('.preview')`);
     const title = () => d.eval(`return document.title`);
     const evalJSON = (body) => d.eval(body);
@@ -136,14 +142,14 @@ export function defineSuite({ label, launch }) {
     // ---- security: what must never be visible ----------------------------------
     test('lists the home folder without denied or ignored entries', async () => {
       await open(fx.home);
-      assert.deepEqual(await rows(), fx.homeRows); // .ssh and .aws are denied, node_modules is hidden
+      await expectRows(fx.homeRows); // .ssh and .aws are denied, node_modules is hidden
       // Showing hidden files must never reveal a denied folder. fsb itself created
       // ~/.config/fsb (rule templates, the remembered port) when it started with
       // this fixture's $HOME; it is an ordinary, non-denied dotfile, so it is
       // expected to appear here, sorted before the rest (a leading dot sorts first).
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await d.eval(`return [...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').checked`)) === true);
-      assert.deepEqual(await rows(), ['.config/', ...fx.homeRows]);
+      await expectRows(['.config/', ...fx.homeRows]);
     });
 
     test('names that would disguise themselves are shown with visible markers', async () => {
@@ -241,7 +247,7 @@ export function defineSuite({ label, launch }) {
       await selectByKeys('pics/');
       await d.key('ArrowRight');
       await waitFor(async () => (await title()) === 'pics - fsb', { message: 'to open pics/' });
-      assert.deepEqual(await rows(), ['gradient.png', 'no-extension']);
+      await expectRows(['gradient.png', 'no-extension']);
       // Going further in (not coming back up) selects the first entry, so arrowing
       // or typing ahead works right away without an extra keystroke to reach it.
       await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'gradient.png', { message: 'gradient.png to be selected on entry' });
@@ -652,7 +658,7 @@ export function defineSuite({ label, launch }) {
       await d.type('needle');
       await d.key('Enter');
       await waitFor(async () => (await rows()).length === 2 && (await d.eval(`return !document.querySelector('.status').textContent.includes('Searching')`)), { message: 'the search to finish' });
-      assert.deepEqual(await rows(), ['work/needle-shallow.txt', 'work/src/deep/er/Needle-Deep.txt']); // case-insensitive, shallowest first
+      await expectRows(['work/needle-shallow.txt', 'work/src/deep/er/Needle-Deep.txt']); // case-insensitive, shallowest first
       // node_modules (hidden) and .ssh (denied) matches are absent.
 
       // Denied names find nothing at all.
@@ -661,7 +667,7 @@ export function defineSuite({ label, launch }) {
         await d.type(q);
         await d.key('Enter');
         await waitFor(async () => (await d.eval(`return !document.querySelector('.status').textContent.includes('Searching')`)), { message: `search for ${q} to finish` });
-        assert.deepEqual(await rows(), [], `searching for ${q} must find nothing`);
+        assert.deepEqual(await rows(), [], `searching for ${q} must find nothing`); // not expectRows: waiting for [] would pass before results arrive
       }
     });
 
@@ -839,7 +845,7 @@ export function defineSuite({ label, launch }) {
       await d.eval(`[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Hidden files')).querySelector('input').click()`);
       await waitFor(async () => (await rows()).includes('.envrc'), { message: 'dotfiles to appear' });
       // Case-insensitive, dotfiles first, folders NOT grouped (src/ sits among the files by name).
-      assert.deepEqual(await rows(), ['.envrc', 'app.log', 'bundle.tar', 'bundle.zip', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'fake.zip', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'special/', 'src/']);
+      await expectRows(['.envrc', 'app.log', 'bundle.tar', 'bundle.zip', 'data.json', 'disguised.png', 'doc.pdf', 'fake.pdf', 'fake.zip', 'link-to-main', 'needle-shallow.txt', 'people.csv', 'random.bin', 'README.md', 'special/', 'src/']);
 
       const foldersFirst = `[...document.querySelectorAll('.toggle')].find((l) => l.textContent.includes('Folders first')).querySelector('input')`;
       const box = await d.eval(`const b = ${foldersFirst}.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }`);
@@ -908,7 +914,7 @@ export function defineSuite({ label, launch }) {
       // An absolute path.
       await goTo(`${fx.work}/src`);
       await waitFor(async () => (await title()) === 'src - fsb', { message: 'to open src' });
-      assert.deepEqual(await rows(), ['deep/', 'main.go']);
+      await expectRows(['deep/', 'main.go']);
       // ~ expands to the home folder.
       await goTo('~/pics');
       await waitFor(async () => (await title()) === 'pics - fsb', { message: '~/pics to open' });
