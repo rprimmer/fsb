@@ -109,7 +109,10 @@ as a root.
 Without this option
 .B fsb
 refuses to serve
-.BR / .
+.BR / ,
+however it is reached: a root that is a symbolic link to
+.BR / ,
+or a home folder that resolves to it, is refused too.
 The rules still apply.
 .TP
 .B \-\-no\-open

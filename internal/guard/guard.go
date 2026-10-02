@@ -107,6 +107,16 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 	return g, nil
 }
 
+// ServesSystemRoot reports whether one of the roots is the system root, /,
+// judged by identity rather than by how it was spelled.
+func (g *Guard) ServesSystemRoot() bool {
+	sys, err := os.Stat("/")
+	if err != nil {
+		return true // cannot tell: assume the worst
+	}
+	return slices.ContainsFunc(g.rootInfo, func(fi fs.FileInfo) bool { return os.SameFile(fi, sys) })
+}
+
 // Roots returns the resolved root paths.
 func (g *Guard) Roots() []string { return append([]string(nil), g.roots...) }
 

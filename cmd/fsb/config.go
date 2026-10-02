@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/rprimmer/fsb/internal/guard"
 	"github.com/rprimmer/fsb/internal/rules"
 )
 
@@ -172,4 +173,18 @@ func showRules(out io.Writer, kind, path string, set *rules.Set, coreMissing []s
 		fmt.Fprintln(out, "# also refused, though not a rule: any other name (hard link) of a denied file or of a file in a credential folder")
 	}
 	return nil
+}
+
+// newGuard creates the guard for roots. resolveRoots refuses "/" as spelled;
+// this refuses it as resolved (a symbolic link to /, or a home that is one),
+// by identity, unless allowSystemRoot.
+func newGuard(roots []string, deny, hide *rules.Set, allowSystemRoot bool) (*guard.Guard, error) {
+	g, err := guard.New(roots, deny, hide)
+	if err != nil {
+		return nil, err
+	}
+	if !allowSystemRoot && g.ServesSystemRoot() {
+		return nil, errors.New("refusing to serve / without --allow-system-root (a root resolves to /)")
+	}
+	return g, nil
 }

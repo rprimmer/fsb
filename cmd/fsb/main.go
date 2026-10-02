@@ -164,7 +164,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	g, err := guard.New(roots, deny, hide)
+	g, err := newGuard(roots, deny, hide, *sysRoot)
 	if err != nil {
 		return err
 	}

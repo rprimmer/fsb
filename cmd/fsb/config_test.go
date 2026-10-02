@@ -332,3 +332,49 @@ func TestRunShowIgnoreExitsWithoutServing(t *testing.T) {
 		t.Errorf("unexpected output:\n%s", out.String())
 	}
 }
+
+// The check on "/" must hold for the root as finally resolved, not only for
+// how it was spelled: a symbolic link to / is the system root too.
+func TestSystemRootOptInAppliesToResolvedRoots(t *testing.T) {
+	dir := t.TempDir()
+	alias := filepath.Join(dir, "root-alias")
+	if err := os.Symlink("/", alias); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(dir, "home")
+	if err := os.Mkdir(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deny, _, err := rules.LoadDeny(filepath.Join(dir, "no-deny"), home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hide, err := rules.LoadIgnore(filepath.Join(dir, "no-ignore"), home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, home, arg string
+		extra           []string
+	}{
+		{"path argument", home, alias, nil},
+		{"--root", home, "", []string{alias}},
+		{"home resolving to /", alias, "", nil},
+	} {
+		for _, allow := range []bool{false, true} {
+			roots, err := resolveRoots(c.home, c.arg, c.extra, allow)
+			if err == nil {
+				_, err = newGuard(roots, deny, hide, allow)
+			}
+			if !allow && err == nil {
+				t.Errorf("%s: a symbolic link to / was served without --allow-system-root", c.name)
+			}
+			if allow && err != nil {
+				t.Errorf("%s with --allow-system-root: %v", c.name, err)
+			}
+		}
+	}
+	if _, err := newGuard([]string{home}, deny, hide, false); err != nil {
+		t.Errorf("an ordinary root: %v", err)
+	}
+}
