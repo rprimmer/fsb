@@ -710,7 +710,14 @@ with a different path, or add
 .BR \-\-root .
 .SH LIMITATIONS
 A file with several names is refused when one of its names lies outside every
-root and outside the credential folders, even if no name is denied.
+root and outside the credential folders, even if no name is denied: for
+example a package that
+.B pnpm
+links from its store in
+.B ~/Library/pnpm
+when that folder is not under a root, or an object file of a
+.B git clone \-\-local
+whose source lies outside the roots.
 Rule files are read at startup only.
 A denied path can be answered slightly faster than a missing one.
 .B fsb

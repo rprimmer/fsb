@@ -126,7 +126,7 @@ func TestANameSeenTwiceIsCountedOnce(t *testing.T) {
 	inner := filepath.Join(fx.home, "proj", "inner")
 	write(t, filepath.Join(inner, "a.txt"), "SECRET")
 	link(t, filepath.Join(inner, "a.txt"), filepath.Join(fx.outside, ".env")) // outside every location
-	fx.g.Protect(inner)                                                         // inner is now walked twice
+	fx.g.Protect(inner)                                                       // inner is now walked twice
 	if openOK(fx.g, filepath.Join(inner, "a.txt")) {
 		t.Error("a.txt was served: its one visible name was counted as both of its names")
 	}
@@ -525,5 +525,125 @@ func TestARecordedNameNowHoldingAnotherFileIsSeen(t *testing.T) {
 	write(t, filepath.Join(proj, "y.txt"), "another file")
 	if openOK(fx.g, filepath.Join(proj, "x.txt")) {
 		t.Error("x.txt is another name of proj/.env but was served")
+	}
+}
+
+// From the third independent review. On APFS one name can be spelled several
+// ways (case, Unicode normalization). A folder walked twice, with the name's
+// spelling changed between the two visits, must not count as two names.
+func TestOneNameInTwoSpellingsIsCountedOnce(t *testing.T) {
+	for _, c := range []struct{ name, from, to string }{
+		{"case", "a.txt", "A.TXT"},
+		{"normalization", "café.txt", "café.txt"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fx := newFixture(t)
+			fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+			inner := filepath.Join(fx.home, "proj", "inner")
+			write(t, filepath.Join(inner, c.from), "SECRET")
+			link(t, filepath.Join(inner, c.from), filepath.Join(fx.outside, ".env"))
+			fx.g.Protect(inner) // walked twice, as nested roots would be
+			renamed := false
+			fx.g.linkVisitHook = func(p string) {
+				if !renamed && filepath.Dir(p) == inner {
+					renamed = true
+					if err := os.Rename(filepath.Join(inner, c.from), filepath.Join(inner, c.to)); err != nil {
+						t.Error(err)
+					}
+				}
+			}
+			fx.g.StartLinkIndex()
+			fx.g.linkVisitHook = nil
+			es, _ := os.ReadDir(inner)
+			for _, e := range es {
+				if openOK(fx.g, filepath.Join(inner, e.Name())) {
+					t.Errorf("%s was served: one name in two spellings was counted as two", e.Name())
+				}
+			}
+		})
+	}
+}
+
+// A decision remembered within one listing must not outlive a new name: here
+// a denied name is added after the listing has started.
+func TestAListingNoticesANameAddedWhileItRuns(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	d := filepath.Join(fx.home, "proj", "pair")
+	write(t, filepath.Join(d, "a"), "SECRET-TO-BE")
+	link(t, filepath.Join(d, "a"), filepath.Join(d, "b"))
+	openOK(fx.g, filepath.Join(d, "a")) // builds the index
+	var listed []string
+	err := fx.g.ListFunc(d, 1, func(es []Entry) error {
+		if len(listed) == 0 {
+			link(t, filepath.Join(d, "a"), filepath.Join(fx.home, "proj", ".env"))
+		}
+		for _, e := range es {
+			listed = append(listed, e.Name)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) > 1 {
+		t.Errorf("listed %v: the second name was listed after a denied name was added", listed)
+	}
+}
+
+// A file whose other name lies where the walk does not look (a pnpm store
+// outside the root, say) is refused; asking again must not start a walk
+// each time when nothing about it has changed.
+func TestAFileWithAnUnseenNameDoesNotKeepStartingWalks(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	write(t, filepath.Join(fx.outside, "store", "pkg.js"), "x")
+	link(t, filepath.Join(fx.outside, "store", "pkg.js"), filepath.Join(fx.home, "proj", "pkg.js"))
+	walks := 0
+	fx.g.linkWalkHook = func() { walks++ }
+	for range 5 {
+		if openOK(fx.g, filepath.Join(fx.home, "proj", "pkg.js")) {
+			t.Fatal("served although one of its names was never seen")
+		}
+	}
+	if walks > 2 {
+		t.Errorf("%d walks for one unchanged file", walks)
+	}
+	// Once it changes (here: the outside name goes), it is judged afresh.
+	if err := os.Remove(filepath.Join(fx.outside, "store", "pkg.js")); err != nil {
+		t.Fatal(err)
+	}
+	if !openOK(fx.g, filepath.Join(fx.home, "proj", "pkg.js")) {
+		t.Error("a file with one name left must be served")
+	}
+}
+
+// A pair made while a walk runs, its new name in a folder the walk had already
+// passed, is recorded with too few names. One more walk finds both, so it is
+// served, not refused for good.
+func TestAPairMadeDuringAWalkIsServedAfterOneMoreWalk(t *testing.T) {
+	fx := newFixture(t)
+	fx.g.linkRebuildMin, fx.g.linkSync = 0, true
+	root := filepath.Join(fx.home, "proj")
+	write(t, filepath.Join(root, "m", "t1"), "trigger")
+	link(t, filepath.Join(root, "m", "t1"), filepath.Join(root, "m", "t2"))
+	write(t, filepath.Join(root, "z", "a"), "ordinary")
+	if err := os.MkdirAll(filepath.Join(root, "l"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	made := false
+	fx.g.linkVisitHook = func(p string) {
+		if !made && filepath.Base(p) == "t1" {
+			made = true
+			link(t, filepath.Join(root, "z", "a"), filepath.Join(root, "l", "c")) // "l" was walked before "m"
+		}
+	}
+	fx.g.StartLinkIndex()
+	fx.g.linkVisitHook = nil
+	fx.g.links.mu.Lock()
+	fx.g.links.lastStart = time.Time{} // walks are spaced by twice the last one's time
+	fx.g.links.mu.Unlock()
+	if !openOK(fx.g, filepath.Join(root, "z", "a")) {
+		t.Error("an ordinary pair must be served once a walk has seen both names")
 	}
 }

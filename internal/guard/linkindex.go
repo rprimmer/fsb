@@ -34,9 +34,12 @@ import (
 
 type fileID struct{ dev, ino uint64 }
 
-// nameKey identifies one name of a file: the folder holding it and the name in
-// that folder. Two paths can spell one name (a firmlink, a folder walked
-// twice); two names never share a key.
+// nameKey identifies one name of a file: the folder holding it (by identity)
+// and the name in that folder, folded as APFS compares names (case and Unicode
+// normalization). Two paths can spell one name (a firmlink, a folder walked
+// twice, "a.txt" and "A.TXT"); they share a key. On a case-sensitive volume
+// two names that differ only in case also share one, which undercounts and so
+// refuses: the safe direction.
 type nameKey struct {
 	dir  fileID
 	base string
@@ -50,17 +53,28 @@ type linkIndex struct {
 	building  bool          // a walk is running
 	lastStart time.Time     // when the last walk (running or not) started
 	lastTook  time.Duration // how long the last completed walk took
+	// retried holds files a walk was started for because the index had
+	// found too few of their names, with their link count then: a second
+	// walk that finds the same is not repeated (see judgeLinked).
+	retried map[fileID]uint64
 }
 
 // linkEntry is what a walk saw of a file with several names.
 type linkEntry struct {
 	names  []string // real paths, one per distinct name
+	nlink  uint64   // the link count the walk saw; 0 if it changed during the walk
 	denied bool     // a deny rule matches one of them
 }
 
 // linkMemo remembers decisions within one listing or search, so a folder
-// holding many names of one file costs one check, not one per name.
-type linkMemo map[fileID]bool
+// holding many names of one file costs one check, not one per name. It is
+// keyed by link count too, so a name added meanwhile is noticed.
+type linkMemo map[linkMemoKey]bool
+
+type linkMemoKey struct {
+	id    fileID
+	nlink uint64
+}
 
 // Limits of an index walk. It runs in the background, so they only need to keep
 // a pathological tree from running forever. Files whose names lie beyond the
@@ -115,12 +129,13 @@ func (g *Guard) hardLinkToDeniedMemo(fi fs.FileInfo, memo linkMemo) bool {
 	if !ok || !fi.Mode().IsRegular() || nlink < 2 {
 		return false
 	}
-	if v, ok := memo[id]; ok {
+	key := linkMemoKey{id, nlink}
+	if v, ok := memo[key]; ok {
 		return v
 	}
 	v := g.judgeLinked(id, nlink)
 	if memo != nil {
-		memo[id] = v
+		memo[key] = v
 	}
 	return v
 }
@@ -140,6 +155,25 @@ func (g *Guard) judgeLinked(id fileID, nlink uint64) bool {
 		}
 		if known && uint64(len(e.names)) == nlink && namesStillName(id, e.names) {
 			return e.denied
+		}
+		if known && e.nlink == nlink && uint64(len(e.names)) < nlink {
+			// The walk saw it with as many links as now but did not find them
+			// all: a name outside every location (a pnpm store, say), in a
+			// folder it could not read, or made while it ran. One more walk
+			// settles the last case; after that, walking again would find the
+			// same, so refuse without starting one.
+			idx.mu.Lock()
+			again := idx.retried[id] == nlink
+			if !again {
+				if idx.retried == nil {
+					idx.retried = map[fileID]uint64{}
+				}
+				idx.retried[id] = nlink
+			}
+			idx.mu.Unlock()
+			if again {
+				return true
+			}
 		}
 		// Not accounted for: refuse, unless a walk may run now (with linkSync,
 		// tests, it completes here and the file is judged again). Walks are
@@ -188,7 +222,7 @@ func nameKeyOf(p string) (nameKey, bool) {
 		return nameKey{}, false
 	}
 	dir, _, ok := idOf(di)
-	return nameKey{dir, filepath.Base(p)}, ok
+	return nameKey{dir, fold(filepath.Base(p))}, ok
 }
 
 func (g *Guard) anyDenied(names []string) bool {
@@ -285,12 +319,17 @@ func (g *Guard) walkLinks(locations []string) map[fileID]linkEntry {
 				}
 				dir = k.dir
 			}
-			key := nameKey{dir, d.Name()}
+			key := nameKey{dir, fold(d.Name())}
 			if seenNames[key] {
 				return nil // the same name reached another way
 			}
 			seenNames[key] = true
-			e := byID[id]
+			e, seen := byID[id]
+			if !seen {
+				e.nlink = nlink
+			} else if e.nlink != nlink {
+				e.nlink = 0 // it changed while walking
+			}
 			e.names = append(e.names, p)
 			byID[id] = e
 			if g.linkVisitHook != nil {
