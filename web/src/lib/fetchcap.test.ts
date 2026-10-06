@@ -34,7 +34,8 @@ test('readCapped refuses on a declared length over the cap without reading the b
 });
 
 test('readCapped stops a body that crosses the cap, whatever the header says', async () => {
-  for (const headers of [{}, { 'content-length': '4' }]) {
+  const cases: Record<string, string>[] = [{}, { 'content-length': '4' }];
+  for (const headers of cases) {
     const { r, state } = streamed([4, 4, 4, 4, 4, 4, 4, 4], headers);
     assert.equal(await readCapped(r, 10), null);
     assert.equal(state.canceled, true, 'the rest of the body is canceled');

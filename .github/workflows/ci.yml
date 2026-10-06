@@ -48,7 +48,8 @@ jobs:
       - name: dependency audit
         run: npm audit --audit-level=high
       - run: npm test
-      - run: npx svelte-check --tsconfig ./tsconfig.json
+      - name: typecheck (app and tests)
+        run: npm run check
       - name: build
         run: npm run build
       - name: committed dist/ is up to date

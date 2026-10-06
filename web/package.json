@@ -6,10 +6,11 @@
   "scripts": {
     "build": "vite build",
     "test": "node --test 'src/lib/*.test.ts'",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.test.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "24.19.1",
     "svelte": "^5.57.1",
     "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
