@@ -1,0 +1,20 @@
+digraph fsb {
+ rankdir=LR; node [shape=box,style=rounded,fontname=Helvetica,fontsize=12]; edge [fontname=Helvetica,fontsize=10];
+ "cmd/fsb" [label="cmd/fsb\n30 functions"];
+ "internal/guard" [label="internal/guard\n60 functions"];
+ "internal/httpguard" [label="internal/httpguard\n11 functions"];
+ "internal/quicklook" [label="internal/quicklook\n1 function"];
+ "internal/rules" [label="internal/rules\n16 functions"];
+ "internal/server" [label="internal/server\n19 functions"];
+ "web" [label="web\n5 functions"];
+ "cmd/fsb" -> "internal/guard" [label="6",penwidth=1.8];
+ "cmd/fsb" -> "internal/rules" [label="4",penwidth=1.5];
+ "cmd/fsb" -> "internal/server" [label="4",penwidth=1.5];
+ "internal/guard" -> "internal/rules" [label="6",penwidth=1.8];
+ "internal/guard" -> "internal/server" [label="2",penwidth=1.2];
+ "internal/quicklook" -> "internal/server" [label="1",penwidth=1.1];
+ "internal/server" -> "internal/guard" [label="10",penwidth=2.2];
+ "internal/server" -> "internal/httpguard" [label="5",penwidth=1.6];
+ "internal/server" -> "internal/quicklook" [label="1",penwidth=1.1];
+ "internal/server" -> "web" [label="2",penwidth=1.2];
+}

@@ -1,0 +1,11 @@
+# LaTeX and call-graph intermediates; the .tex, .dot and .pdf files are kept.
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+callgraph.tsv
