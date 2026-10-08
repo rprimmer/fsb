@@ -69,7 +69,9 @@ for flavor in debian alpine; do
 		record "unit-$flavor" "FAILED (build)"
 		continue
 	fi
-	docker run --rm --init "fsb-unit:$flavor" >"$logs/unit-$flavor.log" 2>&1
+	# /tmp on tmpfs: the container's own file system (overlay) refuses user
+	# extended attributes, so the tests that need them would skip.
+	docker run --rm --init --tmpfs /tmp:rw,exec "fsb-unit:$flavor" >"$logs/unit-$flavor.log" 2>&1
 	rc=$?
 	grep -v '^go: downloading' "$logs/unit-$flavor.log"
 	if [ $rc -eq 0 ]; then record "unit-$flavor" ok; else record "unit-$flavor" FAILED; fi
