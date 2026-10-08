@@ -55,7 +55,7 @@ if docker info >/dev/null 2>&1; then
   DOCKER_VER=$(docker version --format '{{.Client.Version}} (engine {{.Server.Version}})' 2>/dev/null)
   DOCKER_KERNEL=$(docker info --format '{{.KernelVersion}}, {{.OperatingSystem}}, {{.Architecture}}' 2>/dev/null)
   COLIMA_VER=$(colima version 2>/dev/null | head -1 || echo "not used")
-  for img in fsb-smoke:debian fsb-smoke:ubuntu fsb-smoke:fedora fsb-smoke:alpine fsb-smoke:arch fsb-unit:debian fsb-unit:alpine; do
+  for img in fsb-smoke:debian fsb-smoke:ubuntu fsb-smoke:fedora fsb-smoke:alpine fsb-smoke:arch fsb-unit:debian fsb-unit:alpine fsb-unit:fedora; do
     docker image inspect "$img" >/dev/null 2>&1 || continue
     plat=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$img")
     rel=$(docker run --rm --platform "$plat" --entrypoint sh "$img" -c '. /etc/os-release; echo "$PRETTY_NAME"' 2>/dev/null)

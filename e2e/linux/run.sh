@@ -1,11 +1,11 @@
 #!/bin/sh
 # Builds fsb and runs its smoke test (smoke.sh) on several Linux distributions,
-# then the Go unit tests on Debian and Alpine. Needs a running Docker engine
+# then the Go unit tests on Debian, Alpine and Fedora. Needs a running Docker engine
 # (on a Mac, e.g. "colima start").
 #
 #   e2e/linux/run.sh             everything
 #   e2e/linux/run.sh debian      one or more distributions by name
-#   e2e/linux/run.sh unit        only the unit tests
+#   e2e/linux/run.sh unit        only the unit tests (unit-fedora: just one)
 set -u
 cd "$(dirname "$0")/../.."
 
@@ -58,14 +58,18 @@ for row in $(echo "$DISTROS" | awk 'NF==3 {print $1 "|" $2 "|" $3}'); do
 	if [ $rc -eq 0 ]; then record "$name" ok; else record "$name" FAILED; fi
 done
 
-for flavor in debian alpine; do
+for flavor in debian alpine fedora; do
 	selected unit "$@" || selected "unit-$flavor" "$@" || continue
 	suffix=
 	[ $flavor = alpine ] && suffix=-alpine
 	echo
 	echo "#### unit tests on $flavor"
-	if ! docker build -q -f e2e/linux/Dockerfile --target unit \
-		--build-arg GO_FLAVOR="$suffix" -t "fsb-unit:$flavor" . >/dev/null; then
+	case $flavor in
+	debian | alpine) target="--target unit --build-arg GO_FLAVOR=$suffix" ;;
+	fedora) target="--target unit-distro --build-arg BASE=fedora:latest" ;;
+	esac
+	# shellcheck disable=SC2086 # $target is two options and their values
+	if ! docker build -q -f e2e/linux/Dockerfile $target -t "fsb-unit:$flavor" . >/dev/null; then
 		record "unit-$flavor" "FAILED (build)"
 		continue
 	fi

@@ -7,7 +7,7 @@ doesn't.
 ```sh
 make linux                    # or: e2e/linux/run.sh
 e2e/linux/run.sh debian alpine
-e2e/linux/run.sh unit         # only the Go unit tests (Debian and Alpine)
+e2e/linux/run.sh unit         # only the Go unit tests (Debian, Alpine and Fedora)
 ```
 
 Needs a running Docker engine. On a Mac, for example:
@@ -46,6 +46,7 @@ Safari. See [`../README.md`](../README.md), "fsb on Linux".
 | alpine | `alpine:latest` | musl libc and BusyBox instead of GNU tools |
 | arch | `archlinux` | amd64 only, so it runs under emulation on Apple silicon |
 | unit-debian, unit-alpine | `golang` images | `go test ./...` (with `-race` on Debian) as a normal user |
+| unit-fedora | `fedora:latest` with the Go toolchain copied from the `golang` image | `go test -race ./...` as a normal user |
 
 `Dockerfile` compiles fsb once per CPU architecture and copies it into each
 distribution. `setup.sh` installs curl, creates the user `tester` and fills its home

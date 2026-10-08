@@ -48,3 +48,21 @@ USER tester
 WORKDIR /src
 ENV GOFLAGS=-buildvcs=false
 CMD ["sh", "-c", "if command -v gcc >/dev/null; then go test -race ./...; else go test ./...; fi"]
+
+# The Go tests on a distribution without an official Go image (Fedora): the
+# toolchain is copied from the official image, since it does not depend on the
+# distribution's libraries, and the distribution supplies the C compiler that
+# the race detector needs.
+FROM golang:${GO_VERSION} AS gotoolchain
+FROM ${BASE} AS unit-distro
+RUN if command -v dnf >/dev/null; then dnf install -qy gcc && dnf clean all; \
+    elif command -v apt-get >/dev/null; then apt-get update -q && apt-get install -qy --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*; \
+    elif command -v pacman >/dev/null; then pacman -Sy --noconfirm --needed gcc; \
+    else echo "unit-distro: no known package manager" >&2; exit 1; fi && \
+    useradd -m tester
+COPY --from=gotoolchain /usr/local/go /usr/local/go
+ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local GOFLAGS=-buildvcs=false
+COPY --chown=tester . /src
+USER tester
+WORKDIR /src
+CMD ["go", "test", "-race", "./..."]
