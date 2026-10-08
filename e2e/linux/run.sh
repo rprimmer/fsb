@@ -26,6 +26,11 @@ selected() { # selected NAME ARGS...: true if ARGS is empty or names NAME
 	return 1
 }
 
+# Each run's full output is kept here (git-ignored), for failures that are
+# hard to reproduce.
+logs=e2e/artifacts/linux
+mkdir -p "$logs"
+
 summary=
 status=0
 record() { # record NAME RESULT
@@ -42,13 +47,15 @@ for row in $(echo "$DISTROS" | awk 'NF==3 {print $1 "|" $2 "|" $3}'); do
 	selected "$name" "$@" || continue
 	echo
 	echo "#### $name ($image, $platform)"
-	if docker build -q -f e2e/linux/Dockerfile --target smoke --platform "$platform" \
-		--build-arg BASE="$image" -t "fsb-smoke:$name" . >/dev/null &&
-		docker run --rm --init --platform "$platform" "fsb-smoke:$name"; then
-		record "$name" ok
-	else
-		record "$name" FAILED
+	if ! docker build -q -f e2e/linux/Dockerfile --target smoke --platform "$platform" \
+		--build-arg BASE="$image" -t "fsb-smoke:$name" . >/dev/null; then
+		record "$name" "FAILED (build)"
+		continue
 	fi
+	docker run --rm --init --platform "$platform" "fsb-smoke:$name" >"$logs/$name.log" 2>&1
+	rc=$?
+	cat "$logs/$name.log"
+	if [ $rc -eq 0 ]; then record "$name" ok; else record "$name" FAILED; fi
 done
 
 for flavor in debian alpine; do
