@@ -360,6 +360,11 @@ The filter, search and every rule follow this.
 A name that contains characters that would disguise it, such as a right-to-left
 override or a newline, is shown with a visible marker such as
 .BR <U+202E> .
+A name that is not valid UTF-8, which Linux allows, shows each byte that does
+not fit as a marker such as
+.B <0xE9>
+and can still be opened; Copy path then gives the path in shell quoting, such as
+.BR $\(aqcaf\exE9.txt\(aq .
 .SH FILES
 .TP
 .I ~/.config/fsb/ignore
