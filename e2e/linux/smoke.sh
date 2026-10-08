@@ -33,9 +33,10 @@ out=$(mktemp)
 fsb --no-open --port $PORT >"$out" 2>&1 &
 pid=$!
 trap 'kill $pid 2>/dev/null' EXIT
+# Emulated (amd64) runs can be slow to start.
 url=
 i=0
-while [ $i -lt 15 ] && [ -z "$url" ]; do
+while [ $i -lt 30 ] && [ -z "$url" ]; do
 	sleep 1
 	url=$(grep -o "http://127.0.0.1:$PORT/[A-Za-z0-9_-]*/?token=[A-Za-z0-9_-]*" "$out" || true)
 	i=$((i + 1))
