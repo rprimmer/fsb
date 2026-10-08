@@ -21,8 +21,8 @@ const maxBytes = 20 << 20
 
 var timeout = 5 * time.Second
 
-// ErrUnavailable means no picture could be made: qlmanage is missing, failed,
-// or had nothing to draw the document with.
+// ErrUnavailable means no picture could be made: this is not macOS, qlmanage
+// is missing or failed, or it had nothing to draw the document with.
 var ErrUnavailable = errors.New("no Quick Look picture available")
 
 // slots bounds how many qlmanage processes run at once.
@@ -35,6 +35,9 @@ var slots = make(chan struct{}, 2)
 // afterwards. An error from prepare is returned as it is. The path is passed
 // to qlmanage as one argument, never through a shell.
 func Thumbnail(ctx context.Context, size int, prepare func(dir string) (string, error)) ([]byte, error) {
+	if !available {
+		return nil, ErrUnavailable // not macOS: nothing is copied or run
+	}
 	select {
 	case slots <- struct{}{}:
 		defer func() { <-slots }()
