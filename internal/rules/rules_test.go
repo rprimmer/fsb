@@ -224,6 +224,77 @@ func TestCoreDenyCoversKnownSecrets(t *testing.T) {
 	}
 }
 
+// The Linux homes of the same browsers and password stores: on Linux, or in a
+// copy of a Linux home folder seen from a Mac.
+func TestCoreDenyCoversLinuxSecrets(t *testing.T) {
+	s, err := Parse(strings.NewReader(strings.Join(CoreDeny, "\n")), ParseOptions{Home: "/home/u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{
+		"/home/u/.config/google-chrome/Default/Cookies",
+		"/home/u/.config/google-chrome-beta/Default/Login Data",
+		"/home/u/.config/chromium/Default/Login Data",
+		"/home/u/.mozilla/firefox/abc.default/logins.json",
+		"/home/u/snap/firefox/common/.mozilla/firefox/abc.default/key4.db",
+		"/home/u/.var/app/org.mozilla.firefox/.mozilla/firefox/abc.default/key4.db",
+		"/home/u/.local/share/keyrings/login.keyring",
+		"/home/u/.local/share/kwalletd/kdewallet.kwl",
+		"/home/u/.password-store/email.gpg",
+		"/Users/u/backup/home/u/.mozilla/firefox/abc.default/logins.json",
+	} {
+		if !s.Match(p, false).Matched {
+			t.Errorf("core deny should cover %s", p)
+		}
+	}
+	for _, p := range []string{
+		"/home/u/.config/chrome-notes.txt",
+		"/home/u/.local/share/applications/firefox.desktop",
+		"/home/u/notes/mozilla.txt",
+	} {
+		if s.Match(p, false).Matched {
+			t.Errorf("core deny should not cover %s", p)
+		}
+	}
+}
+
+func TestCredentialLocationsCoverEveryHome(t *testing.T) {
+	parent := t.TempDir()
+	if err := os.Mkdir(filepath.Join(parent, "alice"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	saved := homeParents
+	homeParents = []string{parent}
+	t.Cleanup(func() { homeParents = saved })
+
+	got := map[string]bool{}
+	for _, l := range CredentialLocations("/home/u") {
+		got[l] = true
+	}
+	for _, want := range []string{
+		"/home/u/.ssh",
+		"/home/u/Library/Keychains",
+		"/home/u/.config/google-chrome",
+		"/home/u/.config/chromium",
+		"/home/u/.mozilla",
+		"/home/u/.local/share/keyrings",
+		"/home/u/.local/share/kwalletd",
+		"/home/u/.password-store",
+		filepath.Join(parent, "alice", ".ssh"),
+		filepath.Join(parent, "alice", ".mozilla"),
+	} {
+		if !got[want] {
+			t.Errorf("CredentialLocations lacks %s", want)
+		}
+	}
+}
+
+func TestHomeParentsIncludeLinux(t *testing.T) {
+	if strings.Join(homeParents, " ") != "/Users /home" {
+		t.Errorf("homeParents = %v, want [/Users /home]", homeParents)
+	}
+}
+
 func TestCoreDenySecretFilePatterns(t *testing.T) {
 	s, err := Parse(strings.NewReader(strings.Join(CoreDeny, "\n")), ParseOptions{Home: home})
 	if err != nil {

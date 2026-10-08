@@ -31,6 +31,14 @@ var CoreDeny = []string{
 	"**/Library/Application Support/Firefox/",
 	"**/Library/Safari/",
 	"**/Library/Cookies/",
+	// The same on Linux: browser profiles (also inside Snap and Flatpak
+	// sandboxes), the GNOME and KDE keyrings, and the pass password store.
+	"**/.config/google-chrome*/",
+	"**/.config/chromium/",
+	"**/.mozilla/",
+	"**/.local/share/keyrings/",
+	"**/.local/share/kwalletd/",
+	"**/.password-store/",
 	".env",
 	".env.*",
 	"*.pem",
@@ -55,20 +63,24 @@ var CoreDeny = []string{
 }
 
 // CredentialLocations returns the credential folders and files under each home
-// directory that fsb knows of: the given home and every folder in /Users. They
-// mirror the credential entries of CoreDeny for code that must recognize the
-// same files by identity (hard links).
+// directory that fsb knows of: the given home and every folder in /Users and
+// /home. They mirror the credential entries of CoreDeny for code that must
+// recognize the same files by identity (hard links).
 func CredentialLocations(home string) []string {
 	rel := []string{
 		".ssh", ".aws", ".gnupg", ".kube", ".netrc", ".config/gh", "Library/Keychains",
 		"Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
 		"Library/Safari", "Library/Cookies",
+		".config/google-chrome", ".config/chromium", ".mozilla", ".local/share/keyrings",
+		".local/share/kwalletd", ".password-store",
 	}
 	homes := map[string]bool{home: true}
-	if es, err := os.ReadDir("/Users"); err == nil {
-		for _, e := range es {
-			if e.IsDir() {
-				homes["/Users/"+e.Name()] = true
+	for _, parent := range homeParents {
+		if es, err := os.ReadDir(parent); err == nil {
+			for _, e := range es {
+				if e.IsDir() {
+					homes[parent+"/"+e.Name()] = true
+				}
 			}
 		}
 	}
@@ -81,6 +93,10 @@ func CredentialLocations(home string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// homeParents are the folders that hold the home directories (a variable so
+// tests can point it elsewhere).
+var homeParents = []string{"/Users", "/home"}
 
 // OptionalDeny lists situational rules shipped commented out.
 var OptionalDeny = []string{

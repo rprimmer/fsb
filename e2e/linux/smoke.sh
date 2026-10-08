@@ -79,8 +79,10 @@ check "symlink out of the root (404)" 404 "$(get "$H/escape/passwd" head)"
 for p in .config/google-chrome/Default/Cookies ".config/chromium/Default/Login Data" \
 	.mozilla/firefox/abc.default/logins.json .local/share/keyrings/login.keyring \
 	.password-store/email.gpg; do
-	probe "Linux secret ~/$p: $(get "$H/$p" head)"
+	check "core deny: ~/$p (404)" 404 "$(get "$H/$p" head)"
 done
+get "$H" list >/dev/null
+if grep -q -e '"\.mozilla"' -e '"\.password-store"' "$body"; then fail "listing hides denied Linux secrets"; else pass "listing hides denied Linux secrets"; fi
 probe "unreadable docs/locked.txt: $(get "$H/docs/locked.txt" head)"
 get "$H" list >/dev/null
 probe "non-UTF-8 name in listing: $(grep -o '"caf[^"]*"' "$body" | head -1)"
