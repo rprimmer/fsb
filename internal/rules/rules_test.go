@@ -244,6 +244,11 @@ func TestCoreDenyCoversLinuxSecrets(t *testing.T) {
 		"/home/u/.mozilla/firefox/abc.default/logins.json",
 		"/home/u/snap/firefox/common/.mozilla/firefox/abc.default/key4.db",
 		"/home/u/.var/app/org.mozilla.firefox/.mozilla/firefox/abc.default/key4.db",
+		"/home/u/.var/app/com.google.Chrome/config/google-chrome/Default/Cookies",
+		"/home/u/.var/app/org.chromium.Chromium/config/chromium/Default/Login Data",
+		"/home/u/.var/app/io.github.ungoogled_software.ungoogled_chromium/config/chromium/Default/Cookies",
+		"/home/u/.var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser/Default/Login Data",
+		"/home/u/.var/app/com.microsoft.Edge/config/microsoft-edge/Default/Cookies",
 		"/home/u/.local/share/keyrings/login.keyring",
 		"/home/u/.local/share/kwalletd/kdewallet.kwl",
 		"/home/u/.password-store/email.gpg",
@@ -257,6 +262,9 @@ func TestCoreDenyCoversLinuxSecrets(t *testing.T) {
 		"/home/u/.config/chrome-notes.txt",
 		"/home/u/.local/share/applications/firefox.desktop",
 		"/home/u/notes/mozilla.txt",
+		"/home/u/.var/app/com.google.Chrome/cache/x",
+		"/home/u/.var/app/org.gnome.Notes/config/notes.json",
+		"/home/u/projects/config/chromium/README.md",
 	} {
 		if s.Match(p, false).Matched {
 			t.Errorf("core deny should not cover %s", p)
@@ -290,6 +298,10 @@ func TestCredentialLocationsCoverEveryHome(t *testing.T) {
 		"/home/u/.local/share/keyrings",
 		"/home/u/.local/share/kwalletd",
 		"/home/u/.password-store",
+		"/home/u/.var/app/com.google.Chrome/config/google-chrome",
+		"/home/u/.var/app/org.chromium.Chromium/config/chromium",
+		"/home/u/.var/app/com.brave.Browser/config/BraveSoftware",
+		"/home/u/.var/app/com.microsoft.Edge/config/microsoft-edge",
 		filepath.Join(parent, "alice", ".ssh"),
 		filepath.Join(parent, "alice", ".mozilla"),
 	} {

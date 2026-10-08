@@ -39,6 +39,12 @@ var CoreDeny = []string{
 	"**/.config/chromium/",
 	"**/.config/BraveSoftware/",
 	"**/.config/microsoft-edge*/",
+	// Flatpak keeps each app's settings in ~/.var/app/<app ID>/config; any app
+	// ID, so repackaged builds (ungoogled-chromium, say) are covered too.
+	"**/.var/app/*/config/google-chrome*/",
+	"**/.var/app/*/config/chromium/",
+	"**/.var/app/*/config/BraveSoftware/",
+	"**/.var/app/*/config/microsoft-edge*/",
 	"**/.mozilla/",
 	"**/.local/share/keyrings/",
 	"**/.local/share/kwalletd/",
@@ -78,6 +84,8 @@ func CredentialLocations(home string) []string {
 		"Library/Safari", "Library/Cookies",
 		".config/google-chrome", ".config/chromium", ".config/BraveSoftware", ".config/microsoft-edge",
 		".mozilla", ".local/share/keyrings", ".local/share/kwalletd", ".password-store",
+		".var/app/com.google.Chrome/config/google-chrome", ".var/app/org.chromium.Chromium/config/chromium",
+		".var/app/com.brave.Browser/config/BraveSoftware", ".var/app/com.microsoft.Edge/config/microsoft-edge",
 	}
 	homes := map[string]bool{home: true}
 	for _, parent := range homeParents {
