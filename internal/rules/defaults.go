@@ -29,12 +29,16 @@ var CoreDeny = []string{
 	"**/Library/Keychains/",
 	"**/Library/Application Support/Google/Chrome/",
 	"**/Library/Application Support/Firefox/",
+	"**/Library/Application Support/BraveSoftware/",
+	"**/Library/Application Support/Microsoft Edge*/",
 	"**/Library/Safari/",
 	"**/Library/Cookies/",
 	// The same on Linux: browser profiles (also inside Snap and Flatpak
 	// sandboxes), the GNOME and KDE keyrings, and the pass password store.
 	"**/.config/google-chrome*/",
 	"**/.config/chromium/",
+	"**/.config/BraveSoftware/",
+	"**/.config/microsoft-edge*/",
 	"**/.mozilla/",
 	"**/.local/share/keyrings/",
 	"**/.local/share/kwalletd/",
@@ -70,9 +74,10 @@ func CredentialLocations(home string) []string {
 	rel := []string{
 		".ssh", ".aws", ".gnupg", ".kube", ".netrc", ".config/gh", "Library/Keychains",
 		"Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
+		"Library/Application Support/BraveSoftware", "Library/Application Support/Microsoft Edge",
 		"Library/Safari", "Library/Cookies",
-		".config/google-chrome", ".config/chromium", ".mozilla", ".local/share/keyrings",
-		".local/share/kwalletd", ".password-store",
+		".config/google-chrome", ".config/chromium", ".config/BraveSoftware", ".config/microsoft-edge",
+		".mozilla", ".local/share/keyrings", ".local/share/kwalletd", ".password-store",
 	}
 	homes := map[string]bool{home: true}
 	for _, parent := range homeParents {
