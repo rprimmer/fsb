@@ -19,7 +19,8 @@ Differential test against the OS & For each secret, thousands of generated spell
 Real-volume tests & Root containment on a real case-sensitive volume, run when a location for one is given. \\
 Front-end tests (Node) & The pure modules, including the laws for ordering, filtering, location round trips, link resolution and name display. \\
 Browser tests & A dependency-free suite written once against a driver interface, run with real keyboard and mouse events in Chrome (DevTools protocol) and Safari (WebDriver). It includes attacks from a second origin and from a page on another port, a DNS-rebinding hostname, the cookie's scope, and a 100{,}000-file folder. \\
-Mutation checks & Removing a rule or reverting a fix must make a test fail; this was done for the folding fix, the cookie path, and others. \\
+Linux distributions (Docker) & \code{make linux} (\code{e2e/linux}) builds \texttt{fsb} once per architecture and runs a smoke test as an ordinary user on Debian, Ubuntu (standing in for Linux Mint), Fedora, Alpine (musl, BusyBox) and Arch (amd64, emulated), and the Go tests on Debian and Alpine, with \code{/tmp} on tmpfs because the containers' overlay file system refuses user extended attributes. The smoke test checks the session, the \code{Host} check, listing and reading, case-sensitive names, every Linux credential location, a symbolic link out of the root, a name that is not UTF-8, and \code{--background}, \code{--status} and \code{--stop}. \code{e2e/linux/browse.sh} serves a container's \texttt{fsb} to the Mac's browser for manual testing. \\
+Mutation checks & Removing a rule or reverting a fix must make a test fail; this was done for the folding fix, the cookie path, every core rule added in 1.0.2 and 1.0.4, the non-UTF-8 name escape, the impostor check of \code{--stop}, the \code{/proc} layers, and others. \\
 Algebra & The laws, and the defects found by stating them (Section~\ref{sec:history}). \\
 \bottomrule
 \end{tabular}
@@ -31,9 +32,16 @@ On every change: formatting, vetting, the Go tests under the race detector, the 
 tests, type checking, a build whose output must equal the committed one, an audit of the
 packages that ship, the Chrome browser tests, and timed fuzzing of the four fuzz targets.
 A scan for known vulnerabilities in the Go modules runs as well.  The Go tests run on macOS
-and Linux; the rest on Linux.  The workflow runs on GitHub's hosted runners for every push to
-a private repository; its first run (2026-10-02) found finding~28 of
-Section~\ref{sec:history}, and every run since has passed.
+and Linux; the rest on Linux.  The workflow runs on GitHub's hosted runners for every push
+(the repository was private until the 1.0 release and is public since).  Its first run
+(2026-10-02) found finding~28 of Section~\ref{sec:history}.  Of the runs since, three
+failed, all in the front-end job: an automated TypeScript major-version upgrade that
+\code{npm ci} could not install (2026-10-02, never merged); a documentation change whose
+run failed the audit of the packages that ship, and which was reverted a minute later, the
+revert's run passing (2026-10-02); and the run that first type-checked the unit tests,
+whose audit caught a newly published advisory in \code{source-map-js}
+(GHSA-68fv-2mgg-jv7q), fixed by the next change (2026-10-06).  The distribution tests of
+the table above are not part of it; they run locally, before a release.
 
 \subsection{What testing does not establish}
 
@@ -53,3 +61,10 @@ code, as an external review, then of its fixes (which found two further hard-lin
 bypasses), then of those fixes (which found seven defects, several in the fixes
 themselves), and finally of that round, which found nothing new
 (Section~\ref{sec:history}).  A professional penetration test was not done.
+
+The Linux distribution tests share one kernel, that of the Docker virtual machine, so
+they establish behavior across distributions' user space (C library, tools, file
+layout), not across kernels or file systems other than overlay and tmpfs; no Linux
+desktop was used.  They also showed how a test can pass without running: the extended
+attribute test skips where attributes are unsupported, and in the containers it had
+always skipped until \code{/tmp} was moved to tmpfs.

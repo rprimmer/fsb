@@ -5,6 +5,9 @@
 \usepackage{lmodern}
 \usepackage[margin=1in]{geometry}
 \usepackage{microtype}
+% Typewriter text is literal: "--" in \code{--init} must stay two hyphens, not
+% become an en dash.
+\DisableLigatures[-]{encoding = *, family = tt*}
 \usepackage{parskip}
 \usepackage{amsmath}
 \usepackage{amssymb}

@@ -110,7 +110,8 @@ links, hard links to denied files) are left out of the copy.  Copying is given 2
 abandoned.  The 20 seconds is a cooperative limit: it is checked between reads and
 once more when a read returns, so work that ran out of time fails instead of
 succeeding, but it cannot interrupt a read that the file system is itself holding up.  When there is no picture, the pane shows what it would
-show without one (\rid{PRV-3}, or \emph{Folder} for a package).  Keynote documents
+show without one (\rid{PRV-3}, or \emph{Folder} for a package); on systems other than
+macOS there never is one, and nothing is copied (\rid{API-9}).  Keynote documents
 (\code{.key}) are denied by a core rule (Section~\ref{sec:core}) and are not shown.
 \end{req}
 

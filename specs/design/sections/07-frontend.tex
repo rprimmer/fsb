@@ -21,14 +21,17 @@ loaded from (\code{base}).  The components hold only what needs the DOM.
         bad escape is not silently replaced.
   \item[Requests relative to the page.]  Every request is formed from the page's own
         directory, so the random prefix (which scopes the cookie) needs no configuration.
+        Every path enters a request through one function, \code{queryPath}, which turns
+        the escaped bytes of a name that is not UTF-8 back into bytes
+        (Section~\ref{sec:wirenames}).
   \item[Sorting in the browser.]  The server streams entries in the order the file system
         gave them; the browser sorts, with a comparison that is a total order and does not
         depend on the input order (a test).  The collator used for names compares digits by
         value, so \code{file1} and \code{file01} compare equal; the final tiebreak is the
         raw characters, so they still have a fixed order.  A time that cannot be parsed sorts as the oldest,
         so the order stays total.
-  \item[Names are displayed, not trusted.]  Characters that would disguise a name are replaced by
-        visible markers for display only.  Names are always inserted as text, never as markup.
+  \item[Names are displayed, not trusted.]  Characters that would disguise a name, and
+        bytes that are not UTF-8, are replaced by visible markers for display only.  Names are always inserted as text, never as markup.
   \item[Preferences are optional.]  They are kept in local storage with every read guarded, and
         every value falls back on its own.  Local storage is per origin, which includes the
         port; that is why the server remembers its port (Section~\ref{sec:port}).

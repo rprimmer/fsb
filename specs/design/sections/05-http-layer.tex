@@ -67,6 +67,36 @@ not be searched (\code{incomplete}); an error mid-stream is a line of its own in
 The client requires the done line and treats a stream that ends without one as broken,
 not as complete.
 
+\subsection{Names on the wire}
+\label{sec:wirenames}
+
+A Linux name may be any bytes except \code{/} and NUL, so it need not be UTF-8, while
+JSON strings are Unicode: Go's encoder replaces each byte that is not part of valid
+UTF-8 with U+FFFD.  A file so named was listed under a name that does not exist, and
+the client, which builds every request from the names it was given, could never ask
+for it again.  \code{wireName} (\code{internal/server/wire.go}) therefore rewrites every
+name and path the server puts in JSON (\fq{API-10}): valid UTF-8 is unchanged, and each
+stray byte becomes NUL followed by two uppercase hexadecimal digits.  No name contains
+NUL, so the result is never ambiguous, and \code{wireName} is one-to-one.  Copies are
+rewritten (\code{wireEntries}, \code{wireMatches}, \code{wireMeta}); the guard's own
+values are not touched, and the guard never sees an escape.  \code{wireArchive} also
+passes archive members through it, but finds nothing to escape: the archive lister has
+already replaced invalid UTF-8 in them (Section~\ref{sec:content}), since a member is
+only ever displayed, never requested.
+
+The return trip needs no decoder.  The client's \code{queryPath}
+(\code{web/src/lib/format.ts}), the one place a path becomes a request, turns each
+escape into the byte itself (\code{\%E9}) and percent-encodes everything else as UTF-8,
+so the \code{path} parameter decodes, on the server, to the name's real bytes, which
+the guard already handled.  Keeping the decoder out of the server keeps the escape out
+of the security core: a request can only ever name real bytes.  On the screen,
+\code{displayName} shows an escape as \code{\textlangle 0xE9\textrangle}, in the style
+of the markers of \fq{NAM-2}; ``Copy path'' (\code{copyablePath}) writes the path in
+the shell's \code{\$'\ldots'} quoting.  The address bar keeps the escaped form, which
+\code{encodeURIComponent} carries as \code{\%00E9}.  A download's suggested name is
+the name as received (\fq{NAM-2}), escape included; what a browser makes of a NUL in a
+file name is its own choice, and has not been tested.
+
 \subsection{Timeouts and shutdown}
 
 The server sets a header-read timeout against slow clients and has no write timeout,

@@ -22,6 +22,7 @@ $\Filter$ & \code{matchesName} in \code{filter.ts} \\
 $\ToHash$, $\FromHash$ & \code{pathToHash}, \code{parseHash} in \code{format.ts} \\
 $\Goto$ & \code{resolveGoto} in \code{goto.ts} \\
 $\Link$ & \code{resolveLink} in \code{markdown.ts} \\
+$\mathsf{wire}$, $\mathsf{q}$ & \code{wireName} in \code{internal/server/wire.go}; \code{queryPath} in \code{format.ts} \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -38,6 +39,7 @@ than once per endpoint.
 go test -race ./...                 # rule, guard and server laws
 cd web && npm test                  # frontend laws
 node --test e2e/chrome.test.mjs     # end-to-end (Safari: e2e/safari.test.mjs)
+make linux                          # Linux distributions, in Docker
 make -C specs/algebra                     # build this document
 \end{lstlisting}
 
@@ -51,10 +53,11 @@ make -C specs/algebra                     # build this document
         openable, search implies listed, and denied paths are absent and look
         missing.
   \item Content-typed endpoints decide from bytes, disclose names only, and are
-        bounded; Quick Look is given only bytes that $\Open$ would serve.
+        bounded; Quick Look, on macOS, is given only bytes that $\Open$ would serve.
   \item The frontend order is a total preorder independent of input order, and
         the filter, hash and link functions are the exact counterparts of their
-        server-side definitions.
+        server-side definitions; every name crosses the wire whole and comes back as
+        the same bytes.
   \item Eighteen defects were found and fixed; the laws that hold are recorded with
         the checks that establish them.
 \end{itemize}

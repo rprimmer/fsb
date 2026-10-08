@@ -8,14 +8,14 @@
 \toprule
 Component & Responsibility \\
 \midrule
-\code{cmd/fsb} & Command line, startup, the launch URL, opening the browser, shutdown; the remembered port, background mode and finding a running \texttt{fsb} (\code{config.go}, \code{background.go}, \code{process.go}). \\
+\code{cmd/fsb} & Command line, startup, the launch URL, opening the browser, shutdown; the remembered port, background mode and finding a running \texttt{fsb} (\code{config.go}, \code{background.go}, \code{process.go}; \code{process\_linux.go} reads \code{/proc}, \code{process\_other.go} runs \code{ps} and \code{lsof}). \\
 \code{internal/rules} & The rule dialect: parsing, matching, name folding, the built-in rules. Knows nothing of files. \\
 \code{internal/guard} & The chokepoint: opening, listing, searching, reading heads, metadata, sniffed endpoints, archive listing, the hard-link index. The only code that touches the file system on behalf of a request. \\
 \code{internal/httpguard} & The middleware that makes a local web server safe: host and origin checks, the session, the prefix, security headers. Knows nothing of files. \\
-\code{internal/quicklook} & Runs Apple's \code{qlmanage} to draw a Quick Look picture of a private copy that the guard made. The only code that runs another program on a file. Knows nothing of rules. \\
-\code{internal/server} & The endpoints. Turns guard results into HTTP, and guard errors into status codes. \\
+\code{internal/quicklook} & On macOS, runs Apple's \code{qlmanage} to draw a Quick Look picture of a private copy that the guard made; elsewhere answers that there is no picture, before anything is copied or run. The only code that runs another program on a file. Knows nothing of rules. \\
+\code{internal/server} & The endpoints. Turns guard results into HTTP, and guard errors into status codes; \code{wire.go} keeps every byte of the names it sends (Section~\ref{sec:wirenames}). \\
 \code{web} & The embedded front end, and the fixed page that renders Markdown. \\
-\code{e2e} & Browser tests, and their drivers for Chrome and Safari. \\
+\code{e2e} & Browser tests, and their drivers for Chrome and Safari; \code{e2e/linux}, the Linux distribution tests in Docker (Section~\ref{sec:verification}). \\
 \code{specs} & These documents. \\
 \bottomrule
 \end{tabular}
@@ -93,8 +93,8 @@ the random path prefix, which still changes at every start.  \code{--port} is
 deliberately not remembered, so that a one-off choice made to avoid a conflict heals
 back to the usual port, and its preferences, once the conflict is gone.  If the
 remembered port is taken, \code{fsb} fails rather than silently moving (which would
-look as if it had lost the preferences); \code{portInUseMessage} asks \code{lsof} and
-\code{ps} which program holds it so that the message can name it.
+look as if it had lost the preferences); \code{portInUseMessage} finds which program
+holds it (\code{portHolder}, below) so that the message can name it.
 
 \code{--background} re-executes the program with \code{FSB\_BACKGROUND\_CHILD=1}
 in a new session (\code{setsid}), so the child has no controlling terminal.  The
@@ -108,10 +108,21 @@ removes it on shutdown if it still names itself.
 
 \code{findRunning} locates a running \code{fsb} for \code{--stop}, \code{--status} and
 the refusal of a second \code{--background}: first the process in the PID file, then
-the process listening on the remembered port.  Either is accepted only if \code{ps}
-belongs to the same user and its executable file (from \code{/proc} or \code{lsof}, not
-the name \code{ps} shows, which on macOS is the process's own \code{argv[0]}) is named
-\code{fsb} or as the running binary is, and a process from the PID file must also have
-the start time recorded there.  So a stale PID file whose number was reused, or another
+the process listening on the remembered port.  Either is accepted only if it
+belongs to the same user and its executable file (not the name \code{ps} shows, which on
+macOS is the process's own \code{argv[0]}) is named \code{fsb} or as the running binary
+is, and a process from the PID file must also have the start time recorded there.
+Three functions do the looking, one way per system.  On Linux (\code{process\_linux.go})
+they read \code{/proc}, so no other program is needed: \code{lookupProcess} takes the
+name, terminal and start time from \code{/proc/PID/stat} (the fields after the
+\emph{last} parenthesis, since the name may contain any), the effective user from
+\code{/proc/PID/status}, and the boot time from \code{/proc/stat}, and writes the start
+time as \code{ps} would; \code{portHolder} and \code{listeningPort} match the socket
+inodes of \code{/proc/net/tcp} and \code{tcp6} against the links in
+\code{/proc/PID/fd}; and \code{executablePath} reads \code{/proc/PID/exe}, dropping the
+\code{" (deleted)"} that Linux appends once the file has been replaced, as by a rebuild.
+Elsewhere (\code{process\_other.go}) they run \code{ps} and \code{lsof}, which macOS
+always has.  Minimal Linux systems have neither, and BusyBox's \code{ps} lacks the
+options needed, which is why Linux does not use them.  So a stale PID file whose number was reused, or another
 program on the port that calls itself \code{fsb}, is never signaled.  \texttt{fsb}'s own
 files are opened without following symbolic links and set to mode \code{0600}.

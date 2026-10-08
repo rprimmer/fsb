@@ -68,8 +68,9 @@ policy that admits exactly its one script and one style by hash.
 \begin{law}[Quick Look sees only what $\Open$ serves]
 \label{law:quicklook}
 Let $C(p)$ be what Quick Look is given for a request on $p$.  $C(p)$ is defined
-only if $\Open(p)$ succeeds, the real path has an iWork or Office extension, and
-the file is not cloud-only.  For a file, $C(p)$ is a new file in a private folder
+only if the system is macOS, $\Open(p)$ succeeds, the real path has an iWork or
+Office extension, and the file is not cloud-only; on any other system it is never
+defined, and no program is run.  For a file, $C(p)$ is a new file in a private folder
 whose bytes are those read from the descriptor $\Open(p)$ returned.  For a
 package, $C(p)$ is the set of pairs $(r, b)$ such that $\Open(p/r)$ succeeds on a
 regular file whose real path lies under the real path of $p$, and $b$ is the bytes
@@ -78,7 +79,7 @@ no resource fork, and it is never the path $p$ itself.  Hence every byte Quick L
 reads is a byte some request could already read through $\Open$, and
 Law~\ref{law:absent} extends to it: no denied file and nothing outside the roots
 reaches it, whatever $p$ names (an alias, a link, a package with hidden parts).
-\Tests{server/quicklook_test.go (private copy, no extended attributes, package parts, a real Finder alias); server/fuzz_test.go::FuzzPathParameter (stand-in Quick Look echoes its input)}
+\Tests{server/quicklook_test.go (private copy, no extended attributes, package parts, a real Finder alias); server/fuzz_test.go::FuzzPathParameter (stand-in Quick Look echoes its input); quicklook/quicklook_other_test.go::TestNoQuickLookOutsideMacOS}
 \end{law}
 
 \begin{boundary}[What Quick Look does with the copy]

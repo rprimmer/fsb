@@ -27,7 +27,12 @@ The folder \code{/} is refused as a root unless \code{--allow-system-root} is gi
 the message says so.  The decision is made on the folder itself, after symbolic links
 are resolved, not on how it was spelled: a path argument, a \code{--root} or a home
 folder that is a symbolic link to \code{/} is refused too.  Rules
-(Section~\ref{sec:rules}) apply to a root of \code{/} as to any other root.
+(Section~\ref{sec:rules}) apply to a root of \code{/} as to any other root.  On
+Linux, \code{/proc}, \code{/sys} and \code{/dev} can then be listed, but device files
+are never opened (\rid{SEC-14}), a path through a process's \code{root}, \code{cwd} or
+\code{fd} entries in \code{/proc} is judged by the file it reaches, and a process's
+environment and command line show as empty: the system reports them as empty files,
+and nothing past a file's size is read or sent.
 \end{req}
 
 \begin{req}{CLI-5}
@@ -139,10 +144,13 @@ start is refused with a message naming it.  Output after startup (such as
 \rid{CFG-5}.  It sends \code{SIGTERM}, waits up to five seconds for the process to
 exit, and reports it.  Only a process that is \texttt{fsb} is ever signaled: it must
 belong to the same user and have been started from an executable file named
-\texttt{fsb} (the name a process gives itself does not count), and a process taken
-from the process-number file must also have the start time recorded there.  Anything
-else is ignored, so a stale file whose number now belongs to another process is
-harmless.
+\texttt{fsb} (the name a process gives itself does not count; a file replaced or
+removed since it was started, as when \texttt{fsb} is rebuilt while it runs, still
+counts), and a process taken from the process-number file must also have the start
+time recorded there.  Anything else is ignored, so a stale file whose number now
+belongs to another process is harmless.  Finding the process, here and in
+\rid{CLI-19} and \rid{CLI-20}, needs no other program on Linux, so it works on minimal
+systems too; on macOS it uses \code{ps} and \code{lsof}, which are part of the system.
 \end{req}
 
 \begin{req}{CLI-19}

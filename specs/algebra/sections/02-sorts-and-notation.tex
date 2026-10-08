@@ -3,8 +3,10 @@
 \subsection{Sorts}
 
 \begin{description}
-  \item[$\Name$] A path component: a finite sequence of Unicode characters
-        containing neither \code{/} nor NUL.
+  \item[$\Name$] A path component: a finite sequence of bytes containing neither
+        \code{/} nor NUL.  On macOS it is always valid UTF-8, and is read as the
+        sequence of Unicode characters it encodes; on Linux it may be any such bytes
+        (Law~\ref{law:wire} says how the client is given one that is not UTF-8).
   \item[$\Path$] An absolute path, written as the sequence of its components
         $p=\Seq{n_1,\dots,n_k}$; the root is $\Seq{}$.  $\Comps(p)$ is that
         sequence, $\Parent(p)=\Seq{n_1,\dots,n_{k-1}}$, and $p\cdot n$ appends a

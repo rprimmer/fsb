@@ -34,8 +34,11 @@ Version-control status overlays.
 ``Reveal in Finder'' and ``Open in editor'', restricted to a fixed list of actions,
 never building a command from a path.  Excluded from this version because they would
 make the server start local processes at the user's request; ``Copy path'' covers the
-need meanwhile.  The one process this version starts is Quick Look's \code{qlmanage},
-a fixed program run on a private copy (\rid{SEC-15}).
+need meanwhile.  The one program this version runs on a user's file is Quick Look's
+\code{qlmanage}, on macOS, a fixed program run on a private copy (\rid{SEC-15}); the
+others it starts are fixed too and are given no file: \code{open} for the browser
+(\rid{CLI-5}), \code{ps} and \code{lsof} to find a running \texttt{fsb} on macOS
+(\rid{CLI-18}), and \texttt{fsb} itself for \code{--background}.
 \end{req}
 
 \begin{req}{FUT-6}

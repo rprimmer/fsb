@@ -86,9 +86,33 @@ outside.  The client check is advisory; the server's $\InRoots$ decides.
 No character that reorders or hides text (controls, bidirectional overrides and
 isolates, line and paragraph separators, the byte order mark, tag characters) is
 sent to the screen inside a file name: each is replaced by a visible marker naming
-its code point.  Text that needs none of them, including right-to-left scripts, is
-unchanged, and links and downloads use the real name.
-\Tests{web/src/lib/laws.test.ts: displayName; e2e ``names that would disguise themselves are shown with visible markers''}
+its code point.  A byte that is not part of valid UTF-8, sent as the escape of
+Law~\ref{law:wire}, is replaced by a marker naming its value.  Text that needs none
+of them, including right-to-left scripts, is unchanged, and links and downloads use
+the real name.
+\Tests{web/src/lib/laws.test.ts: displayName; web/src/lib/format.test.ts: displayName shows escaped bytes as a marker; e2e ``names that would disguise themselves are shown with visible markers''}
+\end{law}
+
+\begin{law}[Names cross the wire whole]
+\label{law:wire}
+Let $\mathsf{wire}:\Name\to\mathsf{String}$ be the map the server applies to every
+name and path it sends: it keeps each maximal run of valid UTF-8 and replaces each
+other byte $b$ by the two-part escape $\mathrm{NUL}\cdot\mathsf{hex}(b)$, two uppercase
+hexadecimal digits.  Let $\mathsf{q}$ be the client's encoding of a string into a
+query value, which turns each escape into the byte $b$ (\code{\%}$\mathsf{hex}(b)$) and
+percent-encodes the rest as UTF-8, and let $\mathsf{dec}$ be the server's one decoding
+of a query value into bytes.  Then, for all names $n, n'$:
+\begin{enumerate}
+  \item $\mathsf{wire}(n)=n$ if $n$ is valid UTF-8;
+  \item $\mathsf{wire}(n)$ is valid UTF-8;
+  \item $\mathsf{wire}(n)=\mathsf{wire}(n')\implies n=n'$ (no name contains NUL, so an
+        escape is never part of a name);
+  \item $\mathsf{dec}(\mathsf{q}(\mathsf{wire}(n)))=n$, and the same for a path, component
+        by component: what the client sends back names the very bytes it was given.
+\end{enumerate}
+No escape ever reaches the guard, so Laws~\ref{law:deny-monotone} to
+\ref{law:credential-anywhere} are stated over real names alone.
+\Tests{server/wire\_test.go::TestWireName; TestWireNameIsOneToOne; server/wire\_linux\_test.go::TestNonUTF8NameRoundTrips; web/src/lib/format.test.ts: queryPath sends escaped bytes as themselves and everything else as UTF-8}
 \end{law}
 
 \subsection{Markdown links and images}

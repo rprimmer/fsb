@@ -1,4 +1,5 @@
 \section{Decisions and Alternatives}
+\label{sec:decisions}
 
 Each row is a decision that shaped the design, with what else was possible and why it was not
 chosen.
@@ -41,6 +42,12 @@ Identify a running fsb by owner, executable file and start time & By the command
 Quick Look draws a private copy & Hand Quick Look the user's path, re-checking afterwards & Quick Look resolves Finder aliases that the guard cannot see, so a path that passed every check could still lead it to a denied file (found by the independent review). A copy made from a verified descriptor has nothing to follow and cannot be swapped. \\
 Quick Look chosen by extension & Sniff the bytes, as other previews do & Quick Look decides what a document is, and a package has no bytes of its own; the copy makes the name harmless. \\
 Leave denied parts out of a package's copy & Refuse the whole package & Refusing answered differently for a package with a hidden part than for a clean one, revealing what a listing hides. \\
+One set of core rules on every system & Rules chosen by the running system & A copy of one system's home folder is often browsed from the other (a backup, a mounted disk), and a rule for a folder that does not exist costs nothing; one list is also one list to review. The cost is a startup warning, for users with a deny file, each time the list grows. \\
+Flatpak rules match any application ID & List the usual IDs & Repackaged browsers (ungoogled-chromium, say) use their own IDs but the same folder names under \code{config}; a wildcard on the ID with a fixed folder name stays narrow. Identity protection of hard links (\code{CredentialLocations}) still needs literal paths, so it names the usual IDs. \\
+Read \code{/proc} on Linux to find a running fsb & Require \code{ps} and \code{lsof}; ship fallbacks for BusyBox & Minimal systems lack both and BusyBox's \code{ps} lacks the options, so \code{--stop} said no \texttt{fsb} was running while one served; \code{/proc} is always there, and \texttt{fsb} already read \code{/proc/PID/exe}. \\
+Escape stray bytes as NUL and two hex digits, decoded by the client & Send names as base64 or byte arrays; U+FFFD; Python's lone-surrogate escape; decode on the server & An extra field would change every client path; U+FFFD loses the name; a lone surrogate makes \code{encodeURIComponent} throw. NUL cannot occur in a name, so the escape is unambiguous, and a client that turns it back into bytes keeps every decoder out of the security core. \\
+Pin the \code{/proc} layers with a test, not new rules & Deny \code{/proc/*/environ} and the like & Nothing leaked: the files report size 0 and are NUL-separated. New core rules would have warned every user with a deny file, a fourth time in one day, for paths already safe; a test that fails if either layer goes is the proportionate guard. \\
+Attempt Quick Look only on macOS & Run \code{qlmanage} wherever it is found & There is no Quick Look elsewhere; a program of that name on \code{PATH} would be some other program, given a copy of the document, after a copy of up to 256~MB. \\
 \bottomrule
 \end{longtable}
 \end{center}

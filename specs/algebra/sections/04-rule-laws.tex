@@ -89,13 +89,30 @@ negated class excludes it, and a \code{/} inside a class is a pattern error
 
 \begin{law}[Credential folders match wherever they are]
 \label{law:credential-anywhere}
-The core rules for credential folders (\code{.ssh}, \code{.aws}, \code{.gnupg},
-\code{.kube}, \code{.config/gh}, Keychains, and the browser profiles) and files
-(\code{.netrc}) are not anchored to the current home directory: a path that
-contains one of them at any depth is excluded.  The same secrets exist in a
-backup or clone of the home folder, in another account's home, and under a wrong
-\code{\$HOME}, where an anchored rule protects nothing.
-\Tests{guard/differential\_test.go::TestCredentialFoldersAreDeniedWhereverTheyAre}
+Let $\mathsf{Cred}$ be the set of credential folder patterns of the core rules,
+the union of three families that are all in force on every system:
+\begin{itemize}
+  \item shared: \code{.ssh}, \code{.aws}, \code{.gnupg}, \code{.kube}, \code{.config/gh};
+  \item macOS: \code{Library/Keychains}, \code{Library/Safari}, \code{Library/Cookies},
+        and \code{Library/Application Support/} followed by \code{Google/Chrome},
+        \code{Firefox}, \code{BraveSoftware} or \code{Microsoft Edge*};
+  \item Linux: \code{.config/google-chrome*}, \code{.config/chromium},
+        \code{.config/BraveSoftware}, \code{.config/microsoft-edge*}, \code{.mozilla},
+        \code{.local/share/keyrings}, \code{.local/share/kwalletd}, \code{.password-store},
+        and \code{.var/app/*/config/} followed by \code{google-chrome*}, \code{chromium},
+        \code{BraveSoftware} or \code{microsoft-edge*} (Flatpak, any application ID);
+\end{itemize}
+and let the credential files be \code{.netrc}.  For every $c\in\mathsf{Cred}$ and
+every path $q=a\cdot c\cdot b$ with any prefix $a$ and any suffix $b$, $q$ is
+denied; likewise for a path ending in a credential file.  None is anchored to the
+current home directory.  The same secrets exist in a backup or clone of the home
+folder, in another account's home, under a wrong \code{\$HOME}, and, for the Linux
+family, in a copy of a Linux home seen from a Mac, where an anchored rule, or one
+chosen by the running system, protects nothing.  The law quantifies over
+$\mathsf{Cred}$; it says nothing about a secret folder not in it, which is how
+version 1.0 could satisfy it while serving the Linux profiles (finding 32 of the
+design specification): the defect was in the set, not in the matching.
+\Tests{guard/differential\_test.go::TestCredentialFoldersAreDeniedWhereverTheyAre; rules/rules\_test.go::TestCoreDenyCoversKnownSecrets; TestCoreDenyCoversLinuxSecrets}
 \end{law}
 
 \begin{law}[A rule file works as written or fails loudly]

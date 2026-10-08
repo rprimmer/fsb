@@ -85,4 +85,7 @@ folders exist in backups, clones, other accounts' homes and under a wrong \code{
 a deny file exists it is authoritative, and \code{CoreMissing} compares the core rules with the
 file's rules \emph{as names} to decide which are not in effect.  The list of credential
 locations for the hard-link index (Section~\ref{sec:linkindex}) mirrors the credential entries of
-the core rules.
+the core rules, for the given home and every folder in \code{/Users} and \code{/home}
+(\code{homeParents}).  It names literal folders, so for Flatpak, whose rules match any
+application ID, it names the usual IDs.  The list holds the locations of macOS and of
+Linux on both systems (Section~\ref{sec:decisions}).

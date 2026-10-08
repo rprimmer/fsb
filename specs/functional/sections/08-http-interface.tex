@@ -96,7 +96,24 @@ cached, for a document of one of the types of \rid{PRV-12}, file or package.  It
 answered 415 for any other type, for a document larger than 256~MB, and when Quick
 Look cannot draw the document in time; 409 for a cloud-only document or package part;
 and 404 for a denied or missing document.  A package answers the same whether or not
-it holds parts that a listing leaves out.  It does not support range requests.
+it holds parts that a listing leaves out.  It does not support range requests.  Quick
+Look is part of macOS: on any other system every request is answered 415 at once,
+without copying the document or starting any program.
+\end{req}
+
+\begin{req}{API-10}
+Every name and path in a JSON answer (the entries of \code{api/list} and
+\code{api/search}, the \code{name}, \code{path}, \code{symlinkTarget} and attribute
+names of \code{api/meta}, and the \code{roots} and \code{home} of \code{api/status})
+keeps all of its bytes.  (The members of an archive are names inside a file, only ever
+displayed; they are cleaned as \rid{PRV-9} describes.)  A name that is valid UTF-8 is sent as it
+is.  In one that is not (Linux allows any bytes in a name but \code{/} and NUL), each
+byte that is not part of valid UTF-8 is sent as a NUL character followed by its value
+in two uppercase hexadecimal digits, so \code{caf}\textit{E9}\code{.txt} is sent as
+\code{"caf\textbackslash u0000E9.txt"}.  Since no name contains NUL, the escape is
+never ambiguous.  The client sends such a path back with each escape replaced by the
+byte itself (\code{caf\%E9.txt}), so the \code{path} parameter always carries the
+name's real bytes; the server does not decode the escape.
 \end{req}
 
 \subsection{Status codes}

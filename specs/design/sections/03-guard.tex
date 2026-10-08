@@ -152,8 +152,14 @@ internal error (Finding~19).
 
 \begin{description}
   \item[Head] reads at most a stated number of bytes from the descriptor, and returns
-        text only if it is valid UTF-8 without control characters; binary contents never
-        leave the guard.
+        text only if it is valid UTF-8 without control characters (a NUL makes it
+        binary); binary contents never leave the guard.  A file that reports size 0 is not
+        read at all.  These two rules are why, with \code{/} as a root on Linux, a
+        process's environment and command line in \code{/proc} show nothing: the kernel
+        reports them as empty, and their entries are NUL-separated.  Downloads go
+        through \code{http.ServeContent}, which sends the size the file reports, here
+        nothing.  \code{TestProcessSecretsStayHiddenUnderSystemRoot} holds all three in
+        place.
   \item[Metadata] describes the entry, and reads extended attributes through the
         descriptor, capped in number and size.
   \item[Sniffed endpoints] (image, PDF, archive) share one routine that opens the file,
@@ -179,7 +185,8 @@ builds an index from identity (device and inode) to what it saw of the file: its
 as real paths, the link count it saw, and whether any name is denied.  It contains only
 regular files with more than one name (a few dozen on a typical home folder).  The walk
 also covers the \emph{protected locations} named by the program at startup (the
-credential folders of every home), so that a link from a served folder to a credential
+credential folders of the given home and of every folder in \code{/Users} and
+\code{/home}), so that a link from a served folder to a credential
 file outside the roots is found.  A name is identified by the folder holding it (by
 identity) and its last component folded as the file system compares names
 (Section~\ref{sec:fold}); two paths that spell one name (a firmlink, a folder walked

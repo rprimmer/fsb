@@ -25,6 +25,16 @@ Ordinary text, including text in right-to-left scripts, is displayed unchanged.
 Links and downloads use the real name.
 \end{req}
 
+\begin{req}{NAM-3}
+A name that is not valid UTF-8, which Linux allows, is listed, found by search,
+described and opened like any other.  Each byte of it that is not part of valid
+UTF-8 is displayed as a visible marker naming its value (for example
+\code{caf\textlangle 0xE9\textrangle.txt}), so two names that differ only in such
+bytes look different.  ``Copy path'' gives such a path quoted for the shell, with the
+byte escaped (\code{\$'caf\textbackslash xE9.txt'}), which bash and zsh read back as
+the real name.  The interface carries the name as \rid{API-10} describes.
+\end{req}
+
 \subsection{Roots and reachability}
 
 \begin{req}{ROOT-1}

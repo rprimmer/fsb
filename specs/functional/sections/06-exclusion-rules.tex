@@ -60,7 +60,7 @@ firmlink aliases, and resource-fork names such as \code{file/..namedfork/rsrc}.
 A file with more than one name (a hard link) is judged by its identity: if any of
 its names is denied, it is refused under every name and is not listed.  The names
 are found under the roots and under the credential locations of every home folder on
-the machine, using an index built in the background at startup (about 20 seconds for
+the machine (the given home and every folder in \code{/Users} and \code{/home}), using an index built in the background at startup (about 20 seconds for
 a home folder of 700{,}000 files).  A file with several names is served only when
 all of the following hold: the index has found as many distinct names as the file has
 links (names are compared as the file system compares them, \rid{NAM-1}, by folder and
@@ -145,11 +145,11 @@ home folder, in another user's home, or under a wrong \code{HOME} are protected 
 \begin{req}{RUL-14}
 The core rules are:
 
-\begin{center}
-\begin{tabular}{@{}p{0.45\linewidth}p{0.45\linewidth}@{}}
+\begin{longtable}{@{}p{0.45\linewidth}p{0.45\linewidth}@{}}
 \toprule
 Folders & Files \\
 \midrule
+\endhead
 \code{.ssh/}, \code{.aws/}, \code{.gnupg/}, \code{.kube/} &
 \code{.netrc}, \code{.git-credentials}, \code{.pgpass} \\
 \code{**/.config/gh/} &
@@ -160,12 +160,29 @@ Folders & Files \\
 \code{id\_rsa}, \code{id\_dsa}, \code{id\_ecdsa}, \code{id\_ed25519}, \code{id\_ecdsa\_sk}, \code{id\_ed25519\_sk} \\
 \code{**/Library/Application Support/Firefox/} &
 \code{*.p12}, \code{*.pfx}, \code{*.ppk}, \code{*.jks}, \code{*.keystore} \\
-\code{**/Library/Safari/}, \code{**/Library/Cookies/} &
+\code{**/Library/Application Support/BraveSoftware/} &
 \code{*.kdbx}, \code{*.keychain}, \code{*.keychain-db} \\
+\code{**/Library/Application Support/Microsoft Edge*/} & \\
+\code{**/Library/Safari/}, \code{**/Library/Cookies/} & \\
+\midrule
+\multicolumn{2}{@{}l}{Linux: browser profiles, keyrings and the \code{pass} store} \\
+\midrule
+\code{**/.config/google-chrome*/}, \code{**/.config/chromium/} & \\
+\code{**/.config/BraveSoftware/}, \code{**/.config/microsoft-edge*/} & \\
+\code{**/.mozilla/} & \\
+\code{**/.local/share/keyrings/}, \code{**/.local/share/kwalletd/} & \\
+\code{**/.password-store/} & \\
+\code{**/.var/app/*/config/google-chrome*/} & \\
+\code{**/.var/app/*/config/chromium/} & \\
+\code{**/.var/app/*/config/BraveSoftware/} & \\
+\code{**/.var/app/*/config/microsoft-edge*/} & \\
 \bottomrule
-\end{tabular}
-\end{center}
+\end{longtable}
 
+The Linux rules also apply on macOS (to a copy of a Linux home folder, say), and the
+macOS ones on Linux.  Because they match at any depth, they also cover the profiles of
+browsers installed as Snap packages, and the \code{.var/app} rules those of Flatpak
+apps under any application ID (Flatpak Firefox keeps its profile in \code{.mozilla}).
 Public key files (\code{id\_rsa.pub} and the like) are not denied.  The list is
 versioned with the release, and additions are called out in the release notes.
 \end{req}

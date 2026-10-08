@@ -108,7 +108,7 @@ update itself.  Previewing a file never loads anything remote (\rid{PRV-7}).
 
 \begin{req}{SEC-15}
 \texttt{fsb} runs no other program on the user's files except Apple's
-\code{qlmanage}, to draw a Quick Look picture (\rid{PRV-12}).  It is never given
+\code{qlmanage}, to draw a Quick Look picture (\rid{PRV-12}), and only on macOS.  It is never given
 the user's own file: it is given a private copy of a document that every other
 endpoint would serve, which \texttt{fsb} read after the same checks, as a single
 argument and never through a shell.  The copy carries no extended attributes or

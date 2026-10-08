@@ -42,6 +42,9 @@
   \item Rule files are read at startup only.
   \item \code{--stop} would take another program of the same user for \texttt{fsb} if that
         program's executable file were itself named \code{fsb}.
+  \item Under emulation (an amd64 container on Apple silicon), \code{--status} and \code{--stop}
+        cannot recognize \texttt{fsb}: QEMU makes every emulated process's \code{/proc/PID/exe}
+        name itself.
   \item Not yet tried with real cloud-placeholder files or in Firefox; a real mouse drag of a column
         header in Safari is unverified.
   \item The browser test for Safari occasionally fails in a run of tests that need a focused window,
@@ -51,7 +54,7 @@
 \subsection{History of defects found by the design's own checks}
 
 Stating the laws of the algebraic specification, auditing every comparison of names and paths,
-and using the running application found thirty-one defects, all fixed and each covered by a test where
+and using the running application, and running it on Linux, found thirty-six defects, all fixed and each covered by a test where
 the underlying condition could be reproduced at all (Section~\ref{sec:untested} says where it could not).
 In brief:
 
@@ -150,6 +153,25 @@ In brief:
         sliced out of an empty buffer and panicked.  A third review confirmed each fix and found
         nothing new.  Two choices came out of it and are stated as limits rather than hidden: the
         one-second reuse of a verdict, and cooperative (not hard) cancellation.
+  \item Found by the Linux distribution tests (October 2026; fixed in 1.0.2): the core rules
+        named only the macOS locations of browser data, so on Linux the Chrome, Chromium and
+        Firefox profiles, the GNOME and KDE keyrings and the \code{pass} store were served; and
+        the identity protection of credential folders looked for other homes only in
+        \code{/Users}, not \code{/home}.
+  \item Found while fixing the previous one: Brave and Edge were protected on neither system
+        (1.0.2); and, once the Linux rules were in, Flatpak keeps an application's settings in
+        \code{\~{}/.var/app/ID/config}, which they did not reach (1.0.4).
+  \item Found by the same tests: \code{--status}, \code{--stop} and the port-holder message ran
+        \code{ps} and \code{lsof}, which minimal Debian, Fedora and Arch lack and BusyBox's
+        \code{ps} cannot serve, so \code{--stop} said no \texttt{fsb} was running while one
+        served; and a running \texttt{fsb} whose file had been replaced, as by a rebuild, was not
+        recognized, because Linux appends \code{" (deleted)"} to \code{/proc/PID/exe}.  Linux now
+        reads \code{/proc} (1.0.3).
+  \item Found by the same tests: a name that is not UTF-8 reached the client as U+FFFD, under a
+        name that does not exist, and could not be opened (1.0.3,
+        Section~\ref{sec:wirenames}).
+  \item Found by probing Quick Look on Linux: with no Quick Look, \texttt{fsb} still copied the
+        document and then ran any program called \code{qlmanage} on \code{PATH} (1.0.5).
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
@@ -159,7 +181,13 @@ selected file whose main preview fails) is still worth trying by hand.  Findings
 \code{Seek}, a retry spent before it ran, a memo that outlived the facts it summarized), so each
 fix got a test that fails without it, and the reviews were repeated until one found nothing.  Finding 24 is a third: handing a
 path to another program hands over that program's idea of what the path means, which the guard cannot
-check; the safe input is bytes the guard has already read.
+check; the safe input is bytes the guard has already read.  Findings 32 to 36 are a fifth: a test suite that
+passes on a platform is not use of the program there.  The Go tests had run on Linux in continuous
+integration since the first day, yet each of these appeared only when \texttt{fsb} was run on Linux
+distributions, as a user would; the same work found that two tests had never tested what they
+claimed there (the extended-attribute test skipped on the containers' file system, and the test of
+\code{--stop}'s impostor check used \code{sleep} and \code{nc}, which on BusyBox exit at once when
+started under another name).
 
 \subsection{Milestones}
 
@@ -174,6 +202,7 @@ M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file f
 M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
 Hardening & The audits and defects of the preceding subsection & Done, including three independent reviews in October 2026 (the last found nothing new) and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
 M3 Public release & Public repository, documentation, a source release & Done: version 1.0 (October 2026), source only; no binaries and no Homebrew formula, by decision. \\
+Linux check & Five distributions in Docker; \code{/proc}, \code{/sys}, \code{/dev}; extended attributes; Quick Look & Done, October 2026: findings 32 to 36, fixed in 1.0.2 to 1.0.5. \\
 M4 Run & The stage-three requirements of the functional specification & Not planned: the project is finished and provided as-is. \\
 \bottomrule
 \end{tabular}

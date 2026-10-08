@@ -14,8 +14,18 @@ document; they are gathered here so a reader does not have to hunt for them.
         but even within that, only one build and one architecture were tested.  Intel
         Macs, and Apple-silicon Macs other than the model listed, have not run any part
         of this program.  On Linux, the Go tests and the Chrome end-to-end suite run in
-        continuous integration (on GitHub's hosted runners), but \texttt{fsb} has never
-        been used there by hand, and Quick Look previews do not exist there.
+        continuous integration (on GitHub's hosted runners), and \code{make linux} runs a
+        smoke test on five distributions in Docker containers, and the Go tests on two
+        (Section~\ref{sec:verification}); \texttt{fsb} in such a container was also used
+        by hand from the Mac's browser (\code{e2e/linux/browse.sh}), on all five, on
+        2026-10-08.  But every container shares the Docker virtual machine's kernel
+        (Linux 6.8, arm64, with amd64 emulated by QEMU), so no other kernel, no file
+        system but overlay and tmpfs, and no Linux desktop or browser running on Linux
+        has been tried.  Linux Mint was represented by Ubuntu 24.04, its base.  Under
+        emulation, \code{--status} and \code{--stop} cannot recognize \texttt{fsb}
+        (QEMU makes every emulated process's \code{/proc/PID/exe} name itself); this is
+        believed to be an artifact of emulation, not tried on a real amd64 machine.  Quick
+        Look previews do not exist on Linux.
   \item \textbf{Firefox.}  Not installed on the test machine, not driven by any
         end-to-end test, and not opened by hand.  The interface uses no
         Chrome-only or Safari-only API knowingly, but this is design intent, not a
@@ -91,6 +101,17 @@ document; they are gathered here so a reader does not have to hunt for them.
   \item \textbf{Search completeness and cloud-only folders} (\fq{SRC-6}).  A cloud-only
         folder is skipped without marking the result incomplete, by choice, and no real
         placeholder was searched (see the cloud-only item above).
+  \item \textbf{Names that are not UTF-8} (\fq{NAM-3}, \fq{API-10}).  macOS refuses to
+        create such a name, so they are tested only on Linux: by
+        \code{TestNonUTF8NameRoundTrips} (in CI and the distribution tests), by the
+        smoke test, and once by hand in a container's \texttt{fsb} from the Mac's
+        browser.  What a browser does with the NUL of the escape in a download's
+        suggested name was not checked, nor the copied path pasted into a shell.
+  \item \textbf{A system root on Linux} (\fq{CLI-4}).  \code{/proc}, \code{/sys} and
+        \code{/dev} were probed in one Debian container (2026-10-08), against every
+        endpoint, with a positive control; the regression test covers a process's
+        environment and command line.  Other \code{/proc} files that report a nonzero
+        size, and other kernels, were not examined one by one.
 \end{itemize}
 
 \subsection{Process and infrastructure}
@@ -101,10 +122,18 @@ document; they are gathered here so a reader does not have to hunt for them.
         problems (finding 28 of Section~\ref{sec:history}).  It runs the Go tests on
         macOS and Linux, the front-end tests, fuzzing, \code{govulncheck}, \code{npm
         audit}, and the Chrome suite on Linux, on every push.
+  \item \textbf{The Linux distribution tests do not run in CI.}  \code{make linux}
+        needs Docker and runs locally, before a release; it was run on every change of
+        2026-10-08.  An occasional failure of a full run was seen twice and not
+        reproduced in 60 repeated runs; one captured instance was a Docker storage error
+        before the container started.  Each run's full output is now kept, in
+        \code{e2e/artifacts/linux}.
   \item \textbf{Safari's end-to-end suite does not run in CI.}
         \code{ci.yml} sets \code{FSB\_E2E\_SKIP\_SAFARI=1} for the hosted job, because a
         headless CI runner cannot drive Safari.  The Safari suite has been run only on
-        this machine, by hand, each time a feature changed.
+        this machine, by hand, each time a feature changed, until 1.0.1; it was not run
+        for the changes of 1.0.2 to 1.0.5 (2026-10-08), for which the Chrome suite
+        was.
   \item \textbf{No independent review has been performed by anyone other than the
         author and an assistant.}  The ``independent reviews'' recorded in
         Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant

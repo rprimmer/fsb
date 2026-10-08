@@ -74,6 +74,15 @@ outside the roots.  Quick Look is therefore never given the user's file.
         cached, and the temporary folder is removed.
 \end{enumerate}
 
+\paragraph{Only on macOS.}  \code{qlmanage} is looked up on \code{PATH}.  On any other
+system there is no Quick Look, but until version 1.0.5 \code{Thumbnail} still prepared
+the copy (up to 256~MB) and then ran whatever program called \code{qlmanage} came first
+on \code{PATH}, before answering that there was no picture.  A build constant
+(\code{available}, true only in \code{available\_darwin.go}) now makes \code{Thumbnail}
+answer \code{ErrUnavailable} at once, before the guard's copy is asked for or anything
+is run (\code{TestNoQuickLookOutsideMacOS}, which plants a \code{qlmanage} on \code{PATH}
+and checks that it is not run).  The interface then shows the ordinary preview.
+
 Choosing by extension rather than by bytes (\fq{PRV-2}) is deliberate: Quick Look decides
 what the document is, and a package is a folder with no bytes of its own.  The extension only
 decides whether to ask.  Keynote's \code{.key} stays covered by the core rule \code{*.key}.
