@@ -191,7 +191,13 @@ func TestStopNeverSignalsAProcessThatOnlyCallsItselfFsb(t *testing.T) {
 	}
 
 	imp := decoy(t, "")
-	os.WriteFile(filepath.Join(cfg, "pid"), []byte(strconv.Itoa(imp.Process.Pid)+"\n"), 0o600)
+	// With its real start time, as writePID records it, so that only the check
+	// that it is fsb can refuse it (without one, the start time refuses it first).
+	p, ok := lookupProcess(imp.Process.Pid)
+	if !ok || p.startID == "" {
+		t.Fatalf("cannot describe the decoy (process %d)", imp.Process.Pid)
+	}
+	os.WriteFile(filepath.Join(cfg, "pid"), []byte(strconv.Itoa(imp.Process.Pid)+"\n"+p.startID+"\n"), 0o600)
 	survives(imp, "a program named fsb, in the PID file")
 	os.Remove(filepath.Join(cfg, "pid"))
 

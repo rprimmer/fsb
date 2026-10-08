@@ -5,10 +5,12 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // On macOS (and other systems without Linux's /proc), processes and sockets
@@ -47,6 +49,10 @@ func lookupProcess(pid int) (process, bool) {
 	p := process{pid: pid, uid: uid, tty: f[1], started: strings.Join(f[2:7], " "), name: filepath.Base(strings.Join(f[7:], " "))}
 	if p.tty == "??" || p.tty == "?" || p.tty == "-" { // no terminal (macOS, Linux)
 		p.tty = ""
+	}
+	// ps prints the start time in the local time zone, so read it in the same one.
+	if t, err := time.ParseInLocation(lstartLayout, p.started, time.Local); err == nil {
+		p.startID = fmt.Sprintf("unix:%d", t.Unix())
 	}
 	return p, true
 }

@@ -128,14 +128,27 @@ func startBackground(cfgDir string, args []string, stdout io.Writer) error {
 type errAlreadyReported struct{ error }
 
 // writePID records this process as the background fsb: its number, and when
-// it started, so that a number later reused by another process is not
-// mistaken for it.
+// it started (its startID, which does not depend on the time zone), so that a
+// number later reused by another process is not mistaken for it.
 func writePID(cfgDir string) error {
 	started := ""
 	if p, ok := lookupProcess(os.Getpid()); ok {
-		started = p.started
+		started = p.startID
 	}
 	return writeOwnFile(filepath.Join(cfgDir, pidFile), strconv.Itoa(os.Getpid())+"\n"+started+"\n")
+}
+
+// startedAs reports whether p is the process whose start was recorded as
+// recorded: a startID, or, in a PID file written before 1.0.6, the start time
+// as text in the time zone of the time (compared as text, as then).
+func startedAs(p process, recorded string) bool {
+	if recorded == "" {
+		return false
+	}
+	if strings.Contains(recorded, ":") && !strings.Contains(recorded, " ") {
+		return p.startID != "" && recorded == p.startID
+	}
+	return recorded == p.started
 }
 
 // readPID returns the process number and start time recorded by writePID.
@@ -221,7 +234,7 @@ func removePID(cfgDir string) {
 // neither does a program other than fsb holding the port.
 func findRunning(cfgDir string) (p process, background, ok bool) {
 	if pid, started, ok := readPID(cfgDir); ok {
-		if p, ok := lookupProcess(pid); ok && p.started == started && p.isFsb() {
+		if p, ok := lookupProcess(pid); ok && startedAs(p, started) && p.isFsb() {
 			return p, true, true
 		}
 	}

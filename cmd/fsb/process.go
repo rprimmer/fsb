@@ -14,7 +14,11 @@ type process struct {
 	pid     int
 	uid     int
 	name    string // command name as ps shows it, without its folder
-	started string // as ps prints it, e.g. "Fri Oct  2 06:08:27 2026" (lstartLayout)
+	started string // as ps prints it, e.g. "Fri Oct  2 06:08:27 2026" (lstartLayout), for messages
+	// startID identifies the start time independently of the time zone (and, on
+	// Linux, of changes to the clock): "ticks:N" since boot on Linux, "unix:N"
+	// seconds elsewhere.  It is what the PID file records.
+	startID string
 	tty     string // terminal, e.g. "ttys001"; "" if it has none
 }
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,8 +46,11 @@ func TestLookupProcessWithoutPs(t *testing.T) {
 	if age := time.Since(started); age < -time.Minute || age > time.Hour {
 		t.Errorf("started = %q, %v ago; this test began moments ago", p.started, age)
 	}
+	if !strings.HasPrefix(p.startID, "ticks:") {
+		t.Errorf("startID = %q, want ticks since boot", p.startID)
+	}
 	again, _ := lookupProcess(os.Getpid())
-	if again.started != p.started {
+	if again.started != p.started || again.startID != p.startID {
 		t.Errorf("start time changed between lookups: %q, then %q", p.started, again.started)
 	}
 }

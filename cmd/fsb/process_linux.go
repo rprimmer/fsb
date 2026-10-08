@@ -105,7 +105,7 @@ func lookupProcess(pid int) (process, bool) {
 		return process{}, false
 	}
 	started := time.Unix(boot+int64(st.start/clockTicks), 0).Format(lstartLayout)
-	return process{pid: pid, uid: uid, name: st.name, started: started, tty: st.tty}, true
+	return process{pid: pid, uid: uid, name: st.name, started: started, startID: fmt.Sprintf("ticks:%d", st.start), tty: st.tty}, true
 }
 
 // effectiveUID returns the effective user ID of process pid (what ps calls
