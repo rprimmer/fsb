@@ -40,7 +40,8 @@ mkdir -p docs .ssh .aws \
 	".config/google-chrome/Default" ".config/chromium/Default" \
 	".config/BraveSoftware/Brave-Browser/Default" ".config/microsoft-edge/Default" \
 	".mozilla/firefox/abc.default" .local/share/keyrings .password-store \
-	.var/app/com.google.Chrome/config/google-chrome/Default
+	.var/app/com.google.Chrome/config/google-chrome/Default \
+	snap/chromium/common/chromium/Default .config/mozilla/firefox/abc.default
 echo "hello from $(. /etc/os-release && echo "$PRETTY_NAME")" > docs/readme.txt
 echo "secret" > .ssh/id_ed25519
 echo "secret" > .aws/credentials
@@ -52,6 +53,8 @@ echo "secret" > .mozilla/firefox/abc.default/logins.json
 echo "secret" > .local/share/keyrings/login.keyring
 echo "secret" > .password-store/email.gpg
 echo "secret" > .var/app/com.google.Chrome/config/google-chrome/Default/Cookies
+echo "secret" > "snap/chromium/common/chromium/Default/Login Data"
+echo "secret" > .config/mozilla/firefox/abc.default/logins.json
 # A name that is not valid UTF-8 (byte 0xE9, Latin-1 "é"): legal on Linux, impossible on APFS.
 printf 'latin-1 name\n' > "$(printf 'caf\351.txt')"
 # Differs from Readme.TXT only in case: two files on Linux, one on macOS.

@@ -79,7 +79,8 @@ check "symlink out of the root (404)" 404 "$(get "$H/escape/passwd" head)"
 for p in .config/google-chrome/Default/Cookies ".config/chromium/Default/Login Data" \
 	".config/BraveSoftware/Brave-Browser/Default/Login Data" .config/microsoft-edge/Default/Cookies \
 	.mozilla/firefox/abc.default/logins.json .local/share/keyrings/login.keyring \
-	.password-store/email.gpg .var/app/com.google.Chrome/config/google-chrome/Default/Cookies; do
+	.password-store/email.gpg .var/app/com.google.Chrome/config/google-chrome/Default/Cookies \
+	"snap/chromium/common/chromium/Default/Login Data" .config/mozilla/firefox/abc.default/logins.json; do
 	check "core deny: ~/$p (404)" 404 "$(get "$H/$p" head)"
 done
 get "$H" list >/dev/null

@@ -27,25 +27,42 @@ var CoreDeny = []string{
 	".netrc",
 	".kube/",
 	"**/Library/Keychains/",
-	"**/Library/Application Support/Google/Chrome/",
+	"**/Library/Application Support/Google/Chrome*/",
+	"**/Library/Application Support/Chromium/",
 	"**/Library/Application Support/Firefox/",
 	"**/Library/Application Support/BraveSoftware/",
 	"**/Library/Application Support/Microsoft Edge*/",
+	"**/Library/Application Support/Vivaldi/",
+	"**/Library/Application Support/com.operasoftware.Opera*/",
+	"**/Library/Thunderbird/",
 	"**/Library/Safari/",
 	"**/Library/Cookies/",
-	// The same on Linux: browser profiles (also inside Snap and Flatpak
-	// sandboxes), the GNOME and KDE keyrings, and the pass password store.
+	// The same on Linux: browser and mail profiles, the GNOME and KDE keyrings,
+	// the NSS key store and the pass password store.  Matching at any depth also
+	// covers Snap packages that keep the usual folder (Firefox's .mozilla) but not
+	// those that do not (Chromium's snap/chromium/common/chromium, named below).
 	"**/.config/google-chrome*/",
 	"**/.config/chromium/",
 	"**/.config/BraveSoftware/",
 	"**/.config/microsoft-edge*/",
-	// Flatpak keeps each app's settings in ~/.var/app/<app ID>/config; any app
-	// ID, so repackaged builds (ungoogled-chromium, say) are covered too.
+	// Flatpak keeps each app's settings in ~/.var/app/<app ID>/config, and its
+	// own keyring in data/keyrings; any app ID, so repackaged builds
+	// (ungoogled-chromium, say) are covered too.
 	"**/.var/app/*/config/google-chrome*/",
 	"**/.var/app/*/config/chromium/",
 	"**/.var/app/*/config/BraveSoftware/",
 	"**/.var/app/*/config/microsoft-edge*/",
+	"**/.var/app/*/config/mozilla/",
+	"**/.var/app/*/config/vivaldi*/",
+	"**/.var/app/*/config/opera*/",
+	"**/.var/app/*/data/keyrings/",
 	"**/.mozilla/",
+	"**/.config/mozilla/", // Firefox 147 and later, for new profiles
+	"**/.config/vivaldi*/",
+	"**/.config/opera*/",
+	"**/.thunderbird/",
+	"**/.pki/nssdb/", // the NSS certificate and key store Chrome and Firefox use
+	"**/snap/chromium/common/chromium/",
 	"**/.local/share/keyrings/",
 	"**/.local/share/kwalletd/",
 	"**/.password-store/",
@@ -81,9 +98,13 @@ func CredentialLocations(home string) []string {
 		".ssh", ".aws", ".gnupg", ".kube", ".netrc", ".config/gh", "Library/Keychains",
 		"Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
 		"Library/Application Support/BraveSoftware", "Library/Application Support/Microsoft Edge",
+		"Library/Application Support/Chromium", "Library/Application Support/Google/Chrome Beta",
+		"Library/Application Support/Google/Chrome Canary", "Library/Application Support/Vivaldi",
+		"Library/Thunderbird",
 		"Library/Safari", "Library/Cookies",
 		".config/google-chrome", ".config/chromium", ".config/BraveSoftware", ".config/microsoft-edge",
-		".mozilla", ".local/share/keyrings", ".local/share/kwalletd", ".password-store",
+		".mozilla", ".config/mozilla", ".config/vivaldi", ".config/opera", ".thunderbird", ".pki/nssdb",
+		"snap/chromium/common/chromium", ".local/share/keyrings", ".local/share/kwalletd", ".password-store",
 		".var/app/com.google.Chrome/config/google-chrome", ".var/app/org.chromium.Chromium/config/chromium",
 		".var/app/com.brave.Browser/config/BraveSoftware", ".var/app/com.microsoft.Edge/config/microsoft-edge",
 	}
