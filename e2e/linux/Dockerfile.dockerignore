@@ -1,0 +1,10 @@
+# Keep the build context small. .git stays: go build reads it to stamp the
+# commit. Ignored files are not "modifications", so --version stays clean.
+_attic
+_transcripts
+.claude
+fsb
+web/node_modules
+e2e/artifacts
+specs/*/build
+specs/dist

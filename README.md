@@ -139,6 +139,12 @@ go test -race ./...
 go test ./internal/rules -run xxx -fuzz FuzzParseAndMatch -fuzztime 30s
 ```
 
+Linux distributions (Debian, Ubuntu, Fedora, Alpine, Arch) in Docker; see [e2e/linux/README.md](e2e/linux/README.md):
+
+```sh
+make linux
+```
+
 ## License
 
 MIT
