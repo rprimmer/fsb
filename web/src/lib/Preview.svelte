@@ -318,7 +318,7 @@
 
 <aside class="preview" aria-label="Preview">
   <header class="phead">
-    <strong class="ptitle" title={fullPath}>{displayName(entry?.rel ?? entry?.name ?? 'Preview')}</strong>
+    <strong class="ptitle" title={displayName(fullPath)}>{displayName(entry?.rel ?? entry?.name ?? 'Preview')}</strong>
     <span class="pactions">
       {#if entry}<button onclick={() => oncopy(fullPath)} title="Copy the full path (⌥C)">Copy path</button>{/if}
       <button onclick={onclose} aria-label="Close preview" title="Close (Space)">✕</button>
@@ -334,9 +334,9 @@
       {:else if mode === 'folder'}
         <p class="hint">Folder</p>
       {:else if mode === 'image'}
-        <img class="pimg" src={previewURL(fullPath)} alt={entry.name} onerror={imageFailed} />
+        <img class="pimg" src={previewURL(fullPath)} alt={displayName(entry.name)} onerror={imageFailed} />
       {:else if mode === 'quicklook'}
-        <img class="pimg" src={quicklookURL(fullPath)} alt={entry.name} onerror={quicklookFailed} />
+        <img class="pimg" src={quicklookURL(fullPath)} alt={displayName(entry.name)} onerror={quicklookFailed} />
         <p class="note">Quick Look picture, as Finder shows it.</p>
       {:else if mode === 'pdf'}
         <!-- The pointer handlers only record where the pointer is (see frameMayHaveFocus); the frame itself is the interactive element. -->
@@ -420,12 +420,12 @@
         <h3>Details</h3>
         {#if meta}
           <dl>
-            <dt>Path</dt><dd class="mono wrap">{meta.path}</dd>
+            <dt>Path</dt><dd class="mono wrap">{displayName(meta.path)}</dd>
             <dt>Kind</dt><dd>{kindOf(meta)}</dd>
             {#if !meta.isDir}<dt>Size</dt><dd>{formatSize(meta.size)} ({meta.size.toLocaleString()} bytes)</dd>{/if}
             <dt>Modified</dt><dd>{formatDate(meta.modTime)}</dd>
             <dt>Permissions</dt><dd class="mono">{modeString(meta)}</dd>
-            {#if meta.symlinkTarget}<dt>Link to</dt><dd class="mono wrap">{meta.symlinkTarget}</dd>{/if}
+            {#if meta.symlinkTarget}<dt>Link to</dt><dd class="mono wrap">{displayName(meta.symlinkTarget)}</dd>{/if}
             {#if meta.dataless}<dt>Cloud</dt><dd>Not downloaded</dd>{/if}
           </dl>
           <h3>Extended attributes</h3>
@@ -435,7 +435,7 @@
             <ul class="xattrs">
               {#each meta.xattrs as x (x.name)}
                 <li>
-                  <span class="mono xname">{x.name}</span>{#if x.encoding === 'hex' && !x.large}<span class="tag">hex</span>{/if}
+                  <span class="mono xname">{displayName(x.name)}</span>{#if x.encoding === 'hex' && !x.large}<span class="tag">hex</span>{/if}
                   {#if x.large}
                     <span class="note">({formatSize(x.size ?? 0)}, too large to show)</span>
                   {:else if x.value !== undefined && x.value !== ''}

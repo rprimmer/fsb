@@ -1,4 +1,5 @@
 import { apiPath } from './base.ts';
+import { queryPath } from './format.ts';
 
 export { apiPath };
 
@@ -94,7 +95,7 @@ async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   return resp.json();
 }
 
-const q = (path: string) => encodeURIComponent(path);
+const q = queryPath;
 
 export function getStatus(): Promise<Status> {
   return getJSON(apiPath('api/status'));

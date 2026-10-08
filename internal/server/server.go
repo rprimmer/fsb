@@ -102,8 +102,8 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"readOnly":        true,
 		"coreDenyMissing": missing,
-		"roots":           s.cfg.Guard.Roots(),
-		"home":            s.cfg.Home,
+		"roots":           wireNames(s.cfg.Guard.Roots()),
+		"home":            wireName(s.cfg.Home),
 	})
 }
 
@@ -122,11 +122,11 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		}
 		started = true
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		enc.Encode(map[string]any{"path": p})
+		enc.Encode(map[string]any{"path": wireName(p)})
 	}
 	err := s.cfg.Guard.ListFunc(p, listBatch, func(es []guard.Entry) error {
 		start()
-		if err := enc.Encode(map[string]any{"entries": es}); err != nil {
+		if err := enc.Encode(map[string]any{"entries": wireEntries(es)}); err != nil {
 			return err
 		}
 		rc.Flush()
@@ -203,7 +203,7 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, p, err)
 		return
 	}
-	writeJSON(w, m)
+	writeJSON(w, wireMeta(m))
 }
 
 // preview serves a raster image inline, and nothing else inline. The type is
@@ -301,7 +301,7 @@ func (s *Server) archive(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, p, err)
 		return
 	}
-	writeJSON(w, l)
+	writeJSON(w, wireArchive(l))
 }
 
 // mdframe serves the fixed page that renders sanitized Markdown inside a
@@ -332,7 +332,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		}
 		started = true
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		enc.Encode(map[string]any{"path": root, "query": query})
+		enc.Encode(map[string]any{"path": wireName(root), "query": query})
 	}
 
 	var pending []guard.SearchMatch
@@ -342,7 +342,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		start()
-		err := enc.Encode(map[string]any{"matches": pending})
+		err := enc.Encode(map[string]any{"matches": wireMatches(pending)})
 		pending = pending[:0]
 		lastFlush = time.Now()
 		rc.Flush()

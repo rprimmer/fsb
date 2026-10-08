@@ -37,6 +37,7 @@
   } from './lib/columns';
   import {
     basename,
+    copyablePath,
     crumbsFor,
     dirname,
     displayName,
@@ -616,7 +617,7 @@
             return;
           case 'KeyC':
             ev.preventDefault();
-            copyText(selectedRow ? rowPath(selectedRow) : path);
+            copyText(copyablePath(selectedRow ? rowPath(selectedRow) : path));
             return;
         }
       }
@@ -836,7 +837,7 @@
   });
 
   $effect(() => {
-    document.title = path ? `${path.split('/').filter(Boolean).pop() ?? '/'} - fsb` : 'fsb';
+    document.title = path ? `${displayName(path.split('/').filter(Boolean).pop() ?? '/')} - fsb` : 'fsb';
   });
 </script>
 
@@ -906,7 +907,7 @@
       {/if}
     {/each}
     {#if path}
-      <button class="textbtn small" onclick={() => copyText(path)} title="Copy this folder's path (⌥C)">Copy path</button>
+      <button class="textbtn small" onclick={() => copyText(copyablePath(path))} title="Copy this folder's path (⌥C)">Copy path</button>
     {/if}
   </nav>
   <span class="barright">
@@ -935,7 +936,7 @@
       onchange={(ev) => (location.hash = pathToHash((ev.currentTarget as HTMLSelectElement).value))}
     >
       {#each status.roots as r (r)}
-        <option value={r} selected={crumbs[0]?.path === r}>{r}</option>
+        <option value={r} selected={crumbs[0]?.path === r}>{displayName(r)}</option>
       {/each}
     </select>
   {/if}

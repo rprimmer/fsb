@@ -142,5 +142,32 @@ const DECEPTIVE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u
  * and downloads use. Legitimate right-to-left text is untouched.
  */
 export function displayName(name: string): string {
-  return name.replace(DECEPTIVE, (c) => `\u2039U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}\u203a`);
+  return name
+    .replace(RAW_BYTE, (_, hex) => `\u20390x${hex}\u203a`)
+    .replace(DECEPTIVE, (c) => `\u2039U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}\u203a`);
+}
+
+// A byte of a name that is not UTF-8, as the server sends it: NUL and two
+// uppercase hex digits (server/wire.go). NUL never occurs in a real name.
+const RAW_BYTE = /\u0000([0-9A-F]{2})/g;
+
+/**
+ * A path as a URL query value: escaped bytes become themselves (%E9), so the
+ * server receives the name's real bytes; everything else is sent as UTF-8.
+ */
+export function queryPath(path: string): string {
+  return path
+    .split(RAW_BYTE)
+    .map((part, i) => (i % 2 === 1 ? `%${part}` : encodeURIComponent(part)))
+    .join('');
+}
+
+/**
+ * A path to put on the clipboard. One with bytes that are not UTF-8 cannot be
+ * written as plain text, so it is quoted for the shell (bash, zsh): $'...\xE9...'.
+ */
+export function copyablePath(path: string): string {
+  if (!path.includes('\u0000')) return path;
+  const quoted = path.replace(/[\\']/g, (c) => `\\${c}`).replace(RAW_BYTE, (_, hex) => `\\x${hex}`);
+  return `$'${quoted}'`;
 }

@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   basename,
+  copyablePath,
   crumbsFor,
   dirname,
+  displayName,
   formatSize,
   hashToPath,
   joinPath,
@@ -12,6 +14,7 @@ import {
   modeString,
   parseHash,
   pathToHash,
+  queryPath,
 } from './format.ts';
 
 const file = { name: 'a.txt', isDir: false, size: 1, modTime: '', mode: 0o644 };
@@ -105,4 +108,33 @@ test('crumbsFor starts at the enclosing root', () => {
   // With nested roots the longest one wins; "/" contains everything.
   assert.deepEqual(crumbsFor('/Users/me/a', ['/', '/Users/me']).map((c) => c.label), ['/Users/me', 'a']);
   assert.deepEqual(crumbsFor('/etc/x', ['/']).map((c) => c.label), ['/', 'etc', 'x']);
+});
+
+// The server sends each byte of a name that is not UTF-8 as NUL and two hex
+// digits ("caf\u0000E9.txt" for Latin-1 "café.txt"); see server/wire.go.
+const latin1 = '/home/u/caf\u0000E9.txt';
+
+test('queryPath sends escaped bytes as themselves and everything else as UTF-8', () => {
+  assert.equal(queryPath(latin1), '%2Fhome%2Fu%2Fcaf%E9.txt');
+  assert.equal(queryPath('/a/café & b?.txt'), encodeURIComponent('/a/café & b?.txt'));
+  assert.equal(queryPath('\u0000FF\u0000FE'), '%FF%FE');
+  // A NUL that is not an escape is passed on as one (the server refuses it).
+  assert.equal(queryPath('a\u0000zz'), 'a%00zz');
+});
+
+test('displayName shows escaped bytes as a marker', () => {
+  assert.equal(displayName('caf\u0000E9.txt'), 'caf\u20390xE9\u203a.txt');
+  assert.equal(displayName('\u0000FF\u0000FE'), '\u20390xFF\u203a\u20390xFE\u203a');
+  assert.equal(displayName('a\u0000zz'), 'a\u2039U+0000\u203azz');
+  assert.equal(displayName('café.txt'), 'café.txt');
+});
+
+test('copyablePath quotes a path with escaped bytes for the shell', () => {
+  assert.equal(copyablePath('/home/u/notes.txt'), '/home/u/notes.txt');
+  assert.equal(copyablePath(latin1), "$'/home/u/caf\\xE9.txt'");
+  assert.equal(copyablePath("/it's\\\u0000E9"), "$'/it\\'s\\\\\\xE9'");
+});
+
+test('an escaped path survives the address bar', () => {
+  assert.equal(hashToPath(pathToHash(latin1)), latin1);
 });

@@ -85,9 +85,11 @@ done
 get "$H" list >/dev/null
 if grep -q -e '"\.mozilla"' -e '"\.password-store"' "$body"; then fail "listing hides denied Linux secrets"; else pass "listing hides denied Linux secrets"; fi
 probe "unreadable docs/locked.txt: $(get "$H/docs/locked.txt" head)"
+# A name that is not UTF-8 is listed with each stray byte escaped as NUL and
+# two hex digits (JSON "\u0000E9"), and is read by its real bytes.
 get "$H" list >/dev/null
-probe "non-UTF-8 name in listing: $(grep -o '"caf[^"]*"' "$body" | head -1)"
-probe "non-UTF-8 name read by its real bytes: $(get "$H/$(printf 'caf\351.txt')" head)"
+if grep -qF '"caf\u0000E9.txt"' "$body"; then pass "non-UTF-8 name listed losslessly"; else fail "non-UTF-8 name listed losslessly ($(grep -o '"caf[^"]*"' "$body" | head -1))"; fi
+check "non-UTF-8 name read by its real bytes" 200 "$(get "$H/$(printf 'caf\351.txt')" head)"
 
 kill $pid 2>/dev/null
 wait $pid 2>/dev/null
