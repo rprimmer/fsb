@@ -20,7 +20,7 @@ MAN1DIR ?= $(MANDIR)/man1
 BIN     = fsb
 MANPAGE = man/fsb.1
 
-.PHONY: all build test man-lint linux install install-bin install-man uninstall \
+.PHONY: all build test man-lint linux linux-e2e install install-bin install-man uninstall \
         uninstall-bin uninstall-man specs clean help
 
 all: build
@@ -40,6 +40,13 @@ man-lint:
 # running Docker engine; see e2e/linux/README.md).
 linux:
 	e2e/linux/run.sh
+
+# linux-e2e runs the Chrome browser suite on the Mac against fsb in each native
+# Linux distribution (Safari: see e2e/README.md, "fsb on Linux").
+linux-e2e:
+	for d in debian ubuntu fedora alpine; do \
+		FSB_E2E_LINUX=$$d FSB_E2E_SKIP_SAFARI=1 node --test --test-reporter=spec e2e/chrome.test.mjs || exit 1; \
+	done
 
 # install puts the program in BINDIR and the manual page in MAN1DIR.
 install: install-bin install-man
@@ -74,6 +81,7 @@ help:
 	@echo 'make install-man   Install only the manual page'
 	@echo 'make uninstall     Remove what install put in place'
 	@echo 'make linux         Smoke-test on Linux distributions (Docker)'
+	@echo 'make linux-e2e     Chrome suite against fsb on Linux distributions (Docker)'
 	@echo 'make man-lint      Check the manual page with mandoc'
 	@echo 'make specs         Build the specification PDFs'
 	@echo ''

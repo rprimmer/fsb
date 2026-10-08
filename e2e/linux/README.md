@@ -30,6 +30,12 @@ a port (`-p`) can't reach it. Instead the container shares the Docker VM's netwo
 127.0.0.1, never to the network. The port number stays the same on both sides, which
 fsb's Host check requires.
 
+## Browser tests against these distributions
+
+`make linux-e2e` runs the Chrome browser suite on the Mac against `fsb` in each
+native distribution; `FSB_E2E_LINUX=NAME` does the same for one, in Chrome or
+Safari. See [`../README.md`](../README.md), "fsb on Linux".
+
 ## What runs
 
 | Name | Image | Notes |

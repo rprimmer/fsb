@@ -2,21 +2,23 @@
 # Prepares a distribution image for smoke.sh. POSIX sh: Alpine has only
 # BusyBox ash.
 #
-#   setup.sh           as root: install curl and create the user "tester"
+#   setup.sh           as root: install curl and attr, and create the user "tester"
 #   setup.sh fixture   as tester: fill the home directory with test files
 set -eu
 
 if [ "${1:-}" != fixture ]; then
-	if ! command -v curl >/dev/null; then
+	# curl for smoke.sh; setfattr (package attr) for the browser suites'
+	# extended attributes (e2e/lib/container.mjs).
+	if ! command -v curl >/dev/null || ! command -v setfattr >/dev/null; then
 		if command -v apt-get >/dev/null; then
-			apt-get update -q && apt-get install -qy --no-install-recommends curl
+			apt-get update -q && apt-get install -qy --no-install-recommends curl attr
 			rm -rf /var/lib/apt/lists/*
 		elif command -v dnf >/dev/null; then
-			dnf install -qy curl && dnf clean all
+			dnf install -qy curl attr && dnf clean all
 		elif command -v apk >/dev/null; then
-			apk add --no-cache curl
+			apk add --no-cache curl attr
 		elif command -v pacman >/dev/null; then
-			pacman -Sy --noconfirm curl
+			pacman -Sy --noconfirm --needed curl attr
 		else
 			echo "setup.sh: no known package manager" >&2
 			exit 1

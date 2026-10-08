@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startAttacker } from './lib/attacker.mjs';
+import { startContainerServer } from './lib/container.mjs';
 import { makeFixture } from './lib/fixture.mjs';
 import { buildFsb, startServer } from './lib/server.mjs';
 import { basename, hashFor, sleep, waitFor } from './lib/util.mjs';
@@ -109,14 +110,18 @@ export function defineSuite({ label, launch }) {
       mkdirSync(artifacts, { recursive: true });
       buildDir = mkdtempSync(join(tmpdir(), 'fsb-e2e-bin-'));
       fx = makeFixture({ big });
-      server = await startServer(buildFsb(buildDir), fx.home);
+      // FSB_E2E_LINUX=debian (or ubuntu, fedora, alpine, arch) runs fsb in that
+      // Linux distribution's container instead of on this machine.
+      server = process.env.FSB_E2E_LINUX
+        ? await startContainerServer(process.env.FSB_E2E_LINUX, fx)
+        : await startServer(buildFsb(buildDir), fx.home);
       base = server.base;
       attacker = await startAttacker();
       d = await launch();
       // The launch URL is single-use: this exchanges it for the session cookie.
       await d.goto(server.url);
       await waitFor(() => d.eval(`return !!document.querySelector('.crumbs')`), { message: 'the first page load' });
-      console.log(`# ${label}: ${await d.version()}`);
+      console.log(`# ${label}: ${await d.version()}; fsb on ${server.release ?? process.platform}`);
     });
 
     after(async () => {
@@ -162,6 +167,15 @@ export function defineSuite({ label, launch }) {
       // The real name is still what a download uses.
       const dl = await d.eval(`return [...document.querySelectorAll('.vrow a.name')].map((a) => a.getAttribute('download')).filter(Boolean)`);
       assert.ok(dl.includes('invoice\u202Etxt.exe'), 'the link keeps the real name');
+    });
+
+    test('a name that is not UTF-8 is shown with a marker and opens', async (t) => {
+      if (!fx.nonUtf8) return t.skip('only Linux can hold such a name (FSB_E2E_LINUX)');
+      await open(`${fx.home}/spoof`);
+      const shown = await rows();
+      assert.ok(shown.includes('caf\u20390xE9\u203a.txt'), JSON.stringify(shown));
+      const s = await preview('caf\u20390xE9\u203a.txt');
+      assert.equal(s.text, 'bonjour', 'its contents are read by its real bytes');
     });
 
     test('never lists secret files, even with hidden files shown', async () => {
@@ -487,7 +501,7 @@ export function defineSuite({ label, launch }) {
     });
 
     test('shows the Quick Look picture of an Office document, sandboxed like an image', async (t) => {
-      if (process.platform !== 'darwin') return t.skip('Quick Look is macOS only');
+      if ((server.platform ?? process.platform) !== 'darwin') return t.skip('Quick Look is macOS only');
       await open(`${fx.home}/office`);
       // letter.docx is already selected: opening a folder selects its first entry.
       if (!(await previewOpen())) await d.key(' ');

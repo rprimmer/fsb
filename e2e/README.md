@@ -36,6 +36,29 @@ failed tests are written to `e2e/artifacts/`.
 - The tests poll for state (`waitFor`) instead of sleeping, so they hold up on slow machines.
 - Safari under WebDriver reports arrow keys with a modifier held as `key: "\u001c"` (a control character) while `code` stays correct. The app matches navigation keys by `code` (`web/src/lib/keys.ts`) for this reason.
 
+## fsb on Linux
+
+The same suites can drive an `fsb` that runs in a Linux container, with the
+browser on the Mac. Set `FSB_E2E_LINUX` to a distribution of
+[`linux/README.md`](linux/README.md) (`debian`, `ubuntu`, `fedora`, `alpine`,
+`arch`); Docker must be running.
+
+```sh
+make linux-e2e                                                # Chrome, the four native distributions
+FSB_E2E_LINUX=alpine node --test --test-reporter=spec e2e/safari.test.mjs
+```
+
+The fixture is built on the Mac and copied into the container at the same path
+(on tmpfs, so extended attributes work), with one more file whose name is not
+UTF-8, which macOS cannot hold; the test for it runs only here. `fsb` listens on
+127.0.0.1 in the container, which Colima forwards to the Mac (`lib/container.mjs`).
+Quick Look's test is skipped, since it is macOS only. `FSB_E2E_KEEP_CONTAINER=1`
+leaves the container running afterwards, to inspect (`docker rm -f fsb-e2e-NAME`).
+
+`arch` is amd64 and, on Apple silicon, runs under QEMU's emulation, where `fsb`,
+like any Go program, crashes under the suite's load with garbage-collector errors;
+an amd64 Debian does the same. Its results there say nothing about `fsb`.
+
 ## Safari
 
 Safari's automation must be enabled once, by you: Safari > Settings > Advanced >
