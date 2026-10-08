@@ -64,13 +64,15 @@ for flavor in debian alpine; do
 	[ $flavor = alpine ] && suffix=-alpine
 	echo
 	echo "#### unit tests on $flavor"
-	if docker build -q -f e2e/linux/Dockerfile --target unit \
-		--build-arg GO_FLAVOR="$suffix" -t "fsb-unit:$flavor" . >/dev/null &&
-		docker run --rm --init "fsb-unit:$flavor"; then
-		record "unit-$flavor" ok
-	else
-		record "unit-$flavor" FAILED
+	if ! docker build -q -f e2e/linux/Dockerfile --target unit \
+		--build-arg GO_FLAVOR="$suffix" -t "fsb-unit:$flavor" . >/dev/null; then
+		record "unit-$flavor" "FAILED (build)"
+		continue
 	fi
+	docker run --rm --init "fsb-unit:$flavor" >"$logs/unit-$flavor.log" 2>&1
+	rc=$?
+	grep -v '^go: downloading' "$logs/unit-$flavor.log"
+	if [ $rc -eq 0 ]; then record "unit-$flavor" ok; else record "unit-$flavor" FAILED; fi
 done
 
 echo
