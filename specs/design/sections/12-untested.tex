@@ -131,9 +131,9 @@ document; they are gathered here so a reader does not have to hunt for them.
   \item \textbf{Safari's end-to-end suite does not run in CI.}
         \code{ci.yml} sets \code{FSB\_E2E\_SKIP\_SAFARI=1} for the hosted job, because a
         headless CI runner cannot drive Safari.  The Safari suite has been run only on
-        this machine, by hand, each time a feature changed, until 1.0.1; it was not run
-        for the changes of 1.0.2 to 1.0.5 (2026-10-08), for which the Chrome suite
-        was.
+        this machine, by hand, each time a feature changed; for 1.0.2 to 1.0.5 it was
+        run once, after the last of them (2026-10-08: 48 passed, 3 skipped as
+        usual), while the Chrome suite ran after each.
   \item \textbf{No independent review has been performed by anyone other than the
         author and an assistant.}  The ``independent reviews'' recorded in
         Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant
