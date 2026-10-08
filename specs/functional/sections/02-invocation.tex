@@ -147,7 +147,7 @@ belong to the same user and have been started from an executable file named
 \texttt{fsb} (the name a process gives itself does not count; a file replaced or
 removed since it was started, as when \texttt{fsb} is rebuilt while it runs, still
 counts), and a process taken from the process-number file must also have the start
-time recorded there.  Anything else is ignored, so a stale file whose number now
+time recorded there (\rid{CFG-6}).  Anything else is ignored, so a stale file whose number now
 belongs to another process is harmless.  Finding the process, here and in
 \rid{CLI-19} and \rid{CLI-20}, needs no other program on Linux, so it works on minimal
 systems too; on macOS it uses \code{ps} and \code{lsof}, which are part of the system.
@@ -221,7 +221,9 @@ a malformed rule file.
 
 \begin{req}{CFG-6}
 While an \texttt{fsb} started with \code{--background} runs,
-\code{\~{}/.config/fsb/pid} holds its process number; it is removed when that
+\code{\~{}/.config/fsb/pid} holds its process number and a record of its start
+time that does not depend on the time zone (nor, on Linux, on changes to the clock),
+so that \code{--stop} and \code{--status} find it under any \code{TZ}; it is removed when that
 \texttt{fsb} stops.  \code{\~{}/.config/fsb/background.log} receives its output
 after startup and is replaced at each \code{--background} start.  Both are created
 with mode \code{0600}.

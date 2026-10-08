@@ -15,16 +15,20 @@ document; they are gathered here so a reader does not have to hunt for them.
         Macs, and Apple-silicon Macs other than the model listed, have not run any part
         of this program.  On Linux, the Go tests and the Chrome end-to-end suite run in
         continuous integration (on GitHub's hosted runners), and \code{make linux} runs a
-        smoke test on five distributions in Docker containers, and the Go tests on two
-        (Section~\ref{sec:verification}); \texttt{fsb} in such a container was also used
-        by hand from the Mac's browser (\code{e2e/linux/browse.sh}), on all five, on
-        2026-10-08.  But every container shares the Docker virtual machine's kernel
+        smoke test on five distributions in Docker containers, the Go tests on three, and
+        the Chrome and Safari suites, driven from the Mac, against four (Debian, Ubuntu,
+        Fedora, Alpine) (Section~\ref{sec:verification}); \texttt{fsb} in such a container
+        was also used by hand from the Mac's browser (\code{e2e/linux/browse.sh}), on all
+        five, on 2026-10-08.  But every container shares the Docker virtual machine's kernel
         (Linux 6.8, arm64, with amd64 emulated by QEMU), so no other kernel, no file
         system but overlay and tmpfs, and no Linux desktop or browser running on Linux
         has been tried.  Linux Mint was represented by Ubuntu 24.04, its base.  Under
         emulation, \code{--status} and \code{--stop} cannot recognize \texttt{fsb}
-        (QEMU makes every emulated process's \code{/proc/PID/exe} name itself); this is
-        believed to be an artifact of emulation, not tried on a real amd64 machine.  Quick
+        (QEMU makes every emulated process's \code{/proc/PID/exe} name itself), and under
+        the browser suites' load \texttt{fsb} dies with garbage-collector errors (``found
+        pointer to free object''), as an amd64 Debian does under the same emulation while
+        both pass natively; so Arch has run only the smoke test, and no amd64 machine has
+        run anything but continuous integration.  Quick
         Look previews do not exist on Linux.
   \item \textbf{Firefox.}  Not installed on the test machine, not driven by any
         end-to-end test, and not opened by hand.  The interface uses no
@@ -104,9 +108,11 @@ document; they are gathered here so a reader does not have to hunt for them.
   \item \textbf{Names that are not UTF-8} (\fq{NAM-3}, \fq{API-10}).  macOS refuses to
         create such a name, so they are tested only on Linux: by
         \code{TestNonUTF8NameRoundTrips} (in CI and the distribution tests), by the
-        smoke test, and once by hand in a container's \texttt{fsb} from the Mac's
-        browser.  What a browser does with the NUL of the escape in a download's
-        suggested name was not checked, nor the copied path pasted into a shell.
+        smoke test, and by the browser suites against four distributions, which open such
+        a file and check the copied path on the clipboard (Chrome).  What a browser does
+        with the NUL of the escape in a download's suggested name was not checked (the
+        independent review found it wrong, and it is accepted), nor the copied path pasted
+        into a shell.
   \item \textbf{A system root on Linux} (\fq{CLI-4}).  \code{/proc}, \code{/sys} and
         \code{/dev} were probed in one Debian container (2026-10-08), against every
         endpoint, with a positive control; the regression test covers a process's
@@ -133,7 +139,12 @@ document; they are gathered here so a reader does not have to hunt for them.
         headless CI runner cannot drive Safari.  The Safari suite has been run only on
         this machine, by hand, each time a feature changed; for 1.0.2 to 1.0.5 it was
         run once, after the last of them (2026-10-08: 48 passed, 3 skipped as
-        usual), while the Chrome suite ran after each.
+        usual), and against four Linux distributions (48 passed each), while the Chrome
+        suite ran after each.  It was not run for 1.0.6.
+  \item \textbf{An intermittent browser test.}  ``A Markdown file link opens that file
+        inside fsb; a web link opens a new tab'' timed out once, against an Ubuntu
+        container, waiting for its click on the web link, and passed on rerun; the cause
+        is not established.
   \item \textbf{No independent review has been performed by anyone other than the
         author and an assistant.}  The ``independent reviews'' recorded in
         Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant

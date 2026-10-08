@@ -111,7 +111,13 @@ the refusal of a second \code{--background}: first the process in the PID file, 
 the process listening on the remembered port.  Either is accepted only if it
 belongs to the same user and its executable file (not the name \code{ps} shows, which on
 macOS is the process's own \code{argv[0]}) is named \code{fsb} or as the running binary
-is, and a process from the PID file must also have the start time recorded there.
+is, and a process from the PID file must also have the start time recorded there.  That
+record is a \code{startID}: on Linux the kernel's start time in clock ticks since boot
+(\code{ticks:N}), elsewhere seconds since 1970 parsed from \code{ps}'s local-time
+\code{lstart} in the same zone \code{ps} printed it (\code{unix:N}).  Until 1.0.6 the
+record was the local-time text itself, so an \texttt{fsb} started under one \code{TZ}
+was not found under another, and \code{--stop} then removed its PID file (finding 38);
+a PID file in the old form is still compared as text.
 Three functions do the looking, one way per system.  On Linux (\code{process\_linux.go})
 they read \code{/proc}, so no other program is needed: \code{lookupProcess} takes the
 name, terminal and start time from \code{/proc/PID/stat} (the fields after the

@@ -94,13 +94,17 @@ the union of three families that are all in force on every system:
 \begin{itemize}
   \item shared: \code{.ssh}, \code{.aws}, \code{.gnupg}, \code{.kube}, \code{.config/gh};
   \item macOS: \code{Library/Keychains}, \code{Library/Safari}, \code{Library/Cookies},
-        and \code{Library/Application Support/} followed by \code{Google/Chrome},
-        \code{Firefox}, \code{BraveSoftware} or \code{Microsoft Edge*};
-  \item Linux: \code{.config/google-chrome*}, \code{.config/chromium},
-        \code{.config/BraveSoftware}, \code{.config/microsoft-edge*}, \code{.mozilla},
-        \code{.local/share/keyrings}, \code{.local/share/kwalletd}, \code{.password-store},
-        and \code{.var/app/*/config/} followed by \code{google-chrome*}, \code{chromium},
-        \code{BraveSoftware} or \code{microsoft-edge*} (Flatpak, any application ID);
+        \code{Library/Thunderbird}, and \code{Library/Application Support/} followed by
+        \code{Google/Chrome*}, \code{Chromium}, \code{Firefox}, \code{BraveSoftware},
+        \code{Microsoft Edge*}, \code{Vivaldi} or \code{com.operasoftware.Opera*};
+  \item Linux: \code{.config/} followed by \code{google-chrome*}, \code{chromium},
+        \code{BraveSoftware}, \code{microsoft-edge*}, \code{vivaldi*}, \code{opera*} or
+        \code{mozilla}; \code{.mozilla}, \code{.thunderbird}, \code{.pki/nssdb},
+        \code{snap/chromium/common/chromium}, \code{.local/share/keyrings},
+        \code{.local/share/kwalletd}, \code{.password-store}; and, for Flatpak under any
+        application ID, \code{.var/app/*/data/keyrings} and \code{.var/app/*/config/}
+        followed by \code{google-chrome*}, \code{chromium}, \code{BraveSoftware},
+        \code{microsoft-edge*}, \code{mozilla}, \code{vivaldi*} or \code{opera*};
 \end{itemize}
 and let the credential files be \code{.netrc}.  For every $c\in\mathsf{Cred}$ and
 every path $q=a\cdot c\cdot b$ with any prefix $a$ and any suffix $b$, $q$ is
@@ -111,7 +115,8 @@ family, in a copy of a Linux home seen from a Mac, where an anchored rule, or on
 chosen by the running system, protects nothing.  The law quantifies over
 $\mathsf{Cred}$; it says nothing about a secret folder not in it, which is how
 version 1.0 could satisfy it while serving the Linux profiles (finding 32 of the
-design specification): the defect was in the set, not in the matching.
+design specification), and 1.0.5 while serving Snap Chromium and Firefox 147's
+profiles (finding 37): each time the defect was in the set, not in the matching.
 \Tests{guard/differential\_test.go::TestCredentialFoldersAreDeniedWhereverTheyAre; rules/rules\_test.go::TestCoreDenyCoversKnownSecrets; TestCoreDenyCoversLinuxSecrets}
 \end{law}
 

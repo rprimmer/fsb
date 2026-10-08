@@ -54,7 +54,7 @@
 \subsection{History of defects found by the design's own checks}
 
 Stating the laws of the algebraic specification, auditing every comparison of names and paths,
-and using the running application, and running it on Linux, found thirty-six defects, all fixed and each covered by a test where
+and using the running application, and running it on Linux, found thirty-eight defects, all fixed and each covered by a test where
 the underlying condition could be reproduced at all (Section~\ref{sec:untested} says where it could not).
 In brief:
 
@@ -172,6 +172,19 @@ In brief:
         Section~\ref{sec:wirenames}).
   \item Found by probing Quick Look on Linux: with no Quick Look, \texttt{fsb} still copied the
         document and then ran any program called \code{qlmanage} on \code{PATH} (1.0.5).
+  \item Found by an independent review of findings 32 to 36 (October 2026; 1.0.6): the
+        Linux rules still missed Snap Chromium (\code{\~{}/snap/chromium/common/chromium}),
+        although this document and the README said the rules covered Snap; Firefox 147's new
+        profile location (\code{\~{}/.config/mozilla}); Flatpak apps' own keyrings; and, on
+        macOS, Chromium and Chrome Beta and Canary.  Vivaldi, Opera, Thunderbird and the NSS
+        key store were added with them.
+  \item Found by the same review: the PID file recorded the start time as local-time text, so
+        \code{--stop} under another \code{TZ} did not find a background \texttt{fsb} and
+        removed its PID file (on macOS since 1.0).  The record is now independent of the time
+        zone (Section~\ref{sec:port}).  The same review found that one half of the test of
+        \code{--stop}'s impostor check was refused by the start-time check before it reached
+        the impostor check, and that the preview pane's Copy path skipped the shell quoting
+        of finding 35.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
@@ -187,7 +200,9 @@ integration since the first day, yet each of these appeared only when \texttt{fs
 distributions, as a user would; the same work found that two tests had never tested what they
 claimed there (the extended-attribute test skipped on the containers' file system, and the test of
 \code{--stop}'s impostor check used \code{sleep} and \code{nc}, which on BusyBox exit at once when
-started under another name).
+started under another name).  Findings 37 and 38 add a sixth: a claim in the
+documentation is as much in need of review as the code; ``covers Snap'' had been written,
+and read, without anyone listing which Snap packages keep which folder.
 
 \subsection{Milestones}
 
@@ -202,7 +217,7 @@ M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file f
 M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
 Hardening & The audits and defects of the preceding subsection & Done, including three independent reviews in October 2026 (the last found nothing new) and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
 M3 Public release & Public repository, documentation, a source release & Done: version 1.0 (October 2026), source only; no binaries and no Homebrew formula, by decision. \\
-Linux check & Five distributions in Docker; \code{/proc}, \code{/sys}, \code{/dev}; extended attributes; Quick Look & Done, October 2026: findings 32 to 36, fixed in 1.0.2 to 1.0.5. \\
+Linux check & Five distributions in Docker; \code{/proc}, \code{/sys}, \code{/dev}; extended attributes; Quick Look; the browser suites against four distributions; an independent review & Done, October 2026: findings 32 to 38, fixed in 1.0.2 to 1.0.6. \\
 M4 Run & The stage-three requirements of the functional specification & Not planned: the project is finished and provided as-is. \\
 \bottomrule
 \end{tabular}

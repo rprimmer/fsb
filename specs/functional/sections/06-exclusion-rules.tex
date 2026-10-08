@@ -156,33 +156,44 @@ Folders & Files \\
 \code{.env}, \code{.env.*} \\
 \code{**/Library/Keychains/} &
 \code{*.pem}, \code{*.key} \\
-\code{**/Library/Application Support/Google/Chrome/} &
+\code{**/Library/Application Support/Google/Chrome*/} &
 \code{id\_rsa}, \code{id\_dsa}, \code{id\_ecdsa}, \code{id\_ed25519}, \code{id\_ecdsa\_sk}, \code{id\_ed25519\_sk} \\
 \code{**/Library/Application Support/Firefox/} &
 \code{*.p12}, \code{*.pfx}, \code{*.ppk}, \code{*.jks}, \code{*.keystore} \\
 \code{**/Library/Application Support/BraveSoftware/} &
 \code{*.kdbx}, \code{*.keychain}, \code{*.keychain-db} \\
 \code{**/Library/Application Support/Microsoft Edge*/} & \\
+\code{**/Library/Application Support/Chromium/} & \\
+\code{**/Library/Application Support/Vivaldi/} & \\
+\code{**/Library/Application Support/com.operasoftware.Opera*/} & \\
+\code{**/Library/Thunderbird/} & \\
 \code{**/Library/Safari/}, \code{**/Library/Cookies/} & \\
 \midrule
-\multicolumn{2}{@{}l}{Linux: browser profiles, keyrings and the \code{pass} store} \\
+\multicolumn{2}{@{}l}{Linux: browser and mail profiles, keyrings, the NSS key store and \code{pass}} \\
 \midrule
 \code{**/.config/google-chrome*/}, \code{**/.config/chromium/} & \\
 \code{**/.config/BraveSoftware/}, \code{**/.config/microsoft-edge*/} & \\
-\code{**/.mozilla/} & \\
+\code{**/.config/vivaldi*/}, \code{**/.config/opera*/} & \\
+\code{**/.mozilla/}, \code{**/.config/mozilla/}, \code{**/.thunderbird/} & \\
+\code{**/.pki/nssdb/}, \code{**/snap/chromium/common/chromium/} & \\
 \code{**/.local/share/keyrings/}, \code{**/.local/share/kwalletd/} & \\
 \code{**/.password-store/} & \\
 \code{**/.var/app/*/config/google-chrome*/} & \\
 \code{**/.var/app/*/config/chromium/} & \\
 \code{**/.var/app/*/config/BraveSoftware/} & \\
 \code{**/.var/app/*/config/microsoft-edge*/} & \\
+\code{**/.var/app/*/config/mozilla/}, \code{**/.var/app/*/config/vivaldi*/} & \\
+\code{**/.var/app/*/config/opera*/}, \code{**/.var/app/*/data/keyrings/} & \\
 \bottomrule
 \end{longtable}
 
 The Linux rules also apply on macOS (to a copy of a Linux home folder, say), and the
-macOS ones on Linux.  Because they match at any depth, they also cover the profiles of
-browsers installed as Snap packages, and the \code{.var/app} rules those of Flatpak
-apps under any application ID (Flatpak Firefox keeps its profile in \code{.mozilla}).
+macOS ones on Linux.  Because they match at any depth, they also cover a Snap package
+that keeps the usual folder inside its own (Firefox's \code{.mozilla}); Snap Chromium
+does not, and has its own rule.  The \code{.var/app} rules cover Flatpak apps under any
+application ID.  \code{.config/mozilla} is where Firefox 147 and later create new
+profiles on Linux; \code{.pki/nssdb} is the certificate and key store that Chrome and
+Firefox share there.
 Public key files (\code{id\_rsa.pub} and the like) are not denied.  The list is
 versioned with the release, and additions are called out in the release notes.
 \end{req}

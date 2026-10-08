@@ -19,7 +19,7 @@ Differential test against the OS & For each secret, thousands of generated spell
 Real-volume tests & Root containment on a real case-sensitive volume, run when a location for one is given. \\
 Front-end tests (Node) & The pure modules, including the laws for ordering, filtering, location round trips, link resolution and name display. \\
 Browser tests & A dependency-free suite written once against a driver interface, run with real keyboard and mouse events in Chrome (DevTools protocol) and Safari (WebDriver). It includes attacks from a second origin and from a page on another port, a DNS-rebinding hostname, the cookie's scope, and a 100{,}000-file folder. \\
-Linux distributions (Docker) & \code{make linux} (\code{e2e/linux}) builds \texttt{fsb} once per architecture and runs a smoke test as an ordinary user on Debian, Ubuntu (standing in for Linux Mint), Fedora, Alpine (musl, BusyBox) and Arch (amd64, emulated), and the Go tests on Debian and Alpine, with \code{/tmp} on tmpfs because the containers' overlay file system refuses user extended attributes. The smoke test checks the session, the \code{Host} check, listing and reading, case-sensitive names, every Linux credential location, a symbolic link out of the root, a name that is not UTF-8, and \code{--background}, \code{--status} and \code{--stop}. \code{e2e/linux/browse.sh} serves a container's \texttt{fsb} to the Mac's browser for manual testing. \\
+Linux distributions (Docker) & \code{make linux} (\code{e2e/linux}) builds \texttt{fsb} once per architecture and runs a smoke test as an ordinary user on Debian, Ubuntu (standing in for Linux Mint), Fedora, Alpine (musl, BusyBox) and Arch (amd64, emulated), and the Go tests on Debian, Alpine and Fedora (the last with the toolchain copied from Go's official image), with \code{/tmp} on tmpfs because the containers' overlay file system refuses user extended attributes. The smoke test checks the session, the \code{Host} check, listing and reading, case-sensitive names, every Linux credential location, a symbolic link out of the root, a name that is not UTF-8, and \code{--background}, \code{--status} and \code{--stop}. \code{e2e/linux/browse.sh} serves a container's \texttt{fsb} to the Mac's browser for manual testing, and \code{FSB\_E2E\_LINUX} (\code{make linux-e2e} for Chrome) runs the browser suites on the Mac against \texttt{fsb} in a container: the fixture is copied in at the same path, with Linux attributes and a name that is not UTF-8. \\
 Mutation checks & Removing a rule or reverting a fix must make a test fail; this was done for the folding fix, the cookie path, every core rule added in 1.0.2 and 1.0.4, the non-UTF-8 name escape, the impostor check of \code{--stop}, the \code{/proc} layers, and others. \\
 Algebra & The laws, and the defects found by stating them (Section~\ref{sec:history}). \\
 \bottomrule
@@ -60,7 +60,8 @@ September, of Quick Look, background mode and process control; and in October, o
 code, as an external review, then of its fixes (which found two further hard-link
 bypasses), then of those fixes (which found seven defects, several in the fixes
 themselves), and finally of that round, which found nothing new
-(Section~\ref{sec:history}).  A professional penetration test was not done.
+(Section~\ref{sec:history}); and, after the Linux work of 1.0.2 to 1.0.5, of that work
+(eleven findings, two medium, each reproduced; findings 37 and 38).  A professional penetration test was not done.
 
 The Linux distribution tests share one kernel, that of the Docker virtual machine, so
 they establish behavior across distributions' user space (C library, tools, file
