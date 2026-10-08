@@ -17,6 +17,19 @@ brew install colima docker docker-buildx
 colima start --vm-type vz --vz-rosetta
 ```
 
+## Browsing a containerized fsb
+
+```sh
+e2e/linux/browse.sh fedora        # any name from the table below; Control-C stops it
+```
+
+This opens your browser on fsb running inside the container, serving the test user's
+home folder. fsb listens on 127.0.0.1 only, and that can't be configured, so publishing
+a port (`-p`) can't reach it. Instead the container shares the Docker VM's network
+(`--network host`), and Colima forwards the VM's 127.0.0.1 ports to the Mac's
+127.0.0.1, never to the network. The port number stays the same on both sides, which
+fsb's Host check requires.
+
 ## What runs
 
 | Name | Image | Notes |
