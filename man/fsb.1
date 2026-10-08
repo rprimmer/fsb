@@ -114,6 +114,15 @@ however it is reached: a root that is a symbolic link to
 .BR / ,
 or a home folder that resolves to it, is refused too.
 The rules still apply.
+On Linux,
+.BR /proc ,
+.B /sys
+and
+.B /dev
+can be listed, but device files are never opened, and a process's environment
+and command line in
+.B /proc
+show as empty.
 .TP
 .B \-\-no\-open
 Print the launch URL and do not open a browser.
