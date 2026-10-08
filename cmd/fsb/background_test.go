@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -189,30 +190,72 @@ func TestStopNeverSignalsAProcessThatOnlyCallsItselfFsb(t *testing.T) {
 		}
 	}
 
-	imp := &exec.Cmd{Path: "/bin/sleep", Args: []string{"/opt/whatever/fsb", "60"}}
-	if err := imp.Start(); err != nil {
-		t.Fatal(err)
-	}
+	imp := decoy(t, "")
 	os.WriteFile(filepath.Join(cfg, "pid"), []byte(strconv.Itoa(imp.Process.Pid)+"\n"), 0o600)
-	survives(imp, "a sleep named fsb, in the PID file")
+	survives(imp, "a program named fsb, in the PID file")
 	os.Remove(filepath.Join(cfg, "pid"))
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
+	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
 	ln.Close()
-	nc := &exec.Cmd{Path: "/usr/bin/nc", Args: []string{"fsb", "-l", "127.0.0.1", strconv.Itoa(port)}}
-	if err := nc.Start(); err != nil {
-		t.Skipf("nc: %v", err)
-	}
-	time.Sleep(300 * time.Millisecond)
-	os.WriteFile(filepath.Join(cfg, "lastport"), []byte(strconv.Itoa(port)+"\n"), 0o600)
+	listening := decoy(t, port)
+	os.WriteFile(filepath.Join(cfg, "lastport"), []byte(port+"\n"), 0o600)
 	if out, _ := fsb("--status"); !strings.Contains(out, "not running") {
-		t.Errorf("--status took nc named fsb for fsb:\n%s", out)
+		t.Errorf("--status took a program named fsb for fsb:\n%s", out)
 	}
-	survives(nc, "nc named fsb, on the remembered port")
+	survives(listening, "a program named fsb, on the remembered port")
+}
+
+// decoy starts a program that only calls itself fsb: this test binary, with
+// argv[0] set to an fsb path, which ps shows as its name on macOS. Given a
+// port, it listens on it at 127.0.0.1. It returns once the program is ready.
+// (Not /bin/sleep or nc: on BusyBox systems those are one program that acts
+// on its argv[0], and exits at once when that is "fsb".)
+func decoy(t *testing.T, port string) *exec.Cmd {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := &exec.Cmd{
+		Path: self,
+		Args: []string{"/opt/whatever/fsb", "-test.run=^TestDecoyProcess$"},
+		Env:  append(os.Environ(), "FSB_TEST_DECOY=1", "FSB_TEST_DECOY_PORT="+port),
+	}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 6)
+	if n, _ := io.ReadFull(out, buf); string(buf[:n]) != "ready\n" {
+		cmd.Process.Kill()
+		cmd.Wait()
+		t.Fatalf("the decoy did not start (said %q)", buf[:n])
+	}
+	return cmd
+}
+
+// TestDecoyProcess is the program decoy starts; on its own it does nothing.
+func TestDecoyProcess(t *testing.T) {
+	if os.Getenv("FSB_TEST_DECOY") != "1" {
+		t.Skip("run by decoy")
+	}
+	if port := os.Getenv("FSB_TEST_DECOY_PORT"); port != "" {
+		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			os.Exit(1)
+		}
+		defer ln.Close()
+	}
+	os.Stdout.WriteString("ready\n")
+	time.Sleep(time.Minute)
+	os.Exit(0)
 }
 
 // From the independent review: fsb's own files are never written through a
