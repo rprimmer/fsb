@@ -426,7 +426,10 @@
   let toast = $state('');
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function copyText(text: string) {
+  // Every copy is of a path, given in a form a shell reads back as the same name
+  // (copyablePath), whichever button or key asked for it.
+  async function copyPath(path: string) {
+    const text = copyablePath(path);
     let ok = false;
     try {
       await navigator.clipboard.writeText(text);
@@ -617,7 +620,7 @@
             return;
           case 'KeyC':
             ev.preventDefault();
-            copyText(copyablePath(selectedRow ? rowPath(selectedRow) : path));
+            copyPath(selectedRow ? rowPath(selectedRow) : path);
             return;
         }
       }
@@ -907,7 +910,7 @@
       {/if}
     {/each}
     {#if path}
-      <button class="textbtn small" onclick={() => copyText(copyablePath(path))} title="Copy this folder's path (⌥C)">Copy path</button>
+      <button class="textbtn small" onclick={() => copyPath(path)} title="Copy this folder's path (⌥C)">Copy path</button>
     {/if}
   </nav>
   <span class="barright">
@@ -1120,7 +1123,7 @@
       entry={selectedRow}
       fullPath={selectedRow ? rowPath(selectedRow) : ''}
       onclose={() => { showPreview = false; savePrefs(); }}
-      oncopy={copyText}
+      oncopy={copyPath}
       onrefocus={() => gridEl?.focus()}
     />
   {/if}

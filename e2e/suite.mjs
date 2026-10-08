@@ -176,6 +176,17 @@ export function defineSuite({ label, launch }) {
       assert.ok(shown.includes('caf\u20390xE9\u203a.txt'), JSON.stringify(shown));
       const s = await preview('caf\u20390xE9\u203a.txt');
       assert.equal(s.text, 'bonjour', 'its contents are read by its real bytes');
+      // The pane's Copy path button gives the path quoted for the shell, with the
+      // byte escaped, as Alt+C does (from the independent review of 2026-10-08).
+      const button = await d.eval(`const b = [...document.querySelectorAll('.preview button')].find((x) => x.textContent === 'Copy path')?.getBoundingClientRect();
+        return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null`);
+      assert.ok(button, 'the preview pane has a Copy path button');
+      await d.click(button.x, button.y);
+      await waitFor(async () => (await d.eval(`return document.querySelector('.toast')?.textContent ?? ''`)).includes('Copied'), { message: 'the copy to be confirmed' });
+      if (d.caps.clipboardRead) {
+        const clip = await d.eval(`return await navigator.clipboard.readText()`);
+        assert.equal(clip, `$'${fx.home}/spoof/caf\\xE9.txt'`);
+      } else t.diagnostic('clipboard contents not read back with this driver');
     });
 
     test('never lists secret files, even with hidden files shown', async () => {
