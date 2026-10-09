@@ -11,7 +11,7 @@
 # the distribution named by BASE and runs smoke.sh as an ordinary user; "unit"
 # runs the Go unit tests on Debian (glibc) or Alpine (musl).
 
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.2
 ARG BASE=debian:trixie
 # GO_FLAVOR picks the unit stage's image: "" for Debian or "-alpine".
 ARG GO_FLAVOR=""
