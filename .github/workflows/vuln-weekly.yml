@@ -1,0 +1,24 @@
+name: vuln-weekly
+
+# govulncheck once a week, so a new advisory against Go or a dependency is
+# reported without waiting for the next push (Go 1.27.2's net/http fixes were
+# found only because a push happened). The vulnerability database is fetched
+# fresh on every run; the tool itself stays pinned like in ci.yml.
+on:
+  schedule:
+    - cron: '17 9 * * 1' # Mondays, 09:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
