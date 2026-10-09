@@ -107,6 +107,9 @@ export function defineSuite({ label, launch }) {
 
     // ---- lifecycle -----------------------------------------------------------
     before(async () => {
+      // The browser first, so that after() closes it even when starting fsb
+      // fails: an open safaridriver session keeps the test run from exiting.
+      d = await launch();
       mkdirSync(artifacts, { recursive: true });
       buildDir = mkdtempSync(join(tmpdir(), 'fsb-e2e-bin-'));
       fx = makeFixture({ big });
@@ -117,7 +120,6 @@ export function defineSuite({ label, launch }) {
         : await startServer(buildFsb(buildDir), fx.home);
       base = server.base;
       attacker = await startAttacker();
-      d = await launch();
       // The launch URL is single-use: this exchanges it for the session cookie.
       await d.goto(server.url);
       await waitFor(() => d.eval(`return !!document.querySelector('.crumbs')`), { message: 'the first page load' });

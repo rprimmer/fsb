@@ -73,6 +73,12 @@ quit, `safaridriver` launches its own automation instance and the suite runs in
 an automation window; your normal windows and tabs are untouched afterwards
 (Safari restores them next time you open it).
 
+**Keep the Mac awake and unlocked while it runs.** Safari's mouse events (clicks,
+drags, hovers) do not arrive while the display is asleep or the screen is
+locked, so about a dozen tests time out waiting for a click to take effect,
+while keyboard and API tests still pass. `caffeinate` does not help once the
+screen has locked.
+
 If it still times out with Safari quit, run `sudo safaridriver --enable` once
 (it asks for an administrator password), look for an authorization prompt (a
 system dialog, or a sheet in Safari), and to see what Safari says, run:
