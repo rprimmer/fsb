@@ -765,6 +765,24 @@ On Linux, a connection of another user tried the launch URL, which it may have
 read from a command line.
 It was refused and the URL still works for you; another user on this machine
 is trying to reach your files.
+After three such warnings, further refusals are not reported.
+.TP
+.B fsb: warning: refused the launch URL: fsb runs as root
+.B fsb
+was started as root (for example with
+.BR sudo ),
+so your browser's connection is not its user's.
+Start
+.B fsb
+as yourself.
+.TP
+.B fsb: warning: refused the launch URL: could not tell which user opened it
+On Linux,
+.B fsb
+could not find the owner of the connection (no
+.BR /proc ,
+WSL, a user namespace that hides other users), so it refuses the launch URL
+on this system.
 .TP
 .B Not found. This path is outside the folders fsb serves
 Shown in the interface for a path outside every root; start
@@ -791,11 +809,18 @@ the
 program and the browser it starts on Linux;
 .B open
 on macOS, briefly), where another user of the same machine can read it.
-On Linux that user still cannot use it:
+On Linux that user still cannot use it directly:
 .B fsb
 accepts the launch URL only from a connection of its own user, warns
 .RB ( "refused the launch URL" ),
 and the URL keeps working for your browser.
+A connection through a port forward or proxy counts as the user running it,
+so a forward you run lets through whoever can reach it.
+Where the owner of a connection cannot be determined (no
+.BR /proc ,
+WSL, some sandboxes), the launch URL is refused and
+.B fsb
+cannot be used.
 On macOS, which offers no such check, it is visible only while
 .B open
 runs; on a shared Mac use

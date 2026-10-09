@@ -24,11 +24,19 @@ if [ "${1:-}" != fixture ]; then
 			exit 1
 		fi
 	fi
-	# BusyBox has adduser but not useradd. TESTER_UID: see the Dockerfile.
+	# BusyBox has adduser but not useradd. TESTER_UID: see the Dockerfile;
+	# never root's. An image's own user with that uid (ubuntu:24.04 has
+	# "ubuntu" as 1000, the usual uid on a Linux host) makes way.
+	uid=${TESTER_UID:-1000}
+	[ "$uid" = 0 ] && uid=1000
+	taken=$(awk -F: -v u="$uid" '$3 == u { print $1 }' /etc/passwd)
+	if [ -n "$taken" ]; then
+		userdel -r "$taken" 2>/dev/null || deluser --remove-home "$taken"
+	fi
 	if command -v useradd >/dev/null; then
-		useradd -m -s /bin/sh -u "${TESTER_UID:-1000}" tester
+		useradd -m -s /bin/sh -u "$uid" tester
 	else
-		adduser -D -s /bin/sh -u "${TESTER_UID:-1000}" tester
+		adduser -D -s /bin/sh -u "$uid" tester
 	fi
 	exit 0
 fi

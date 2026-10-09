@@ -45,6 +45,8 @@ type Auth struct {
 	uid   int                                              // fsb's own user
 	owner func(server, client netip.AddrPort) (int, error) // nil: no check
 	warn  func(string)
+
+	refusals atomic.Int32
 }
 
 // RequireOwner makes the launch exchange accept only connections whose client
@@ -147,13 +149,17 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 		forbid(w)
 		return
 	}
+	// A used token is refused like a wrong one: no lookup, no warning, so
+	// replaying it costs nothing and fills no log.
+	if a.used.Load() {
+		forbid(w)
+		return
+	}
 	// Checked before the token is used, so that a refused connection leaves it
 	// for the person's own browser.
 	if a.owner != nil {
 		if why := a.notOwn(r); why != "" {
-			if a.warn != nil {
-				a.warn("refused the launch URL: " + why)
-			}
+			a.warnRefused(why)
 			forbid(w)
 			return
 		}
@@ -190,11 +196,29 @@ func (a *Auth) notOwn(r *http.Request) string {
 	uid, err := a.owner(server, client)
 	switch {
 	case err != nil:
-		return "could not tell which user opened it (" + err.Error() + ")"
-	case uid != a.uid:
-		return fmt.Sprintf("it was opened by another user (uid %d), who may have read it from a command line; your own browser can still use it", uid)
+		return "could not tell which user opened it (" + err.Error() + "); on this system the launch URL cannot be used"
+	case uid == a.uid:
+		return ""
+	case a.uid == 0:
+		return fmt.Sprintf("fsb runs as root, and the connection belongs to uid %d; start fsb as your own user", uid)
 	}
-	return ""
+	return fmt.Sprintf("it was opened by another user (uid %d), who may have read it from a command line; your own browser can still use it", uid)
+}
+
+// maxRefusalWarnings is how many refused launches are reported; another
+// user could otherwise fill the terminal or background.log with them.
+const maxRefusalWarnings = 3
+
+func (a *Auth) warnRefused(why string) {
+	if a.warn == nil {
+		return
+	}
+	switch n := a.refusals.Add(1); {
+	case n <= maxRefusalWarnings:
+		a.warn("refused the launch URL: " + why)
+	case n == maxRefusalWarnings+1:
+		a.warn("refused the launch URL again; further refusals are not reported")
+	}
 }
 
 // sameOrigin rejects requests that a cross-site page could have triggered.

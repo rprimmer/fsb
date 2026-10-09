@@ -141,3 +141,56 @@ func (w *warnings) all() []string {
 	defer w.mu.Unlock()
 	return append([]string(nil), w.msgs...)
 }
+
+// Once the person's browser has used the token, replaying it is refused like a
+// wrong token: no lookup (reading the connection table costs time) and no
+// warning (another user could fill the log).
+func TestAUsedTokenIsRefusedWithoutALookupOrWarning(t *testing.T) {
+	a, srv := launchServer(t)
+	w := &warnings{}
+	a.SetWarn(w.add)
+	var lookups atomic.Int32
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { lookups.Add(1); return 1001, nil })
+	a.used.Store(true) // the person's browser has been in
+	for range 5 {
+		if code := launch(t, a, srv); code != http.StatusForbidden {
+			t.Fatalf("replayed token = %d, want 403", code)
+		}
+	}
+	if n := lookups.Load(); n != 0 {
+		t.Errorf("%d lookups for a used token, want none", n)
+	}
+	if got := w.all(); len(got) != 0 {
+		t.Errorf("warnings for a used token: %q", got)
+	}
+}
+
+// Refusals before the token is used are reported, but only the first few.
+func TestRefusalWarningsAreLimited(t *testing.T) {
+	a, srv := launchServer(t)
+	w := &warnings{}
+	a.SetWarn(w.add)
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { return 1001, nil })
+	for range 10 {
+		launch(t, a, srv)
+	}
+	got := w.all()
+	if len(got) != maxRefusalWarnings+1 || !strings.Contains(got[len(got)-1], "not reported") {
+		t.Errorf("warnings after 10 refusals = %q; want %d, then one saying the rest are not reported", got, maxRefusalWarnings)
+	}
+}
+
+// fsb run as root (sudo fsb) refuses the person's own browser; the warning
+// says so instead of blaming another user.
+func TestRootFsbSaysSoInsteadOfBlamingAnotherUser(t *testing.T) {
+	a, srv := launchServer(t)
+	w := &warnings{}
+	a.SetWarn(w.add)
+	a.RequireOwner(0, func(netip.AddrPort, netip.AddrPort) (int, error) { return 1000, nil })
+	if code := launch(t, a, srv); code != http.StatusForbidden {
+		t.Fatalf("launch = %d, want 403", code)
+	}
+	if got := w.all(); len(got) != 1 || !strings.Contains(got[0], "runs as root") || strings.Contains(got[0], "another user") {
+		t.Errorf("warning = %q", got)
+	}
+}

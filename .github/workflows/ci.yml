@@ -71,6 +71,10 @@ jobs:
           FSB_E2E_BIG: '1'
           FSB_E2E_SKIP_SAFARI: '1'
         run: node --test --test-reporter=spec e2e/chrome.test.mjs
+      - name: Another user cannot use the launch URL (two real users)
+        run: |
+          go build -o "$RUNNER_TEMP/bin/fsb" ./cmd/fsb
+          PATH="$RUNNER_TEMP/bin:$PATH" e2e/linux/crossuser.sh --host
       - name: Keep screenshots of failures
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
