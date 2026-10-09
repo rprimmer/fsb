@@ -67,3 +67,7 @@ directory with test files. `smoke.sh` runs inside the container as `tester`. It 
   is an emulation artifact, not an Arch Linux problem.
 - `docker run --init` is needed: without an init process to reap them, a stopped
   background fsb lingers as a zombie and `--stop` reports that it did not stop.
+- Every rebuild adds to Docker's build cache, which is never trimmed on its own. After
+  many runs it filled Colima's 40 GB disk, and an image build failed with "No space
+  left on device". `docker system df` shows the usage; `docker builder prune -af`
+  clears the cache (the next build just takes longer).
