@@ -124,9 +124,11 @@ It is done in three layers, each assuming the one before failed.
 
 \begin{enumerate}
   \item \textbf{Escaping.}  The Markdown is converted by a library configured so that raw HTML
-        in the source becomes text; links carry no address at all (an attribute says what
-        they mean: a file on the disk, or a web address); images carry no source (a marker names
-        a local file); a remote or unsupported image becomes a text placeholder.  A link is
+        in the source becomes text; links carry no address at all, only a number that indexes
+        the converter's list of their targets (each a file on the disk or a web address),
+        so that a target never passes through HTML parsing, which would turn the NUL of an
+        escaped byte (\fq{API-10}) into U+FFFD; images carry no source either (a marker
+        indexes the list of local files to fetch); a remote or unsupported image becomes a text placeholder.  A link is
         resolved against the Markdown file's folder to a normalized absolute path, or dropped
         to plain text if it is not a relative path or an \code{http} or \code{https} address.
   \item \textbf{Sanitizing.}  The result goes through DOMPurify with a fixed list of allowed
@@ -139,8 +141,10 @@ It is done in three layers, each assuming the one before failed.
         silently invalidate the policy.  The page accepts messages only from its parent.
 \end{enumerate}
 
-Links are not followed inside the frame.  A click sends a message to the interface, which
-validates it and either changes the location to the target file's folder with the file selected,
+Links are not followed inside the frame.  A click sends the interface the link's number and
+the number of the rendering it belongs to; the interface ignores a message about an earlier
+rendering, looks the link up in its own list, so the frame supplies neither the kind of a
+link nor its target, and either changes the location to the target file's folder with the file selected,
 or opens a web address in a new tab without a referrer.  Images inside the roots are fetched by
 the interface, through the guarded image endpoint, and passed in as \code{data:} URLs, because the
 cookie's scope and \code{SameSite} would otherwise stop the opaque-origin frame from fetching them.

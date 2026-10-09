@@ -161,7 +161,11 @@ let another user take the session; Law~\ref{law:launch-owner} was then stated, a
 review found that a used token still caused a lookup and a warning on every replay (the
 law's first case now comes before the owner), and that the tests could not tell the
 client's end of a connection from \texttt{fsb}'s own, which would have satisfied the
-law's form while letting anyone through.
+law's form while letting anyone through.  A review of 1.0.11 found that a Markdown link
+in a folder whose name holds an escape (Law~\ref{law:wire}) led elsewhere: the target
+went through an HTML attribute, and HTML parsing turned the escape's NUL into U+FFFD.
+Law~\ref{law:link-path} held, since $\Link$ was right; what failed was carrying its
+result to the interface, which no law stated.  Law~\ref{law:link-exact} now does.
 
 \subsection{What the method did and did not find}
 

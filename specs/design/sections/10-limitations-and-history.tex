@@ -235,6 +235,14 @@ In brief:
         so a deny rule anchored to a place did not match it (Section~\ref{sec:aliases},
         1.0.11).  The differential test had tried every alias but only against secrets that
         rules matching a name anywhere protect.
+  \item Found by a review of 1.0.11, reproduced in Chrome: a Markdown link in a folder
+        whose name is not UTF-8 led to a different path, because the link's target went
+        through an HTML attribute and HTML parsing turned the NUL of the byte's escape
+        (\fq{API-10}) into U+FFFD.  Not a bypass: the altered path was checked like any
+        other.  Links now carry only an index into a list the interface keeps
+        (Section~\ref{sec:content}, 1.0.12).  The browser test of names that are not UTF-8
+        existed, but ran only against containers and never reached a Markdown link; the
+        fixture now makes such names on any Linux machine, so continuous integration runs it.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
@@ -257,7 +265,10 @@ add a seventh: what reaches the user is the release as installed, and the progra
 \texttt{fsb} starts.  Every check had passed inside the repository, where the
 \code{toolchain} line applies; only installing the tag as a user would showed that it
 did not.  A program \texttt{fsb} starts inherits more than its arguments (descriptors,
-environment, a terminal), and is itself a channel another user can read.
+environment, a terminal), and is itself a channel another user can read.  Finding 49
+adds an eighth: a value can be altered between parts that each pass their own tests (the
+converter, the sanitizer, the HTML parser, the request), and a test that skips where its
+case cannot arise must run somewhere it can.
 
 \subsection{Milestones}
 
@@ -274,6 +285,7 @@ Hardening & The audits and defects of the preceding subsection & Done, including
 M3 Public release & Public repository, documentation, a source release & Done: version 1.0 (October 2026), source only; no binaries and no Homebrew formula, by decision. \\
 Linux check & Five distributions in Docker; \code{/proc}, \code{/sys}, \code{/dev}; extended attributes; Quick Look; the browser suites against four distributions; an independent review & Done, October 2026: findings 32 to 38, fixed in 1.0.2 to 1.0.6. \\
 Linux browser & Opening the browser with \code{xdg-open}; the launch only from the user's own connection; Go 1.27.2 & Done, October 2026: findings 39 to 48, fixed in 1.0.7 to 1.0.11. \\
+Review of 1.0.11 & A review of the whole project at 1.0.11 & Done, October 2026: finding 49, fixed in 1.0.12. \\
 M4 Run & The stage-three requirements of the functional specification & Not planned: the project is finished and provided as-is. \\
 \bottomrule
 \end{tabular}

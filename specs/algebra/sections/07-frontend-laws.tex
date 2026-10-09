@@ -134,3 +134,13 @@ tab without a referrer.  Only base64 raster \code{data:} URLs fetched through th
 guarded preview endpoint are put into images.
 \Tests{web/src/lib/markdown.test.ts; e2e Markdown tests}
 \end{law}
+
+\begin{law}[A followed link is the resolved link]
+\label{law:link-exact}
+The target the interface opens when link $i$ of a rendering is followed is
+exactly $\Link(b,h_i)$, character for character, for every directory $b$,
+including one holding escapes of Law~\ref{law:wire}: targets are kept outside
+the markup, which carries only $i$, so neither sanitizing nor HTML parsing can
+alter them.  Each target is percent-decoded once, by $\Link$, and never again.
+\Tests{web/src/lib/markdown.test.ts: link targets stay out of the HTML, exactly as resolved; e2e: ``a Markdown link from a folder whose name is not UTF-8 reaches its sibling'', ``a Markdown link to a name holding \% is decoded once''}
+\end{law}

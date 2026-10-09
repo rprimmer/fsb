@@ -150,7 +150,13 @@ document; they are gathered here so a reader does not have to hunt for them.
         usual), and against four Linux distributions (48 passed each), while the Chrome
         suite ran after each.  For 1.0.6 it ran on 2026-10-09 on the Mac and against the
         same four (48 passed each; three runs first failed every mouse test because the
-        display had gone to sleep, and passed with it awake).
+        display had gone to sleep, and passed with it awake).  For 1.0.11 (2026-10-09):
+        48 passed on the Mac and against each of the four; the first Ubuntu run failed two
+        click tests and passed on a rerun.  For 1.0.12 (2026-10-09): 49 passed on the Mac
+        and 50 against Debian, Ubuntu and Fedora; the first Alpine run failed one click
+        test (the click never reached the Markdown frame) and passed 50 on a rerun.  Logs
+        of each run are in \code{e2e/artifacts/safari}.  1.0.7 to 1.0.10 were not run
+        separately.
   \item \textbf{An intermittent browser test, since explained.}  ``A Markdown file link
         opens that file inside fsb; a web link opens a new tab'' failed about one run in
         15 against Linux containers.  Diagnostics added to it showed the cause: the

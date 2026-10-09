@@ -30,7 +30,11 @@ Algebra & The laws, and the defects found by stating them (Section~\ref{sec:hist
 
 On every change: formatting, vetting, the Go tests under the race detector, the front-end
 tests, type checking, a build whose output must equal the committed one, an audit of the
-packages that ship, the Chrome browser tests, and timed fuzzing of the four fuzz targets.
+packages that ship, the Chrome browser tests (on Linux these include the names that are not
+UTF-8), timed fuzzing of the four fuzz targets, and a check that every test this
+specification and the algebraic one cite exists (\code{specs/tools/check-traceability.py}).
+The runner images are named (\code{ubuntu-24.04}, \code{macos-26}), not the moving
+\code{-latest} labels, like the actions, Node and the scanner.
 A scan for known vulnerabilities in the Go modules runs as well, and also every week on its
 own (\code{vuln-weekly.yml}), so that an advisory published between changes is reported
 without waiting for one.  On Linux, the two-user check of the launch URL
