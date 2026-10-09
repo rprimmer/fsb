@@ -99,6 +99,9 @@ func New(roots []string, deny, hide *rules.Set) (*Guard, error) {
 		if !fi.IsDir() {
 			return nil, fmt.Errorf("root %q is not a directory", r)
 		}
+		if throughSpecialRoot(real) {
+			return nil, fmt.Errorf("root %q is reached through a macOS special path (/.nofollow, /.resolve, /.vol); give its ordinary path", r)
+		}
 		// The same folder given twice, under any spelling, is served once.
 		if slices.ContainsFunc(g.rootInfo, func(o os.FileInfo) bool { return os.SameFile(o, fi) }) {
 			continue
@@ -395,6 +398,9 @@ func (g *Guard) entry(dir string, de fs.DirEntry, memo linkMemo) (Entry, bool) {
 		return Entry{}, false // vanished between ReadDir and Info
 	}
 	child := filepath.Join(dir, de.Name())
+	if throughSpecialRoot(child) {
+		return Entry{}, false // refused when opened, so not offered
+	}
 	e := Entry{
 		Name:      de.Name(),
 		IsDir:     de.IsDir(),

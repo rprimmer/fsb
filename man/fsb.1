@@ -648,8 +648,12 @@ and
 and is scoped to a random path prefix, so that the browser never sends it to
 another web
 server on 127.0.0.1 that does not know the prefix.
-Only the browser that used the launch URL learns the prefix: the URL handed to
-the program that opens the browser does not contain it.
+The launch URL does not contain the prefix; only the redirect that answers it
+does, so whoever first uses the launch URL learns it.
+On Linux that can only be your own browser (see below); on macOS another user
+would have to read the URL and use it in the moment
+.B open
+runs.
 On Linux, a request with the session cookie is also answered only on a
 connection of
 .BR fsb 's
@@ -771,7 +775,8 @@ On Linux, a connection of another user tried the launch URL, which it may have
 read from a command line.
 It was refused and the URL still works for you; another user on this machine
 is trying to reach your files.
-After three such warnings, further refusals are not reported.
+After three such warnings, further refused launches are not reported; refused
+requests with the session are counted separately.
 .TP
 .B fsb: warning: refused the launch URL: fsb runs as root
 .B fsb
@@ -781,6 +786,19 @@ so your browser's connection is not its user's.
 Start
 .B fsb
 as yourself.
+.TP
+.B fsb: warning: refused a request: a request with your session came from another user
+On Linux, another user presented your session cookie, which a server of theirs
+may have captured from your browser.
+The request was refused, and your own browser keeps working; restart
+.B fsb
+to start a new session.
+.TP
+.B fsb: warning: refused a request: could not tell which user sent a request with your session
+On Linux,
+.B fsb
+could not find the owner of a connection that carried your session cookie
+(see the launch case below); the next request tries again.
 .TP
 .B fsb: warning: refused the launch URL: could not tell which user opened it
 On Linux,

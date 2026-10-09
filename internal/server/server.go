@@ -39,11 +39,11 @@ type Config struct {
 	// Go to path box.
 	Home   string
 	Logger *log.Logger
-	// Warn receives warnings that are always shown, such as a launch URL
-	// refused because another user opened it.
+	// Warn receives warnings that are always shown, such as a launch URL or a
+	// session cookie refused because another user presented it.
 	Warn io.Writer
 	// UID and ConnOwner, when ConnOwner is set (connowner.Lookup on Linux),
-	// make the launch URL work only from a connection of user UID.
+	// make the launch URL and the session work only on connections of user UID.
 	UID       int
 	ConnOwner func(server, client netip.AddrPort) (int, error)
 	// Thumbnail draws a PNG picture of the document that prepare places in the

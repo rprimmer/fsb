@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/rprimmer/fsb/internal/rules"
 )
 
 // alias is the same location named through the data volume's firmlink.
@@ -148,5 +151,45 @@ func TestRootGivenAsAnAliasIsCanonicalized(t *testing.T) {
 	}
 	if _, err := readAll(t, g, filepath.Join(fx.home, ".ssh", "id_ed25519")); err == nil {
 		t.Error("a root given as an alias must still enforce the deny rules")
+	}
+}
+
+// Under --root /, the special root entries are not listed: opening them is
+// refused (throughSpecialRoot), so a listing must not offer them.
+func TestRootListingLeavesOutTheSpecialRootEntries(t *testing.T) {
+	deny, _ := rules.Parse(strings.NewReader(""), rules.ParseOptions{})
+	hide, _ := rules.Parse(strings.NewReader(""), rules.ParseOptions{})
+	g, err := New([]string{"/"}, deny, hide)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := g.List("/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name)
+	}
+	for _, special := range []string{".nofollow", ".resolve", ".vol"} {
+		if slices.Contains(names, special) {
+			t.Errorf("listing / shows %s", special)
+		}
+	}
+	if !slices.Contains(names, "Users") {
+		t.Fatalf("listing / does not show Users: %v", names)
+	}
+}
+
+// A root given through a special root entry would serve nothing; it is
+// refused when fsb starts, with a message.
+func TestARootThroughASpecialRootEntryIsRefused(t *testing.T) {
+	deny, _ := rules.Parse(strings.NewReader(""), rules.ParseOptions{})
+	home, _ := filepath.EvalSymlinks(t.TempDir())
+	if _, err := New([]string{"/.nofollow" + home}, deny, deny); err == nil {
+		t.Fatal("a root under /.nofollow was accepted")
+	}
+	if _, err := New([]string{home}, deny, deny); err != nil {
+		t.Fatalf("the same folder, spelled normally: %v", err)
 	}
 }

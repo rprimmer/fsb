@@ -284,3 +284,63 @@ func TestTheOwnerIsLookedUpOncePerConnection(t *testing.T) {
 		t.Errorf("%d lookups for five requests on one connection, want 1", n)
 	}
 }
+
+// The warning that the session cookie may have been captured is not used up
+// by refused launches: another user trying the token first must not be able
+// to silence it.
+func TestCookieWarningHasItsOwnBudget(t *testing.T) {
+	a, srv := launchServer(t)
+	w := &warnings{}
+	a.SetWarn(w.add)
+	var connUID atomic.Int64
+	connUID.Store(1001)
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { return int(connUID.Load()), nil })
+	for range maxRefusalWarnings + 2 {
+		launch(t, a, srv) // another user's attempts fill the launch warnings
+	}
+	connUID.Store(1000)
+	if code := launch(t, a, srv); code != http.StatusSeeOther {
+		t.Fatalf("own launch = %d", code)
+	}
+	connUID.Store(1001)
+	if code := session(t, a, srv, a.session); code != http.StatusForbidden {
+		t.Fatalf("replayed cookie = %d, want 403", code)
+	}
+	got := w.all()
+	if last := got[len(got)-1]; !strings.Contains(last, "captured") {
+		t.Errorf("no warning that the cookie may have been captured; warnings: %q", got)
+	}
+}
+
+// A failed lookup is not remembered for the connection: the next request on
+// it looks again, so one bad moment does not refuse a whole connection.
+func TestAFailedLookupIsNotRememberedForTheConnection(t *testing.T) {
+	a, srv := launchServer(t)
+	var calls atomic.Int32
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) {
+		if calls.Add(1) == 1 {
+			return 0, errors.New("not listed yet")
+		}
+		return 1000, nil
+	})
+	a.used.Store(true) // the browser has its session
+	client := &http.Client{Transport: &http.Transport{MaxConnsPerHost: 1}}
+	var codes []int
+	for range 3 {
+		req, _ := http.NewRequest("GET", srv.URL+"/"+a.Prefix()+"/api/status", nil)
+		req.AddCookie(&http.Cookie{Name: CookieName, Value: a.session})
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		codes = append(codes, resp.StatusCode)
+	}
+	if codes[0] != http.StatusForbidden || codes[1] != http.StatusOK || codes[2] != http.StatusOK {
+		t.Errorf("statuses on one connection = %v; want 403, then 200 once the owner is found", codes)
+	}
+	if n := calls.Load(); n != 2 {
+		t.Errorf("%d lookups; want 2 (the failure is not remembered, the success is)", n)
+	}
+}

@@ -32,13 +32,16 @@ const CookieName = "fsb_session"
 // the session cookie is set with that path. Browsers scope cookies by host and
 // never by port, so without this the cookie would be sent to every other web
 // server on 127.0.0.1 that the same browser visits; with it, the browser sends
-// the cookie only for URLs under the prefix, which no other server has.
+// the cookie only for URLs under the prefix, which no other server knows. The
+// launch URL ("/?token=...") therefore never names the prefix: it is in the
+// command line of the program that opens the browser, which other users can
+// read; only the redirect that sets the cookie names it.
 //
 // Where the platform can tell who owns a connection (Linux), the launch token
-// is accepted only from a connection of fsb's own user: the launch URL is in
-// the command line of the program that opens the browser, which other users
-// can read. Refusing a connection does not use the token up, so another user
-// who reads it and uses it first cannot keep the person's browser out.
+// and the session cookie are accepted only on a connection of fsb's own user,
+// so another user who reads the token or captures the cookie gains nothing.
+// Refusing a launch does not use the token up, so another user who tries it
+// first cannot keep the person's browser out.
 type Auth struct {
 	launch  string
 	session string
@@ -49,17 +52,19 @@ type Auth struct {
 	owner func(server, client netip.AddrPort) (int, error) // nil: no check
 	warn  func(string)
 
-	refusals atomic.Int32
+	launchRefusals, sessionRefusals atomic.Int32
 }
 
-// RequireOwner makes the launch exchange accept only connections whose client
-// end belongs to user uid, as owner reports (connowner.Lookup); a nil owner,
-// where the platform cannot tell, leaves the check off.
+// RequireOwner makes the launch exchange, and every request with the session,
+// accept only connections whose client end belongs to user uid, as owner
+// reports (connowner.Lookup); a nil owner, where the platform cannot tell,
+// leaves the check off.
 func (a *Auth) RequireOwner(uid int, owner func(server, client netip.AddrPort) (int, error)) {
 	a.uid, a.owner = uid, owner
 }
 
-// SetWarn sets where warnings go (a refused launch); by default, nowhere.
+// SetWarn sets where warnings go (a refused launch or session); by default,
+// nowhere.
 func (a *Auth) SetWarn(f func(string)) { a.warn = f }
 
 // NewAuth generates fresh 256-bit random secrets.
@@ -151,7 +156,7 @@ func Middleware(a *Auth, port int) func(http.Handler) http.Handler {
 			// the cookie, and once per connection).
 			if a.owner != nil {
 				if why := a.notOwn(r, false); why != "" {
-					a.warnRefused("refused a request: " + why)
+					a.warnRefused("refused a request: "+why, true)
 					forbid(w)
 					return
 				}
@@ -177,7 +182,7 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 	// for the person's own browser.
 	if a.owner != nil {
 		if why := a.notOwn(r, true); why != "" {
-			a.warnRefused("refused the launch URL: " + why)
+			a.warnRefused("refused the launch URL: "+why, false)
 			forbid(w)
 			return
 		}
@@ -217,11 +222,12 @@ func (a *Auth) notOwn(r *http.Request, launch bool) string {
 	return fmt.Sprintf("a request with your session came from another user (uid %d): your session cookie may have been captured; restart fsb to start a new session", uid)
 }
 
-// connOwner remembers, for one connection, who owns its client end.
+// connOwner remembers, for one connection, who owns its client end, once it
+// has been found.
 type connOwner struct {
-	once sync.Once
-	uid  int
-	err  error
+	mu    sync.Mutex
+	found bool
+	uid   int
 }
 
 type connKey struct{}
@@ -235,13 +241,23 @@ func ConnContext(ctx context.Context, _ net.Conn) context.Context {
 
 // connectionOwner returns the owner of r's connection, from the connection's
 // memory when the server set ConnContext. It is the owner, not a verdict,
-// that is remembered.
+// that is remembered, and only once found: a failed lookup is tried again on
+// the next request, so one bad moment does not refuse a whole connection.
 func (a *Auth) connectionOwner(r *http.Request) (int, error) {
-	if c, ok := r.Context().Value(connKey{}).(*connOwner); ok {
-		c.once.Do(func() { c.uid, c.err = a.lookupOwner(r) })
-		return c.uid, c.err
+	c, ok := r.Context().Value(connKey{}).(*connOwner)
+	if !ok {
+		return a.lookupOwner(r)
 	}
-	return a.lookupOwner(r)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.found {
+		return c.uid, nil
+	}
+	uid, err := a.lookupOwner(r)
+	if err == nil {
+		c.found, c.uid = true, uid
+	}
+	return uid, err
 }
 
 func (a *Auth) lookupOwner(r *http.Request) (int, error) {
@@ -263,15 +279,22 @@ func (a *Auth) lookupOwner(r *http.Request) (int, error) {
 // user could otherwise fill the terminal or background.log with them.
 const maxRefusalWarnings = 3
 
-func (a *Auth) warnRefused(msg string) {
+// warnRefused reports a refusal. Refused launches and refused sessions are
+// counted apart, so that attempts at the launch URL cannot use up the warning
+// that the session cookie may have been captured.
+func (a *Auth) warnRefused(msg string, session bool) {
 	if a.warn == nil {
 		return
 	}
-	switch n := a.refusals.Add(1); {
+	count, what := &a.launchRefusals, "launch URL"
+	if session {
+		count, what = &a.sessionRefusals, "session"
+	}
+	switch n := count.Add(1); {
 	case n <= maxRefusalWarnings:
 		a.warn(msg)
 	case n == maxRefusalWarnings+1:
-		a.warn("refused another connection of another user; further refusals are not reported")
+		a.warn("refused the " + what + " again; further refusals are not reported")
 	}
 }
 
