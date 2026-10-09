@@ -155,7 +155,13 @@ was queued, and that looked complete when a folder could not be opened (the sear
 definition now says so); a collator that left two names in input order (the row order
 now ends on the raw characters); and several limits that did not bind (a count that could
 never trip, a work limit that ignored excluded entries).  The design specification's
-history lists them; each has a test that fails without its fix.
+history lists them; each has a test that fails without its fix.  Later reviews of
+opening the browser on Linux found that the launch URL, in the opener's command line,
+let another user take the session; Law~\ref{law:launch-owner} was then stated, and its
+review found that a used token still caused a lookup and a warning on every replay (the
+law's first case now comes before the owner), and that the tests could not tell the
+client's end of a connection from \texttt{fsb}'s own, which would have satisfied the
+law's form while letting anyone through.
 
 \subsection{What the method did and did not find}
 

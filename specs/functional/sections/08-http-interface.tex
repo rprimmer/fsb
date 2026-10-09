@@ -130,7 +130,7 @@ Status & Meaning \\
 200, 206 & Success (206: a range of the file). \\
 303 & The launch token was accepted; the session cookie is set (\rid{SEC-5}). \\
 400 & A parameter is out of range (\code{bytes}). \\
-403 & No valid session, a wrong \code{Host}, a cross-origin request, or a URL outside the prefix (Section~\ref{sec:security}); or a permission error on a non-denied path (\rid{RUL-7}). \\
+403 & No valid session, a wrong \code{Host}, a cross-origin request, a URL outside the prefix, or, on Linux, a launch from a connection not of \texttt{fsb}'s own user (Section~\ref{sec:security}, \rid{SEC-16}); or a permission error on a non-denied path (\rid{RUL-7}). \\
 404 & Not found: the path does not exist, is denied, lies outside the roots, or is not a regular file or folder (\rid{SEC-14}). \\
 405 & A method other than \code{GET} or \code{HEAD}. \\
 409 & The file is stored only in the cloud and was not read (\rid{SEC-13}). \\

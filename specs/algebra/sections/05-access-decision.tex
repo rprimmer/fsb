@@ -173,6 +173,30 @@ The frontend forms every request relative to the page's own directory.
 \Tests{httpguard/httpguard\_test.go::TestOnlyURLsUnderThePrefixExist, TestSessionCookieIsScopedToThePrefix; e2e ``the session cookie is scoped to fsb's own prefix'' (fails if the path is widened); web/src/lib/laws.test.ts::apiBase}
 \end{law}
 
+\begin{law}[The launch is the user's own, and a refusal costs the user nothing]
+\label{law:launch-owner}
+A request on connection $c$ presenting token $t$ is answered, on Linux, by
+\[
+  \Exchange(t,c) =
+  \begin{cases}
+    403 & \text{if } t\neq\tau \text{ or } \Used,\\
+    403 & \text{if } \Owner(c) \text{ is undefined or } \Owner(c)\neq u,\\
+    303^{*} & \text{otherwise,}
+  \end{cases}
+\]
+where $303^{*}$ sets the session cookie and $\Used$, with the cases tried in that order, and on macOS by the same without the second
+case.  Three consequences.  (1) At most one request per start is answered 303.
+(2) A 403 never changes $\Used$: however many connections of other users present
+$\tau$ first, the first request of the user's own connection still succeeds.
+(3) No connection $c$ with $\Owner(c)\neq u$, or with no defined owner, is ever
+answered 303 on Linux, so a user who reads the launch URL from another user's
+command line gains no session.  The first case also means that once $\Used$
+holds, $\Owner$ is not evaluated at all (no lookup, no warning).  Not covered: a
+connection through a forwarder has the forwarder's owner, so a forward run by $u$
+carries $u$'s identity for whoever reaches it.
+\Tests{httpguard/owner\_test.go::TestLaunchFromAnotherUsersConnectionIsRefusedAndTheTokenKept, TestLaunchWhoseOwnerIsUnknownIsRefusedAndTheTokenKept, TestAWrongTokenIsRefusedWithoutALookup, TestAUsedTokenIsRefusedWithoutALookupOrWarning; httpguard/owner\_linux\_test.go::TestLaunchWithTheRealOwnerLookup; connowner/connowner\_linux\_test.go::TestProcConnOwnerFindsTheClientEnd; e2e/linux/crossuser.sh}
+\end{law}
+
 \begin{law}[Canonical form is stable]
 \label{law:canon}
 $\Canon(\Canon(p))=\Canon(p)$.

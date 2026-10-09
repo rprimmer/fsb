@@ -34,6 +34,38 @@ under it.  The browser then sends the cookie only for URLs under the prefix, whi
 server has.  The prefix is a scope, not a secret: the session cookie is still required.  The
 front end forms every URL relative to its own location so that this needs no configuration.
 
+\subsection{The launch comes from the user's own connection (Linux)}
+\label{sec:launchowner}
+
+The launch URL is in the command line of the program that opens the browser (and on
+Linux of the browser itself, until it first uses the URL), where other users can
+read it.  On Linux, \code{exchange} therefore accepts a correct token only from a
+connection whose client end belongs to \texttt{fsb}'s own user (\fq{SEC-16}).  The
+order is the point: (1) a wrong token is refused with no lookup; (2) a token already
+used is refused the same way, with no lookup and no warning, so replaying it costs
+nothing and fills no log; (3) only then is the owner looked up, and a refusal leaves
+the token unused, so another user who reads the URL and uses it first cannot keep
+the user's own browser out; (4) the token is consumed atomically.  Refusals are
+reported on standard error (\code{Config.Warn}), at most three times and once more
+to say the rest are not, with the reason but never the token.
+
+The lookup (\code{internal/connowner}) takes the server's and the client's address
+from the request (\code{http.LocalAddrContextKey} and \code{RemoteAddr}, IPv4-mapped
+addresses unmapped) and finds the row of \code{/proc/net/tcp} or \code{tcp6} whose
+own address is the client's and whose peer is the server's: the client's end.
+\texttt{fsb}'s own end lists the same two addresses the other way round, and would
+name \texttt{fsb}'s own user, so matching it would let anyone through; the test
+compares the matched row's socket inode with the client's.  Rows in ESTABLISHED,
+FIN\_WAIT1 or FIN\_WAIT2 count (a client may close its sending side after its
+request); TIME\_WAIT rows carry no owner.  The table's uid column is given in
+\texttt{fsb}'s own user namespace, so a sandboxed browser (Flatpak, Snap) should show
+as the user (not yet tried, Section~\ref{sec:untested}); the overflow uid, which every user the namespace cannot name shares, is
+treated as unknown.  An unreadable table or a missing row is unknown too, and
+unknown is refused: failing open would let the check be skipped by any condition
+that hides a row.  A port forward counts as the user running it.  macOS has no
+comparable table, so there \code{RequireOwner} is given no lookup and the check is
+off.
+
 \subsection{Headers and framing}
 
 Every response carries the headers of \fq{SEC-9}.  Two endpoints relax framing, deliberately

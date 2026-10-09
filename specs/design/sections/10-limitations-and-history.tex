@@ -40,6 +40,10 @@
         opened; an attacker who could rewrite that link during the call could learn the text of a denied
         path (not its contents).  Requires a same-user attacker.
   \item Rule files are read at startup only.
+  \item On macOS the launch URL is visible to other users for the moment \code{open} runs, and
+        no connection-owner check exists there.  On Linux, a port forward the user runs counts as
+        the user, and where the owner of a connection cannot be determined (no \code{/proc}, WSL,
+        some sandboxes) the launch URL is refused, so \texttt{fsb} cannot be used there.
   \item \code{--stop} would take another program of the same user for \texttt{fsb} if that
         program's executable file were itself named \code{fsb}.
   \item Under emulation (an amd64 container on Apple silicon), \code{--status} and \code{--stop}
@@ -54,7 +58,7 @@
 \subsection{History of defects found by the design's own checks}
 
 Stating the laws of the algebraic specification, auditing every comparison of names and paths,
-and using the running application, and running it on Linux, found thirty-eight defects, all fixed and each covered by a test where
+and using the running application, and running it on Linux, found forty-six defects, all fixed and each covered by a test where
 the underlying condition could be reproduced at all (Section~\ref{sec:untested} says where it could not).
 In brief:
 
@@ -185,6 +189,40 @@ In brief:
         \code{--stop}'s impostor check was refused by the start-time check before it reached
         the impostor check, and that the preview pane's Copy path skipped the shell quoting
         of finding 35.
+  \item Found by the vulnerability scan of continuous integration on 2026-10-09: six advisories against the
+        standard library's \code{net/http} in Go 1.27.1 (GO-2026-6603, -6609, -6611, -6612,
+        -6613, -6617).  Four concern the HTTP/2 server, which \texttt{fsb} never uses; the
+        unbounded \code{Range} header was reachable through downloads with a session.  Fixed by
+        Go 1.27.2 (1.0.7).
+  \item Found by installing 1.0.7 the way a user does: \code{go install} ignores a module's
+        \code{toolchain} line, so the pinned Go 1.27.2 reached no one who installed a release, and
+        every earlier release had been built with whatever Go the user had.  The module's
+        minimum (\code{go} line) is now 1.27.2, which an older Go downloads (1.0.8).
+  \item Found by an independent review of opening the browser on Linux (1.0.9): the background
+        child passed its handoff pipe and its marker variable to the browser it started, so a
+        browser holding the pipe kept \code{fsb --background} waiting, and an \texttt{fsb} later
+        started from the browser's process tree took itself for a background child, printing
+        nothing and taking over the PID file (Section~\ref{sec:port}).
+  \item Found by the same review: without a display, \code{xdg-open} ran \code{w3m}, which fetched
+        the launch URL itself and left the printed one used up, with no message.
+        \code{xdg-open} is no longer run without a display.
+  \item Found by the same review: the launch URL, in the command line of \code{xdg-open} and the
+        browser, could be read by another user, who could use it first and take the session.
+        First documented (1.0.9), then closed on Linux by accepting the launch only from a
+        connection of \texttt{fsb}'s own user (Section~\ref{sec:launchowner}, 1.0.10).
+  \item Found by the same review: Control-C and \code{fsb --stop} waited out the opener's grace
+        period, and a background instance stopped during it was reported as running.
+  \item Found by an independent review of the launch-owner check: after the user's browser had
+        used the token, another user could present it without limit, each time making
+        \texttt{fsb} read the connection table and print a warning (about 4\,GB of log an hour).
+        A used token is now refused before any lookup, and warnings are limited.
+  \item Found by the same review: the check took the overflow uid, which every user an unusual
+        user namespace cannot name shares, for an owner; missed a client that closes its sending
+        side after its request; reported an unreadable table as a missing row; and, with
+        \texttt{fsb} run as root, blamed ``another user'' for the user's own browser.  The tests
+        compared owners by uid only, so a lookup that matched \texttt{fsb}'s own end of the
+        connection, letting anyone through, would have passed them; they now compare socket
+        inodes.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
@@ -202,7 +240,12 @@ claimed there (the extended-attribute test skipped on the containers' file syste
 \code{--stop}'s impostor check used \code{sleep} and \code{nc}, which on BusyBox exit at once when
 started under another name).  Findings 37 and 38 add a sixth: a claim in the
 documentation is as much in need of review as the code; ``covers Snap'' had been written,
-and read, without anyone listing which Snap packages keep which folder.
+and read, without anyone listing which Snap packages keep which folder.  Findings 39 to 46
+add a seventh: what reaches the user is the release as installed, and the programs
+\texttt{fsb} starts.  Every check had passed inside the repository, where the
+\code{toolchain} line applies; only installing the tag as a user would showed that it
+did not.  A program \texttt{fsb} starts inherits more than its arguments (descriptors,
+environment, a terminal), and is itself a channel another user can read.
 
 \subsection{Milestones}
 
@@ -215,9 +258,10 @@ Milestone & Scope & Status \\
 M0 Skeleton & Repository, CI, guard, matcher, middleware & Done. \\
 M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file folder measured. Daily use by the author still to confirm. \\
 M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
-Hardening & The audits and defects of the preceding subsection & Done, including three independent reviews in October 2026 (the last found nothing new) and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
+Hardening & The audits and defects of the preceding subsection & Done, including independent reviews in October 2026 of 1.0 (three rounds, the last finding nothing new), of the Linux work, of opening the browser on Linux, and of the launch-owner check, and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
 M3 Public release & Public repository, documentation, a source release & Done: version 1.0 (October 2026), source only; no binaries and no Homebrew formula, by decision. \\
 Linux check & Five distributions in Docker; \code{/proc}, \code{/sys}, \code{/dev}; extended attributes; Quick Look; the browser suites against four distributions; an independent review & Done, October 2026: findings 32 to 38, fixed in 1.0.2 to 1.0.6. \\
+Linux browser & Opening the browser with \code{xdg-open}; the launch only from the user's own connection; Go 1.27.2 & Done, October 2026: findings 39 to 46, fixed in 1.0.7 to 1.0.10. \\
 M4 Run & The stage-three requirements of the functional specification & Not planned: the project is finished and provided as-is. \\
 \bottomrule
 \end{tabular}

@@ -19,6 +19,9 @@
   \item[$\Entry$] A directory entry as shown in a listing.
   \item[$\Row$] An entry as the frontend sorts it: name, type, size, and
         modification time.
+  \item[$\Conn$] A TCP connection to \texttt{fsb}, given by the server's and the
+        client's address and port.
+  \item[$\Uid$] A user, as the system's numeric user ID.
 \end{description}
 
 \subsection{Environment}
@@ -30,6 +33,13 @@ location of $p$ after all symbolic links and aliases (such as the macOS
 firmlink prefix \code{/System/Volumes/Data}) are resolved, defined when $p$
 exists.  $\Canon$ reduces aliases of the same location to one spelling.
 
+For the session: $\tau$ is the launch token of this start, $u\in\Uid$ the user
+\texttt{fsb} runs as, and $\Used\in\Bool$ whether the token has been exchanged
+(initially false).  $\Owner:\Conn\rightharpoonup\Uid$ is the user owning the
+client end of a connection.  On Linux it is defined when the connection table
+lists that end with a user \texttt{fsb}'s user namespace can name; on macOS it is
+never consulted.
+
 \subsection{Operations}
 
 The operations analyzed are, on the server:
@@ -37,7 +47,7 @@ The operations analyzed are, on the server:
   \Open,\ \List,\ \Search,\ \text{and the endpoints built on them,}
 \]
 namely file download, head, metadata, image and PDF preview, and archive
-listing; and on the client the pure functions $\Cmp$ and $\Sort$ (row order),
+listing; the launch exchange $\Exchange$; and on the client the pure functions $\Cmp$ and $\Sort$ (row order),
 $\Filter$, $\ToHash$ and $\FromHash$, $\Goto$, and $\Link$.
 
 \subsection{Conventions}

@@ -51,6 +51,25 @@ The token then no longer works, so a copy of the URL left in shell or browser
 history is useless.
 \end{req}
 
+\begin{req}{SEC-16}
+On Linux, the launch token is accepted only from a connection whose client end
+belongs to \texttt{fsb}'s own user, as the system's table of connections
+(\code{/proc/net/tcp}, \code{/proc/net/tcp6}) reports it: the launch URL is in the
+command line of the program that opens the browser (\rid{CLI-5}), which other users
+can read.  A connection of another user, or one whose owner cannot be determined
+(no readable table, no matching entry, or an owner that \texttt{fsb}'s user
+namespace cannot name), is refused with status 403, and the token stays unused, so
+the user's own browser can still use it.  \texttt{fsb} warns on standard error,
+naming the reason (another user's uid, \texttt{fsb} running as root, or an owner
+that could not be determined) but never the token; after three such warnings it
+says once that further refusals are not reported.  Once the token has been used, a
+request presenting it is refused like a wrong token, with no lookup and no warning.
+A connection made through a port forward or proxy counts as the user running it.
+Where the owner cannot be determined at all (no \code{/proc}, WSL, some sandboxes),
+the launch URL is always refused, so \texttt{fsb} cannot be used there.  On macOS,
+which offers no such check, the token is accepted from any connection.
+\end{req}
+
 \begin{req}{SEC-6}
 The session cookie is \code{HttpOnly} (scripts cannot read it) and
 \code{SameSite=Strict}.  Its path is the random prefix.

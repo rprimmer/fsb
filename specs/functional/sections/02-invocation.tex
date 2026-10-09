@@ -37,11 +37,24 @@ and nothing past a file's size is read or sent.
 
 \begin{req}{CLI-5}
 By default the launch URL is opened in the user's default browser.  \code{--no-open}
-only prints it.  \code{--browser NAME} opens it in the named macOS application
-instead (for example \code{"Google Chrome"}).  A name that begins with \code{-} or
-contains a NUL, carriage return or newline is refused before anything starts.  If
-the browser cannot be opened, \texttt{fsb} says so, keeps running, and the printed
-URL remains usable.  On systems other than macOS the URL is only printed.
+only prints it.  \code{--browser NAME} opens it in a browser of the user's choosing
+instead: on macOS the named application (for example \code{"Google Chrome"}), on
+Linux the named program, run with the URL as its one argument (for example
+\code{firefox}; it takes no arguments of its own).  A name that begins with \code{-}
+or contains a NUL, carriage return or newline is refused before anything starts.
+On Linux the default browser is opened with \code{xdg-open}, and only when there is
+a display (\code{DISPLAY} or \code{WAYLAND\_DISPLAY}): without one, as over
+\code{ssh}, \code{xdg-open} could start a text browser that would use the
+single-use URL itself, so the URL is only printed; \code{--browser} is run
+regardless.  The program \texttt{fsb} runs to open the browser on Linux runs in a
+session of its own (Control-C in the terminal stops \texttt{fsb}, not the browser),
+with no terminal input or output, and inherits nothing of \texttt{fsb}'s
+background handoff (\rid{CLI-17}); one still running after 3 seconds, as a browser
+it started may be, counts as having opened it.  \texttt{fsb} serves before it opens
+the browser.  If the browser cannot be opened, \texttt{fsb} says so, with a hint
+that names \code{--browser} only when it was given and, on Linux, \code{xdg-utils}
+when \code{xdg-open} is missing; it keeps running, and the printed URL remains
+usable.  On systems other than macOS and Linux the URL is only printed.
 \end{req}
 
 \begin{req}{CLI-6}
@@ -131,8 +144,10 @@ that cannot be parsed is an error, as in \rid{CLI-14}.
 \code{--background} starts \texttt{fsb} detached from the terminal (in a new
 session, so closing the terminal or pressing Control-C there does not stop it),
 prints the startup output of \rid{CLI-9}, and returns to the shell once it is
-serving.  If startup fails, the error is reported as in \rid{CLI-13} and nothing is
-left running.  If an \texttt{fsb} is already running (as found by \rid{CLI-18}), the
+serving and has opened the browser (\rid{CLI-5}); the line naming its process is
+printed only then.  If startup fails, or the instance is stopped before that point
+(Control-C does not reach it, but \code{fsb --stop} does), the error is reported as
+in \rid{CLI-13}, the start counts as failed, and nothing is left running.  If an \texttt{fsb} is already running (as found by \rid{CLI-18}), the
 start is refused with a message naming it.  Output after startup (such as
 \code{--debug} logging) goes to the log file of \rid{CFG-6}.
 \end{req}

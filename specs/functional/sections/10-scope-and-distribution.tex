@@ -36,9 +36,11 @@ never building a command from a path.  Excluded from this version because they w
 make the server start local processes at the user's request; ``Copy path'' covers the
 need meanwhile.  The one program this version runs on a user's file is Quick Look's
 \code{qlmanage}, on macOS, a fixed program run on a private copy (\rid{SEC-15}); the
-others it starts are fixed too and are given no file: \code{open} for the browser
-(\rid{CLI-5}), \code{ps} and \code{lsof} to find a running \texttt{fsb} on macOS
-(\rid{CLI-18}), and \texttt{fsb} itself for \code{--background}.
+others it starts are given no file: \code{open} for the browser on macOS and
+\code{xdg-open} on Linux, or the browser the user names with \code{--browser}, each
+given only the launch URL (\rid{CLI-5}); \code{ps} and \code{lsof} to find a running
+\texttt{fsb} on macOS (\rid{CLI-18}); and \texttt{fsb} itself for
+\code{--background}.
 \end{req}
 
 \begin{req}{FUT-6}
@@ -55,7 +57,10 @@ The program shall be published in a public repository under the MIT license.
 \begin{req}{DST-2}
 Releases are source releases: a version tag in the public repository, installed with
 \code{go install github.com/rprimmer/fsb/cmd/fsb@latest} or built with \code{make
-install} from a clone.  No prebuilt binaries are provided, so none needs signing or
+install} from a clone.  The module requires Go 1.27.2, the release with the
+standard library's current security fixes; an older Go (1.21 or later) downloads it
+when installing, since \code{go install} honors the module's minimum Go version but
+not a \code{toolchain} line.  No prebuilt binaries are provided, so none needs signing or
 notarization; a program built locally is not quarantined by macOS.
 \end{req}
 

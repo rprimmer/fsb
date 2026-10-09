@@ -8,10 +8,11 @@
 \toprule
 Component & Responsibility \\
 \midrule
-\code{cmd/fsb} & Command line, startup, the launch URL, opening the browser, shutdown; the remembered port, background mode and finding a running \texttt{fsb} (\code{config.go}, \code{background.go}, \code{process.go}; \code{process\_linux.go} reads \code{/proc}, \code{process\_other.go} runs \code{ps} and \code{lsof}). \\
+\code{cmd/fsb} & Command line, startup, the launch URL, opening the browser (\code{open\_darwin.go} runs \code{open}, \code{open\_linux.go} \code{xdg-open} or the \code{--browser} program), shutdown; the remembered port, background mode and finding a running \texttt{fsb} (\code{config.go}, \code{background.go}, \code{process.go}; \code{process\_linux.go} reads \code{/proc}, \code{process\_other.go} runs \code{ps} and \code{lsof}). \\
 \code{internal/rules} & The rule dialect: parsing, matching, name folding, the built-in rules. Knows nothing of files. \\
 \code{internal/guard} & The chokepoint: opening, listing, searching, reading heads, metadata, sniffed endpoints, archive listing, the hard-link index. The only code that touches the file system on behalf of a request. \\
-\code{internal/httpguard} & The middleware that makes a local web server safe: host and origin checks, the session, the prefix, security headers. Knows nothing of files. \\
+\code{internal/httpguard} & The middleware that makes a local web server safe: host and origin checks, the session, the prefix, security headers, and (given an owner lookup) the check that the launch comes from \texttt{fsb}'s own user. Knows nothing of files. \\
+\code{internal/connowner} & On Linux, which user owns the client end of a connection, from \code{/proc/net/tcp} and \code{tcp6} (Section~\ref{sec:launchowner}); elsewhere nothing. Kept out of \code{httpguard}, which may not read the file system. \\
 \code{internal/quicklook} & On macOS, runs Apple's \code{qlmanage} to draw a Quick Look picture of a private copy that the guard made; elsewhere answers that there is no picture, before anything is copied or run. The only code that runs another program on a file. Knows nothing of rules. \\
 \code{internal/server} & The endpoints. Turns guard results into HTTP, and guard errors into status codes; \code{wire.go} keeps every byte of the names it sends (Section~\ref{sec:wirenames}). \\
 \code{web} & The embedded front end, and the fixed page that renders Markdown. \\
@@ -45,8 +46,9 @@ Component & Responsibility \\
 Dependencies point one way: \code{server} uses \code{guard} and \code{httpguard};
 \code{server} also uses \code{quicklook}, which draws only the copy that
 \code{guard.CopyForQuickLook} made; \code{guard} uses \code{rules};
-\code{rules}, \code{httpguard} and \code{quicklook} use nothing of the program's
-own.  \code{cmd/fsb} assembles them.
+\code{rules}, \code{httpguard}, \code{connowner} and \code{quicklook} use nothing of
+the program's own.  \code{cmd/fsb} assembles them, and hands \code{connowner}'s
+lookup to \code{server}, which hands it to \code{httpguard}.
 
 \subsection{Life of a request}
 
@@ -77,8 +79,23 @@ rule files (or their built-in defaults); \code{--show-deny} and \code{--show-ign
 print them and exit here, so they show exactly what would be enforced.  It then builds the guard from the roots (served once each, compared by
 identity) and rules, names the credential locations the guard must also protect,
 starts the hard-link index building in the background, binds the loopback port
-(\code{choosePort}, Section~\ref{sec:port}), prints the launch URL, and only then
-serves.  A failure at any step before serving stops the program with a message.
+(\code{choosePort}, Section~\ref{sec:port}), prints the launch URL, starts serving,
+and only then opens the browser: on Linux, waiting for the opener can take up to
+3 seconds (\code{openerGrace}), while a browser it started is already asking for the
+page.  Waiting for the opener ends early when \code{fsb} is stopped, and a background
+instance stopped then does not report itself as running.  A failure at any step
+before serving stops the program with a message.
+
+The program that opens the browser is given the launch URL as its one argument,
+never through a shell.  On Linux (\code{open\_linux.go}) it runs in a session of its
+own, so Control-C in the terminal reaches \texttt{fsb} and not the browser, with no
+terminal input or output, so that a browser's messages do not fill the terminal and
+its writes after \texttt{fsb} exits cannot stop it.  \code{xdg-open} is not run
+without a display (\code{DISPLAY} or \code{WAYLAND\_DISPLAY}), where it would fall back
+to a text browser that fetches, and so uses up, the launch URL itself; an explicit
+\code{--browser} is run regardless.  An opener still running after the grace
+period counts as success, since a browser it started may stay in the foreground
+until it is closed.
 
 \subsection{The port, and background mode}
 \label{sec:port}
@@ -99,8 +116,13 @@ holds it (\code{portHolder}, below) so that the message can name it.
 \code{--background} re-executes the program with \code{FSB\_BACKGROUND\_CHILD=1}
 in a new session (\code{setsid}), so the child has no controlling terminal.  The
 child's standard output and error are a writer (\code{handoff}) that goes to a pipe
-on file descriptor~3 until the child is serving, then to
-\code{\~{}/.config/fsb/background.log}.  The parent copies the pipe to its own output
+on file descriptor~3 until the child is serving and has opened the browser, then to
+\code{\~{}/.config/fsb/background.log}.  The child at once marks descriptor~3
+close-on-exec and removes the variable, so that nothing it starts (the browser,
+\code{qlmanage}) inherits either: a browser holding the pipe would keep the parent
+waiting, and an \texttt{fsb} started later from the browser's process tree would
+take itself for a background child.  Inside \code{run}, the child knows itself by
+its \code{handoff} writer instead.  The parent copies the pipe to its own output
 until a fixed ready marker arrives (success: it releases the child and exits) or the
 pipe closes without one (the child failed and has printed why; nothing is left
 running).  The child records its process number in \code{\~{}/.config/fsb/pid} and

@@ -21,8 +21,15 @@ document; they are gathered here so a reader does not have to hunt for them.
         was also used by hand from the Mac's browser (\code{e2e/linux/browse.sh}), on all
         five, on 2026-10-08.  But every container shares the Docker virtual machine's kernel
         (Linux 6.8, arm64, with amd64 emulated by QEMU), so no other kernel, no file
-        system but overlay and tmpfs, and no Linux desktop or browser running on Linux
-        has been tried.  Linux Mint was represented by Ubuntu 24.04, its base.  Under
+        system but overlay and tmpfs, and no Linux desktop has been tried.  Opening the
+        browser on Linux was tried with the real \code{xdg-open} and Firefox ESR under a
+        virtual X display (Xvfb) in Debian, with \code{--browser firefox-esr}, and with
+        \code{w3m} and no display; not on a real desktop, under Wayland, or with a
+        sandboxed (Flatpak or Snap) browser, whose connections the launch-owner check
+        should see as the user's (Section~\ref{sec:launchowner}) but has not been seen
+        to.  The connection table's byte order was checked on little-endian machines only
+        (the test pins the order with a literal; no big-endian machine ran it), and WSL,
+        where the check is expected to refuse every launch, was not tried.  Linux Mint was represented by Ubuntu 24.04, its base.  Under
         emulation, \code{--status} and \code{--stop} cannot recognize \texttt{fsb}
         (QEMU makes every emulated process's \code{/proc/PID/exe} name itself), and under
         the browser suites' load \texttt{fsb} dies with garbage-collector errors (``found
@@ -140,11 +147,16 @@ document; they are gathered here so a reader does not have to hunt for them.
         this machine, by hand, each time a feature changed; for 1.0.2 to 1.0.5 it was
         run once, after the last of them (2026-10-08: 48 passed, 3 skipped as
         usual), and against four Linux distributions (48 passed each), while the Chrome
-        suite ran after each.  It was not run for 1.0.6.
-  \item \textbf{An intermittent browser test.}  ``A Markdown file link opens that file
-        inside fsb; a web link opens a new tab'' timed out once, against an Ubuntu
-        container, waiting for its click on the web link, and passed on rerun; the cause
-        is not established.
+        suite ran after each.  For 1.0.6 it ran on 2026-10-09 on the Mac and against the
+        same four (48 passed each; three runs first failed every mouse test because the
+        display had gone to sleep, and passed with it awake).
+  \item \textbf{An intermittent browser test, since explained.}  ``A Markdown file link
+        opens that file inside fsb; a web link opens a new tab'' failed about one run in
+        15 against Linux containers.  Diagnostics added to it showed the cause: the
+        Markdown frame measured its links once, and headless Chrome could lay out the
+        sandboxed frame before it knew its size, so every link measured at 0,0 with no
+        size and the click missed.  The frame now measures again after layout; 25 runs
+        against Fedora passed.
   \item \textbf{No independent review has been performed by anyone other than the
         author and an assistant.}  The ``independent reviews'' recorded in
         Section~\ref{sec:history} and \code{specs/SECURITY.md} were done by an assistant
@@ -155,10 +167,10 @@ document; they are gathered here so a reader does not have to hunt for them.
         (\fq{DST-2}), so there is no signing, notarization or Gatekeeper behavior to test,
         but \code{go install} from the public repository was tried only once, on the
         machine of Section~\ref{sec:environment}, right after release.
-  \item \textbf{Vulnerability scanning runs on every push, not on a schedule.}
-        \code{govulncheck} and \code{npm audit} run in continuous integration; nothing
-        rescans an unchanged commit when a new advisory is published, and no automated
-        dependency updates are proposed.
+  \item \textbf{Only the Go scan runs on a schedule.}  \code{govulncheck} runs on every
+        push and every week; \code{npm audit} runs on every push only, so an advisory
+        against a front-end package is reported at the next change.  No automated
+        dependency updates are proposed, by decision.
 \end{itemize}
 
 \subsection{What this does not mean}
