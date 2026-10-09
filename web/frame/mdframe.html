@@ -33,6 +33,7 @@ body { font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sa
 <script>
 (function () {
   var root = document.getElementById('md');
+  var gen = 0; // which render is shown: the app ignores messages about another
   // Only the app that framed us may send content, and it sends HTML it has already
   // sanitized. This page's policy still forbids scripts, handlers and any network
   // access, so even markup that slipped through could not do anything.
@@ -40,6 +41,7 @@ body { font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sa
     if (e.source !== parent) return;
     var d = e.data;
     if (!d || d.type !== 'fsb-md-render' || typeof d.html !== 'string') return;
+    gen = d.gen;
     root.innerHTML = d.html;
     report();
     // Again once laid out: a frame can be measured before it knows its own
@@ -49,21 +51,23 @@ body { font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sa
   window.addEventListener('resize', report);
 
   // Layout facts let the app (and its browser tests) locate links without
-  // reaching into this frame.
+  // reaching into this frame. A link is named by its index: its target never
+  // enters this page.
   function report() {
     var links = [].map.call(root.querySelectorAll('a[data-fsb]'), function (a) {
       var r = a.getBoundingClientRect();
-      return { kind: a.getAttribute('data-fsb'), href: a.getAttribute('data-href'), x: r.left, y: r.top, w: r.width, h: r.height };
+      return { link: Number(a.getAttribute('data-fsb-link')), x: r.left, y: r.top, w: r.width, h: r.height };
     });
     parent.postMessage({
       type: 'fsb-md-ready',
+      gen: gen,
       text: root.innerText.slice(0, 4000),
       links: links,
       images: root.querySelectorAll('img[src]').length
     }, '*');
   }
   function send(a) {
-    parent.postMessage({ type: 'fsb-md-link', kind: a.getAttribute('data-fsb'), href: a.getAttribute('data-href') }, '*');
+    parent.postMessage({ type: 'fsb-md-link', gen: gen, link: Number(a.getAttribute('data-fsb-link')) }, '*');
   }
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[data-fsb]') : null;

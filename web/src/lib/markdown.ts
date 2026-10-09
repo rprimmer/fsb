@@ -8,10 +8,13 @@
 //
 // Rules applied here:
 //  - raw HTML in the source is shown as text, never as markup;
-//  - links never carry an href. A relative link becomes a "file" link that the
-//    app resolves inside its own guarded API; an http(s) link becomes an
-//    "external" link that the app opens in a new tab without a referrer;
-//    anything else (javascript:, data:, file:, ...) is shown as plain text;
+//  - links never carry an href, nor their target at all: the element holds only
+//    an index into `links`, so a target never passes through HTML parsing
+//    (which would turn the NUL marking a byte that is not UTF-8 into U+FFFD). A
+//    relative link becomes a "file" link that the app resolves inside its own
+//    guarded API; an http(s) link becomes an "external" link that the app opens
+//    in a new tab without a referrer; anything else (javascript:, data:, file:,
+//    ...) is shown as plain text;
 //  - images are never given a src here. A relative image is marked so the app
 //    can fetch it through the guarded preview endpoint; a remote image is
 //    replaced by a placeholder, so opening a Markdown file makes no request.
@@ -22,6 +25,8 @@ export interface RenderedMarkdown {
   html: string;
   /** Local images to fetch, by index: the marker is `data-fsb-img="N"`. */
   images: string[];
+  /** Link targets, by index: the marker is `data-fsb-link="N"`. */
+  links: LinkTarget[];
 }
 
 export type LinkTarget =
@@ -68,6 +73,7 @@ function esc(s: string): string {
 
 export function renderMarkdown(source: string, baseDir: string): RenderedMarkdown {
   const images: string[] = [];
+  const links: LinkTarget[] = [];
   const md = new Marked({ gfm: true, breaks: false });
   md.use({
     renderer: {
@@ -78,8 +84,8 @@ export function renderMarkdown(source: string, baseDir: string): RenderedMarkdow
         const inner = this.parser.parseInline(tokens);
         const t = resolveLink(baseDir, href);
         if (t.kind === 'none') return inner;
-        const data = t.kind === 'file' ? t.path : t.url;
-        return `<a data-fsb="${t.kind}" data-href="${esc(data)}" tabindex="0" role="link">${inner}</a>`;
+        links.push(t);
+        return `<a data-fsb="${t.kind}" data-fsb-link="${links.length - 1}" tabindex="0" role="link">${inner}</a>`;
       },
       image({ href, text }: Tokens.Image) {
         const t = resolveLink(baseDir, href);
@@ -92,7 +98,7 @@ export function renderMarkdown(source: string, baseDir: string): RenderedMarkdow
       },
     },
   });
-  return { html: md.parse(source, { async: false }) as string, images };
+  return { html: md.parse(source, { async: false }) as string, images, links };
 }
 
 /** Splice fetched images (as data: URLs) into rendered HTML. Unfetched markers become placeholders. */

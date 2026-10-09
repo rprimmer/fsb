@@ -484,9 +484,8 @@ export function defineSuite({ label, launch }) {
       assert.equal(h.xfo, 'SAMEORIGIN');
     });
 
-    test('a Markdown file link opens that file inside fsb; a web link opens a new tab', async () => {
-      await open(fx.work);
-      await preview('README.md');
+    /** The rendered Markdown's links, once laid out and still, and a way to find their centers. */
+    async function settledMdLinks() {
       // Wait for the links to be laid out, not just rendered: the frame can
       // report them before layout, at 0,0 with no size, and a click there lands
       // on nothing (seen 2026-10-09 against Fedora, after the wait below).
@@ -501,6 +500,22 @@ export function defineSuite({ label, launch }) {
       let last = '';
       const box = JSON.parse(await waitFor(async () => { const b = await frameBox(); const same = b === last; last = b; await sleep(100); return same && b; }, { message: 'the Markdown frame to settle' }));
       const center = (l) => ({ x: box.x + l.x + l.w / 2, y: box.y + l.y + l.h / 2 });
+      return { info, box, center };
+    }
+
+    /** Clicks the rendered Markdown's one file link and waits for `name` to be selected and previewed. */
+    async function followMdFileLink(name) {
+      const { info, center } = await settledMdLinks();
+      const file = center(info.links.find((l) => l.kind === 'file'));
+      await d.click(file.x, file.y);
+      await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === name, { message: `${name} to be selected in its folder` });
+      return waitFor(async () => { const s = await paneSummary(name); return s?.ready ? s : null; }, { message: `the preview of ${name}` });
+    }
+
+    test('a Markdown file link opens that file inside fsb; a web link opens a new tab', async () => {
+      await open(fx.work);
+      await preview('README.md');
+      const { info, box, center } = await settledMdLinks();
       // Record window.open rather than spawning a real tab.
       await d.eval(`window.__opened = []; window.open = (...a) => { window.__opened.push(a); return null; };
         window.__msgs = []; window.addEventListener('message', (e) => window.__msgs.push(e.data?.type)); return true`);
@@ -519,6 +534,25 @@ export function defineSuite({ label, launch }) {
       await d.click(file.x, file.y);
       await waitFor(async () => (await d.eval(`return document.querySelector('.row.selected .name')?.textContent`)) === 'main.go', { message: 'main.go to be selected in its folder' });
       assert.match(await d.eval(`return location.hash`), /src\?select=main\.go$/);
+    });
+
+    // From the independent review of 1.0.11 (F1): a link's target went through
+    // an HTML attribute, whose parsing turned the NUL that marks a byte that is
+    // not UTF-8 into U+FFFD, so the link led to a different path.
+    test('a Markdown link from a folder whose name is not UTF-8 reaches its sibling', async (t) => {
+      if (!fx.nonUtf8) return t.skip('only Linux can hold such a name');
+      await open(`${fx.home}/spoof/caf\u0000E9`);
+      await preview('notes.md');
+      const s = await followMdFileLink('sibling.txt');
+      assert.equal(s.text, 'the sibling');
+      assert.equal(await d.eval(`return location.hash`), hashFor(`${fx.home}/spoof/caf\u0000E9`) + '?select=sibling.txt');
+    });
+
+    test('a Markdown link to a name holding % is decoded once', async () => {
+      await open(`${fx.home}/spoof`);
+      await preview('links.md');
+      const s = await followMdFileLink('100%.txt');
+      assert.equal(s.text, 'one hundred percent');
     });
 
     test('Markdown can be viewed as source, and back', async () => {

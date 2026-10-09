@@ -8,6 +8,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { NOTES_MD } from './fixture.mjs';
 import { sleep } from './util.mjs';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -73,10 +74,13 @@ export async function startContainerServer(name, fx) {
     const setx = (...args) => { try { exec(['setfattr', ...args], { stdio: 'ignore' }); return true; } catch { return false; } };
     fx.xattrs = setx('-n', 'user.com.example.note', '-v', 'hello from an xattr', data);
     fx.xattrsHex = fx.xattrs && setx('-n', 'user.com.example.blob', '-v', '0xdeadbeef0001', data);
-    // Latin-1 "café.txt": byte 0xE9 is not UTF-8.  fx.nonUtf8 is its path as the
-    // interface holds it: the byte escaped as NUL and two hex digits (API-10).
+    // The names of fixture.mjs's makeNonUtf8, which tar from the Mac cannot
+    // carry: Latin-1 "café.txt" and a folder "café" (byte 0xE9 is not UTF-8).
+    // fx.nonUtf8 is the file's path as the interface holds it: the byte escaped
+    // as NUL and two hex digits (API-10).
     fx.nonUtf8 = join(fx.home, 'spoof', 'caf\u0000E9.txt');
-    exec(['sh', '-c', `printf 'bonjour\\n' > "$(printf '%s/spoof/caf\\351.txt' "$1")"`, 'sh', fx.home]);
+    exec(['sh', '-c', `d="$(printf '%s/spoof/caf\\351' "$1")"; printf 'bonjour\\n' > "$d.txt" && mkdir -p "$d" && printf '%s' "$2" > "$d/notes.md" && printf 'the sibling\\n' > "$d/sibling.txt"`,
+      'sh', fx.home, NOTES_MD]);
 
     // Started as on the Mac, without --port: fsb picks a port and remembers it in
     // ~/.config/fsb, which the listing tests expect to see.  Colima forwards

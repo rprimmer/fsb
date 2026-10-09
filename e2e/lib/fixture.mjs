@@ -135,6 +135,25 @@ function setXattr(file, name, value) {
   }
 }
 
+/**
+ * Names that are not UTF-8, which only Linux can hold (APFS refuses them):
+ * Latin-1 "café.txt", and a folder "café" whose notes.md links to its sibling.
+ * Returns the file's path as the interface holds it: the byte 0xE9 escaped as
+ * NUL and two hex digits (API-10). e2e/lib/container.mjs makes the same names
+ * inside a container; keep the two alike.
+ */
+export function makeNonUtf8(home) {
+  const raw = (rest) => Buffer.concat([Buffer.from(join(home, 'spoof', 'caf')), Buffer.from([0xe9]), Buffer.from(rest)]);
+  writeFileSync(raw('.txt'), 'bonjour\n');
+  mkdirSync(raw(''));
+  writeFileSync(raw('/notes.md'), NOTES_MD);
+  writeFileSync(raw('/sibling.txt'), 'the sibling\n');
+  return join(home, 'spoof', 'caf\u0000E9.txt');
+}
+
+/** notes.md in the folder whose name is not UTF-8. */
+export const NOTES_MD = '[the sibling](sibling.txt)\n';
+
 const put = (path, content) => {
   mkdirSync(join(path, '..'), { recursive: true });
   writeFileSync(path, content);
@@ -169,6 +188,9 @@ export function makeFixture({ big = false } = {}) {
   put(join(home, 'spoof', 'invoice\u202Etxt.exe'), 'x');
   put(join(home, 'spoof', 'two\nlines.txt'), 'x');
   put(join(home, 'spoof', 'שלום.txt'), 'x'); // real right-to-left text is left alone
+  // A Markdown link to a name holding a literal %, written %25 as Markdown needs.
+  put(join(home, 'spoof', 'links.md'), '[a percent](100%25.txt)\n');
+  put(join(home, 'spoof', '100%.txt'), 'one hundred percent\n');
 
   put(join(work, 'src', 'main.go'), 'package main\n\nimport "fmt"\n\n// greet prints a greeting.\nfunc greet(name string) string { return fmt.Sprintf("hello, %s", name) }\n\nfunc main() { fmt.Println(greet("fsb")) }\n');
   put(join(work, 'src', 'deep', 'er', 'Needle-Deep.txt'), 'needle deep\n');
@@ -221,5 +243,6 @@ export function makeFixture({ big = false } = {}) {
   mkdirSync(join(work, 'special'), { recursive: true });
   const fifoPath = join(work, 'special', 'a.pipe');
   const hasFifo = mkfifoOrNull(fifoPath);
-  return { root, home, work, xattrs, xattrsHex, homeRows, fifoPath: hasFifo ? fifoPath : null };
+  const nonUtf8 = process.platform === 'linux' ? makeNonUtf8(home) : null;
+  return { root, home, work, xattrs, xattrsHex, homeRows, nonUtf8, fifoPath: hasFifo ? fifoPath : null };
 }

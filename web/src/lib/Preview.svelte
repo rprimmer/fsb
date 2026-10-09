@@ -29,7 +29,7 @@
   import { ApiError, apiPath, getArchive, getHead, getMeta, pdfURL, previewURL, quicklookURL, type ArchiveListing, type Head, type Meta, type Row } from './api';
   import { mapLimit, readCapped } from './fetchcap';
   import { basename, dirname, displayName, formatDate, formatSize, kindOf, modeString, pathToHash } from './format';
-  import { fillImages, renderMarkdown } from './markdown';
+  import { fillImages, renderMarkdown, type LinkTarget } from './markdown';
   import { formatFor, languageFor, looksLikeArchive, looksLikeImage, looksLikePdf, looksLikeQuickLook, parseDelimited, plural, prettyJSON } from './preview';
 
   const languages = {
@@ -218,13 +218,17 @@
   let frame = $state<HTMLIFrameElement | null>(null);
   let frameLoaded = $state(false);
   let frameInfo = $state('');
+  // The links of what the frame shows, which it names by index, and a count of
+  // renders so that a message about an earlier one is ignored.
+  let mdLinks: LinkTarget[] = [];
+  let mdGen = 0;
 
   const PURIFY = {
     ALLOWED_TAGS: [
       'a', 'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
       'em', 'strong', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'span', 'input',
     ],
-    ALLOWED_ATTR: ['data-fsb', 'data-href', 'tabindex', 'role', 'alt', 'src', 'class', 'align', 'start', 'type', 'checked', 'disabled'],
+    ALLOWED_ATTR: ['data-fsb', 'data-fsb-link', 'tabindex', 'role', 'alt', 'src', 'class', 'align', 'start', 'type', 'checked', 'disabled'],
   };
 
   const MAX_IMAGES = 20;
@@ -260,7 +264,8 @@
       const urls = await mapLimit(r.images.slice(0, MAX_IMAGES), IMAGE_FETCHES, (p) => fetchImage(p, ctrl.signal));
       if (ctrl.signal.aborted) return;
       const clean = DOMPurify.sanitize(fillImages(r.html, urls), PURIFY);
-      target.contentWindow?.postMessage({ type: 'fsb-md-render', html: clean }, '*');
+      mdLinks = r.links;
+      target.contentWindow?.postMessage({ type: 'fsb-md-render', html: clean, gen: ++mdGen }, '*');
     })();
     return () => ctrl.abort();
   });
@@ -275,15 +280,22 @@
   function onMessage(e: MessageEvent) {
     if (!frame || e.source !== frame.contentWindow) return;
     const d = e.data;
-    if (!d || typeof d !== 'object') return;
+    if (!d || typeof d !== 'object' || d.gen !== mdGen) return;
+    const linkAt = (i: unknown) => (Number.isInteger(i) ? mdLinks[i as number] : undefined);
     if (d.type === 'fsb-md-ready') {
-      frameInfo = JSON.stringify({ text: String(d.text ?? ''), links: Array.isArray(d.links) ? d.links : [], images: Number(d.images) || 0 });
-    } else if (d.type === 'fsb-md-link' && typeof d.href === 'string') {
-      if (d.kind === 'file' && d.href.startsWith('/')) {
-        location.hash = pathToHash(dirname(d.href), basename(d.href));
-      } else if (d.kind === 'external') {
+      // For the browser tests: each link's target, with where the frame laid it out.
+      const links = (Array.isArray(d.links) ? d.links : []).map((l: Record<string, unknown>) => {
+        const t = linkAt(l?.link);
+        return { kind: t?.kind ?? 'none', href: t?.kind === 'file' ? t.path : t?.kind === 'external' ? t.url : '', x: l?.x, y: l?.y, w: l?.w, h: l?.h };
+      });
+      frameInfo = JSON.stringify({ text: String(d.text ?? ''), links, images: Number(d.images) || 0 });
+    } else if (d.type === 'fsb-md-link') {
+      const t = linkAt(d.link);
+      if (t?.kind === 'file' && t.path.startsWith('/')) {
+        location.hash = pathToHash(dirname(t.path), basename(t.path));
+      } else if (t?.kind === 'external') {
         try {
-          const u = new URL(d.href);
+          const u = new URL(t.url);
           if (u.protocol === 'http:' || u.protocol === 'https:') window.open(u.href, '_blank', 'noopener,noreferrer');
         } catch {
           /* ignore */

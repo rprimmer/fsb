@@ -37,12 +37,28 @@ test('raw HTML is text, never markup', () => {
 });
 
 test('links carry no href', () => {
-  const { html } = renderMarkdown('[a](b.md) [c](https://e.com/x?q="1") [d](javascript:alert(1)) [e](<a b.md>) <https://auto.link>', base);
+  const { html, links } = renderMarkdown('[a](b.md) [c](https://e.com/x?q="1") [d](javascript:alert(1)) [e](<a b.md>) <https://auto.link>', base);
   assert.ok(!/\shref=/i.test(html), html);
-  assert.ok(html.includes('data-fsb="file" data-href="/Users/me/docs/b.md"'));
+  assert.ok(html.includes('data-fsb="file" data-fsb-link="0"'), html);
+  assert.deepEqual(links[0], { kind: 'file', path: '/Users/me/docs/b.md' });
   assert.ok(html.includes('data-fsb="external"'));
   assert.ok(!/javascript/i.test(html.replace(/>[^<]*</g, '><')), 'the dropped link keeps only its text');
   assert.ok(html.includes('</a> d <a'), html);
+});
+
+// A link's target never goes through HTML: HTML parsing turns NUL, which marks
+// a byte that is not UTF-8 (API-10), into U+FFFD, so a link from such a folder
+// led elsewhere (independent review of 1.0.11, F1). The attribute holds only an
+// index into `links`, as images do.
+test('link targets stay out of the HTML, exactly as resolved', () => {
+  const r = renderMarkdown('[s](sibling.txt) [p](100%25.txt) [w](https://e.com/a%20b)', '/tmp/caf\u0000E9');
+  assert.deepEqual(r.links, [
+    { kind: 'file', path: '/tmp/caf\u0000E9/sibling.txt' },
+    { kind: 'file', path: '/tmp/caf\u0000E9/100%.txt' },
+    { kind: 'external', url: 'https://e.com/a%20b' },
+  ]);
+  assert.ok(!r.html.includes('\u0000') && !r.html.includes('caf') && !r.html.includes('e.com'), r.html);
+  assert.deepEqual([...r.html.matchAll(/data-fsb-link="(\d+)"/g)].map((m) => m[1]), ['0', '1', '2']);
 });
 
 test('quotes in link targets cannot break out of the attribute', () => {
