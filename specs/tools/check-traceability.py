@@ -58,10 +58,12 @@ for src in SOURCES:
         name = name.replace('\\_', '_').replace('\\', '')
         if name not in go_funcs:
             missing.append(f'{rel}: Go test {name}')
-    for title in re.findall(r'e2e:?\s*``(.+?)\'\'', text):
-        t = detex(title)
-        if t and t not in suite:
-            missing.append(f'{rel}: e2e test "{t}"')
+    # Every title of a list (e2e: ``a'', ``b'' and ``c''), not only the first.
+    for seg in re.findall(r'e2e:?\s*((?:``.+?\'\'(?:,?\s*(?:and\s+)?(?=``))?)+)', text):
+        for title in re.findall(r'``(.+?)\'\'', seg):
+            t = detex(title)
+            if t and t not in suite:
+                missing.append(f'{rel}: e2e test "{t}"')
     for m in re.finditer(r'web:\s*([\w.]+\.test\.ts)(?:\}?\s*\(([^)]*)\))?', text):
         fname = m.group(1)
         path = os.path.join(ROOT, 'web/src/lib', fname)

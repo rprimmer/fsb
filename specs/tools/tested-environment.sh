@@ -4,7 +4,7 @@
 # right before a release, and commit the result: do not hand-edit it, and do
 # not run it speculatively on a machine that did not run the tests.
 #
-# usage: specs/tools/tested-environment.sh > specs/design/sections/appendix-environment.tex
+# usage: specs/tools/tested-environment.sh   (writes that file itself)
 
 set -eu
 cd "$(dirname "$0")/../.."   # repo root
@@ -224,7 +224,7 @@ named above.
 This section is generated, not written by hand.  On the machine that ran the tests:
 
 \begin{lstlisting}[language=bash]
-specs/tools/tested-environment.sh > specs/design/sections/appendix-environment.tex
+specs/tools/tested-environment.sh
 make -C specs design
 \end{lstlisting}
 TEX
