@@ -484,7 +484,13 @@ export function defineSuite({ label, launch }) {
     test('a Markdown file link opens that file inside fsb; a web link opens a new tab', async () => {
       await open(fx.work);
       await preview('README.md');
-      const info = await waitFor(mdInfo, { message: 'the Markdown to render' });
+      // Wait for the links to be laid out, not just rendered: the frame can
+      // report them before layout, at 0,0 with no size, and a click there lands
+      // on nothing (seen 2026-10-09 against Fedora, after the wait below).
+      const info = await waitFor(async () => {
+        const i = await mdInfo();
+        return i && i.links.length && i.links.every((l) => l.w > 0 && l.h > 0) && i;
+      }, { message: 'the Markdown links to be laid out' });
       // Click only once the frame has stopped moving: a click made while the pane
       // was still settling missed the link now and then (about one run in 15
       // against a Linux container, 2026-10-08).
