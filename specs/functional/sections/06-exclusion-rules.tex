@@ -53,7 +53,9 @@ any spelling that the file system equates (\rid{NAM-1}).
 Every spelling that the file system resolves to a denied file is refused.  This
 includes other letter cases, decomposed accents, characters that fold to ASCII
 (\rid{NAM-1}), doubled or trailing separators, dot segments, symbolic-link and
-firmlink aliases, and resource-fork names such as \code{file/..namedfork/rsrc}.
+firmlink aliases, and resource-fork names such as \code{file/..namedfork/rsrc}.  A
+path through one of macOS's special root entries that name every path again
+(\code{/.nofollow}, \code{/.resolve}, \code{/.vol}) is refused outright.
 \end{req}
 
 \begin{req}{RUL-6}

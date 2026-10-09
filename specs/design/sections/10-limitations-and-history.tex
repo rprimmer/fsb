@@ -58,7 +58,7 @@
 \subsection{History of defects found by the design's own checks}
 
 Stating the laws of the algebraic specification, auditing every comparison of names and paths,
-and using the running application, and running it on Linux, found forty-six defects, all fixed and each covered by a test where
+and using the running application, and running it on Linux, found forty-eight defects, all fixed and each covered by a test where
 the underlying condition could be reproduced at all (Section~\ref{sec:untested} says where it could not).
 In brief:
 
@@ -223,6 +223,18 @@ In brief:
         compared owners by uid only, so a lookup that matched \texttt{fsb}'s own end of the
         connection, letting anyone through, would have passed them; they now compare socket
         inodes.
+  \item Found by an independent review of the whole core before the final release
+        (reproduced with Chromium and two users): the launch URL named the path prefix,
+        and since 1.0.9 it was in a command line other users can read.  A server of another
+        user on another port, asked by a page the user's browser visited once for a URL
+        under the prefix, received the session cookie and could replay it.  The launch URL
+        now names no prefix, and on Linux a request with the cookie must come from the
+        user's own connection (Section~\ref{sec:launchowner}, 1.0.11).
+  \item Found by the same review: under \code{--root /}, \code{/.nofollow/}\emph{path}
+        named a file a second time and kept the prefix through symbolic-link resolution,
+        so a deny rule anchored to a place did not match it (Section~\ref{sec:aliases},
+        1.0.11).  The differential test had tried every alias but only against secrets that
+        rules matching a name anywhere protect.
 \end{enumerate}
 
 The lesson common to several: name equality is a property of the volume, so deny checks may over-match but
@@ -240,7 +252,7 @@ claimed there (the extended-attribute test skipped on the containers' file syste
 \code{--stop}'s impostor check used \code{sleep} and \code{nc}, which on BusyBox exit at once when
 started under another name).  Findings 37 and 38 add a sixth: a claim in the
 documentation is as much in need of review as the code; ``covers Snap'' had been written,
-and read, without anyone listing which Snap packages keep which folder.  Findings 39 to 46
+and read, without anyone listing which Snap packages keep which folder.  Findings 39 to 48
 add a seventh: what reaches the user is the release as installed, and the programs
 \texttt{fsb} starts.  Every check had passed inside the repository, where the
 \code{toolchain} line applies; only installing the tag as a user would showed that it
@@ -258,10 +270,10 @@ Milestone & Scope & Status \\
 M0 Skeleton & Repository, CI, guard, matcher, middleware & Done. \\
 M1 Crawl & Browsing, listing, filtering, sorting, rules & Done; 100{,}000-file folder measured. Daily use by the author still to confirm. \\
 M2 Walk & Preview, hover peek, search, attributes, columns, rendered Markdown, PDF, archives & Built and tested in Chrome and Safari; not yet on real cloud placeholders or in Firefox. \\
-Hardening & The audits and defects of the preceding subsection & Done, including independent reviews in October 2026 of 1.0 (three rounds, the last finding nothing new), of the Linux work, of opening the browser on Linux, and of the launch-owner check, and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
+Hardening & The audits and defects of the preceding subsection & Done, including independent reviews in October 2026 of 1.0 (three rounds, the last finding nothing new), of the Linux work, of opening the browser on Linux, of the launch-owner check, and of the whole core before the final release, and continuous integration on macOS and Linux.  A professional penetration test was planned but, by the owner's decision, not done. \\
 M3 Public release & Public repository, documentation, a source release & Done: version 1.0 (October 2026), source only; no binaries and no Homebrew formula, by decision. \\
 Linux check & Five distributions in Docker; \code{/proc}, \code{/sys}, \code{/dev}; extended attributes; Quick Look; the browser suites against four distributions; an independent review & Done, October 2026: findings 32 to 38, fixed in 1.0.2 to 1.0.6. \\
-Linux browser & Opening the browser with \code{xdg-open}; the launch only from the user's own connection; Go 1.27.2 & Done, October 2026: findings 39 to 46, fixed in 1.0.7 to 1.0.10. \\
+Linux browser & Opening the browser with \code{xdg-open}; the launch only from the user's own connection; Go 1.27.2 & Done, October 2026: findings 39 to 48, fixed in 1.0.7 to 1.0.11. \\
 M4 Run & The stage-three requirements of the functional specification & Not planned: the project is finished and provided as-is. \\
 \bottomrule
 \end{tabular}

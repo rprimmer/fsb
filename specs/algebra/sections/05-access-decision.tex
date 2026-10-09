@@ -155,9 +155,12 @@ not over-match.
 \label{law:alias-fold}
 $\Canon$ recognizes the data-volume prefix and the firmlink directories
 component by component, comparing components with $\Fold$, so no spelling of
-\code{/System/Volumes/Data/Users} escapes reduction.  Slicing by byte length
+\code{/System/Volumes/Data/Users} escapes reduction.  A path whose first
+component is, up to $\Fold$, one of the special root entries
+(\code{.nofollow}, \code{.resolve}, \code{.vol}) has no canonical form and is
+refused: it names a file a second time in a way reduction does not undo.  Slicing by byte length
 does not have this property, because a folded spelling can be longer or shorter.
-\Tests{guard/foldalias\_test.go::TestRootOfSlashHonoursDenyRulesThroughFoldedFirmlinkSpellings; guard/firmlink\_darwin\_test.go}
+\Tests{guard/foldalias\_test.go::TestRootOfSlashHonoursDenyRulesThroughFoldedFirmlinkSpellings; guard/firmlink\_darwin\_test.go; guard/differential\_test.go::TestDifferentialEverySpellingOfASecretIsRefused (special root entries, anchored rules)}
 \end{law}
 
 \begin{law}[The session is scoped to a random path]
@@ -168,7 +171,10 @@ address.  All URLs of \texttt{fsb} therefore live under a random 128-bit prefix
 $/\pi/$ fixed at launch; the cookie is set with \code{Path=/$\pi$/}; and a
 request whose path is not under the prefix is refused exactly like an
 unauthenticated one, whatever cookie it carries.  A cookie that is sent only for
-paths under $/\pi/$ is never sent to another server, which has no such path.
+paths under $/\pi/$ is never sent to another server that does not know $\pi$;
+so $\pi$ is never written where another user can read it: the launch URL names
+no prefix, and only the redirect that sets the cookie names $\pi$ (finding~47
+of the design specification).
 The frontend forms every request relative to the page's own directory.
 \Tests{httpguard/httpguard\_test.go::TestOnlyURLsUnderThePrefixExist, TestSessionCookieIsScopedToThePrefix; e2e ``the session cookie is scoped to fsb's own prefix'' (fails if the path is widened); web/src/lib/laws.test.ts::apiBase}
 \end{law}
@@ -191,7 +197,10 @@ $\tau$ first, the first request of the user's own connection still succeeds.
 (3) No connection $c$ with $\Owner(c)\neq u$, or with no defined owner, is ever
 answered 303 on Linux, so a user who reads the launch URL from another user's
 command line gains no session.  The first case also means that once $\Used$
-holds, $\Owner$ is not evaluated at all (no lookup, no warning).  Not covered: a
+holds, $\Owner$ is not evaluated at all (no lookup, no warning).  Likewise, on
+Linux a request on $c$ with the session cookie is served only if $\Owner(c)=u$,
+$\Owner$ being evaluated only for a valid cookie and once per connection; so a
+captured cookie gives another user nothing either.  Not covered: a
 connection through a forwarder has the forwarder's owner, so a forward run by $u$
 carries $u$'s identity for whoever reaches it.
 \Tests{httpguard/owner\_test.go::TestLaunchFromAnotherUsersConnectionIsRefusedAndTheTokenKept, TestLaunchWhoseOwnerIsUnknownIsRefusedAndTheTokenKept, TestAWrongTokenIsRefusedWithoutALookup, TestAUsedTokenIsRefusedWithoutALookupOrWarning; httpguard/owner\_linux\_test.go::TestLaunchWithTheRealOwnerLookup; connowner/connowner\_linux\_test.go::TestProcConnOwnerFindsTheClientEnd; e2e/linux/crossuser.sh}

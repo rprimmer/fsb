@@ -61,6 +61,16 @@ cut a folded spelling (\code{/S}\emph{long-s}\code{ystem}) in the middle of a
 character and left it unreduced.  The firmlink table is read from
 \code{/usr/share/firmlinks}, with a built-in copy as fallback.
 
+macOS also names every path a second time through special entries of the root folder:
+\code{/.nofollow/}\emph{path} opens \emph{path} without following a final symbolic link,
+and \code{/.resolve} and \code{/.vol} reach files by identity.  Resolving symbolic links
+keeps the \code{/.nofollow} prefix, so a rule anchored to a place (\code{\~{}/private/})
+would not match the second name; under \code{--root /} the file was served (finding~48).
+A path whose first component is one of these entries, compared with the rules' name
+equality, is refused (\code{throughSpecialRoot}), before roots and rules are consulted;
+a listing of \code{/} does not offer them, and a root given through one is refused at
+startup.
+
 \subsection{Roots}
 \label{sec:roots}
 

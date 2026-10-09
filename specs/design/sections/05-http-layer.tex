@@ -23,15 +23,21 @@ the prefix removed.  Its checks, and the order of them, are in the life of a req
 \subsection{The session and the prefix}
 
 The launch token and the session value are 256-bit random values, compared in constant
-time.  The token is exchanged once, atomically, for the session cookie; the response redirects
-to the prefixed root so the token leaves the address bar and the history.
+time.  The token is exchanged once, atomically, for the session cookie, at the bare root
+(\code{/?token=}); the response redirects to the prefixed root so the token leaves the
+address bar and the history.  The launch URL does not name the prefix: it is handed to the
+program that opens the browser, whose command line other users can read, and a user who
+knew the prefix could have the user's browser send the cookie to a server of theirs on
+another port (finding~47).
 
 A cookie is scoped by host and by path, never by port.  A plain \code{Path=/} cookie would be
 sent to every other web server on \code{127.0.0.1} that the same browser visits, and a server
 that received it could replay it.  The design therefore serves everything under a random
 128-bit path prefix chosen at start, sets the cookie's path to it, and refuses (403) any URL not
 under it.  The browser then sends the cookie only for URLs under the prefix, which no other
-server has.  The prefix is a scope, not a secret: the session cookie is still required.  The
+server knows.  The prefix is a scope rather than a credential, since the session cookie is
+still required; but it is kept from other users, because knowing it is what would let a
+local server receive the cookie.  The
 front end forms every URL relative to its own location so that this needs no configuration.
 
 \subsection{The launch comes from the user's own connection (Linux)}
@@ -62,8 +68,17 @@ request); TIME\_WAIT rows carry no owner.  The table's uid column is given in
 as the user (not yet tried, Section~\ref{sec:untested}); the overflow uid, which every user the namespace cannot name shares, is
 treated as unknown.  An unreadable table or a missing row is unknown too, and
 unknown is refused: failing open would let the check be skipped by any condition
-that hides a row.  A port forward counts as the user running it.  macOS has no
-comparable table, so there \code{RequireOwner} is given no lookup and the check is
+that hides a row.  A port forward counts as the user running it.
+
+The same check applies to every request that carries a valid session cookie, so that a
+cookie captured by another user, by whatever route, is refused.  It runs only after
+the cookie is validated, so a request without the session costs no lookup, and its
+result is remembered per connection (\code{httpguard.ConnContext}, installed as the
+server's \code{ConnContext}): it is the owner that is remembered, not a verdict, and
+only once found, so a lookup that fails is tried again on the next request rather
+than refusing the whole connection; a browser's few kept-alive connections cost a few
+lookups in all.  Refused launches and refused sessions have separate warning budgets.  macOS has no
+comparable table, so there \code{RequireOwner} is given no lookup and both checks are
 off.
 
 \subsection{Headers and framing}

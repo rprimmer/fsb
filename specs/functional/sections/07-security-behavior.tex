@@ -45,8 +45,10 @@ placed there cannot make \texttt{fsb} overwrite something else.
 Access requires the session, which is established as follows.  At each start
 \texttt{fsb} generates a random launch token (at least 128 bits), a random session
 value, and a random path prefix (at least 128 bits).  The launch URL carries the
-token.  The first request that presents the correct token is answered with a
-redirect that removes the token from the address bar, and sets the session cookie.
+token, at the bare root, and not the prefix.  The first request that presents the
+correct token there is answered with a redirect to the prefix, which removes the
+token from the address bar, and sets the session cookie; the token works at no
+other path.
 The token then no longer works, so a copy of the URL left in shell or browser
 history is useless.
 \end{req}
@@ -62,8 +64,14 @@ namespace cannot name), is refused with status 403, and the token stays unused, 
 the user's own browser can still use it.  \texttt{fsb} warns on standard error,
 naming the reason (another user's uid, \texttt{fsb} running as root, or an owner
 that could not be determined) but never the token; after three such warnings it
-says once that further refusals are not reported.  Once the token has been used, a
+says once that further refusals are not reported.  Refused launches and refused
+requests with the session cookie are counted separately, so attempts at the
+launch URL cannot silence the warning about a captured cookie.  Once the token has been used, a
 request presenting it is refused like a wrong token, with no lookup and no warning.
+A request with the session cookie is likewise answered only on a connection of
+\texttt{fsb}'s own user (looked up once per connection, and only for a request
+whose cookie is valid), so a cookie captured by another user is useless; the
+warning then says the cookie may have been captured.
 A connection made through a port forward or proxy counts as the user running it.
 Where the owner cannot be determined at all (no \code{/proc}, WSL, some sandboxes),
 the launch URL is always refused, so \texttt{fsb} cannot be used there.  On macOS,
@@ -82,6 +90,10 @@ reason every URL of \texttt{fsb} lies under the random prefix (\code{/PREFIX/}),
 a request whose path is not under it is refused (status 403) like an unauthenticated
 request, whatever cookie it carries.  The interface forms every request relative to
 its own location, so the cookie accompanies exactly the requests that need it.
+Since the cookie goes to any server on \code{127.0.0.1} that is asked for a path
+under the prefix, the prefix is kept from other users: only the redirect of
+\rid{SEC-5} names it, never the launch URL that is handed to another program
+(\rid{CLI-5}).
 \end{req}
 
 \begin{req}{SEC-8}

@@ -90,9 +90,11 @@ chosen by the operating system when nothing is remembered; \code{--port}
 \end{req}
 
 \begin{req}{CLI-10}
-The launch URL has the form \code{http://127.0.0.1:PORT/PREFIX/?token=TOKEN}, where
-\code{PREFIX} and \code{TOKEN} are random values generated at each start
-(Section~\ref{sec:security}).  It works once; opening it a second time is refused.
+The launch URL has the form \code{http://127.0.0.1:PORT/?token=TOKEN}, where
+\code{TOKEN} is a random value generated at each start (Section~\ref{sec:security}).
+It names no path prefix: the redirect it answers with takes the browser to
+\code{/PREFIX/}, another random value, so the prefix is never in a command line.
+It works once; opening it a second time is refused.
 \end{req}
 
 \begin{req}{CLI-11}

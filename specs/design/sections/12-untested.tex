@@ -25,9 +25,10 @@ document; they are gathered here so a reader does not have to hunt for them.
         browser on Linux was tried with the real \code{xdg-open} and Firefox ESR under a
         virtual X display (Xvfb) in Debian, with \code{--browser firefox-esr}, and with
         \code{w3m} and no display; not on a real desktop, under Wayland, or with a
-        sandboxed (Flatpak or Snap) browser, whose connections the launch-owner check
-        should see as the user's (Section~\ref{sec:launchowner}) but has not been seen
-        to.  The connection table's byte order was checked on little-endian machines only
+        sandboxed (Flatpak or Snap) browser, whose connections the owner check should see
+        as the user's (Section~\ref{sec:launchowner}) but has not been seen to; since the
+        check applies to every request with the session, a wrong answer there would lock
+        the user out of \texttt{fsb} altogether, not just out of the launch.  The connection table's byte order was checked on little-endian machines only
         (the test pins the order with a literal; no big-endian machine ran it), and WSL,
         where the check is expected to refuse every launch, was not tried.  Linux Mint was represented by Ubuntu 24.04, its base.  Under
         emulation, \code{--status} and \code{--stop} cannot recognize \texttt{fsb}
