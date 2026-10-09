@@ -483,13 +483,24 @@ export function defineSuite({ label, launch }) {
       await open(fx.work);
       await preview('README.md');
       const info = await waitFor(mdInfo, { message: 'the Markdown to render' });
-      const box = await d.eval(`const b = document.querySelector('.preview iframe.mdframe').getBoundingClientRect(); return { x: b.x, y: b.y }`);
+      // Click only once the frame has stopped moving: a click made while the pane
+      // was still settling missed the link now and then (about one run in 15
+      // against a Linux container, 2026-10-08).
+      const frameBox = () => d.eval(`const b = document.querySelector('.preview iframe.mdframe').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y, w: b.width })`);
+      let last = '';
+      const box = JSON.parse(await waitFor(async () => { const b = await frameBox(); const same = b === last; last = b; await sleep(100); return same && b; }, { message: 'the Markdown frame to settle' }));
       const center = (l) => ({ x: box.x + l.x + l.w / 2, y: box.y + l.y + l.h / 2 });
       // Record window.open rather than spawning a real tab.
-      await d.eval(`window.__opened = []; window.open = (...a) => { window.__opened.push(a); return null; }; return true`);
+      await d.eval(`window.__opened = []; window.open = (...a) => { window.__opened.push(a); return null; };
+        window.__msgs = []; window.addEventListener('message', (e) => window.__msgs.push(e.data?.type)); return true`);
       const web = center(info.links.find((l) => l.kind === 'external'));
       await d.click(web.x, web.y);
-      const opened = await waitFor(() => d.eval(`return window.__opened.length ? window.__opened[0] : null`), { message: 'the web link to open' });
+      const opened = await waitFor(() => d.eval(`return window.__opened.length ? window.__opened[0] : null`), { message: 'the web link to open' }).catch(async (e) => {
+        // Evidence for an intermittent miss: what the frame sent, and where the link is now.
+        const now = await mdInfo();
+        const box2 = await d.eval(`const b = document.querySelector('.preview iframe.mdframe').getBoundingClientRect(); return { x: b.x, y: b.y }`);
+        throw new Error(`${e.message}; clicked ${JSON.stringify(web)} (frame at ${JSON.stringify(box)}, now ${JSON.stringify(box2)}); messages ${JSON.stringify(await d.eval('return window.__msgs'))}; link now ${JSON.stringify(now?.links.find((l) => l.kind === 'external'))}, then ${JSON.stringify(info.links.find((l) => l.kind === 'external'))}`);
+      });
       assert.equal(opened[0], 'https://example.com/docs');
       assert.match(opened[2], /noopener/);
       assert.match(opened[2], /noreferrer/);
