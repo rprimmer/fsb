@@ -128,7 +128,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 		showStatus(cfgDir, stdout)
 		return nil
 	}
-	if *background && !isBackgroundChild() {
+	// The background child knows itself by its handoff, not by childEnv, which
+	// it removes so that nothing it starts inherits it.
+	if _, isChild := stdout.(*handoff); *background && !isChild {
 		return startBackground(cfgDir, args, stdout)
 	}
 
@@ -206,7 +208,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		defer removePID(cfgDir)
-		fmt.Fprintf(stdout, "fsb: running in the background (process %d); stop it with \"fsb --stop\"\n", os.Getpid())
 	} else {
 		fmt.Fprintln(stdout, "fsb: runs until stopped (Control-C), or start it with --background to get your prompt back")
 	}
@@ -216,14 +217,18 @@ func run(args []string, stdout, stderr io.Writer) error {
 	defer stop()
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.Serve(ln) }()
-	if name, args := openCommand(runtime.GOOS, *browser, launchURL); !*noOpen && name != "" {
-		if err := openBrowser(name, args); err != nil {
+	display := runtime.GOOS == "darwin" || hasDisplay(os.Getenv)
+	if name, args := openCommand(runtime.GOOS, *browser, launchURL, display); !*noOpen && name != "" {
+		if err := openBrowser(ctx, name, args); err != nil {
 			fmt.Fprintf(stderr, "fsb: could not open the browser (%v)\n", err)
-			fmt.Fprintln(stderr, "fsb: open the URL above yourself, or check the --browser name")
+			fmt.Fprintln(stderr, "fsb: "+openHint(runtime.GOOS, *browser, err))
 		}
 	}
 
-	if inBackground {
+	// Stopped while opening the browser: the waiting fsb --background must
+	// not hear that this one is running.
+	if inBackground && ctx.Err() == nil {
+		fmt.Fprintf(stdout, "fsb: running in the background (process %d); stop it with \"fsb --stop\"\n", os.Getpid())
 		h.ready()
 	}
 

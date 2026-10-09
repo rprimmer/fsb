@@ -62,6 +62,12 @@ func (h *handoff) ready() {
 
 // childMain runs fsb as the background child and returns its exit status.
 func childMain(args []string) int {
+	// Nothing this process starts (a browser, qlmanage) may inherit the
+	// handoff pipe or the marker: a browser holding the pipe would keep the
+	// waiting fsb from returning, and an fsb started later from the browser's
+	// process tree would take itself for a background child.
+	syscall.CloseOnExec(3)
+	os.Unsetenv(childEnv)
 	pipe := os.NewFile(3, "handoff")
 	var log io.Writer = io.Discard
 	if home, err := os.UserHomeDir(); err == nil {

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -85,20 +86,42 @@ func checkBrowserName(name string) error {
 
 // openCommand returns the command that opens url in the default browser, or,
 // if browser is set, in that browser: a macOS application, or on Linux a
-// program run with the URL. It returns no command where fsb opens nothing.
+// program run with the URL. It returns no command where fsb opens nothing,
+// which includes Linux without a display (X11 or Wayland), as over ssh:
+// xdg-open would then fall back to a text browser such as w3m, which fetches
+// the single-use URL itself and leaves the printed one used up.
 // The URL is always a single argument; nothing goes through a shell.
-func openCommand(goos, browser, url string) (string, []string) {
+func openCommand(goos, browser, url string, display bool) (string, []string) {
 	switch {
 	case goos == "darwin" && browser == "":
 		return "open", []string{url}
 	case goos == "darwin":
 		return "open", []string{"-a", browser, url}
-	case goos == "linux" && browser == "":
+	case goos == "linux" && browser == "" && display:
 		return "xdg-open", []string{url}
+	case goos == "linux" && browser == "":
+		return "", nil
 	case goos == "linux":
 		return browser, []string{url}
 	}
 	return "", nil
+}
+
+// hasDisplay reports whether a graphical display is available (X11 or
+// Wayland); macOS always has one.
+func hasDisplay(getenv func(string) string) bool {
+	return getenv("DISPLAY") != "" || getenv("WAYLAND_DISPLAY") != ""
+}
+
+// openHint says what to do when the browser could not be opened.
+func openHint(goos, browser string, err error) string {
+	switch {
+	case browser != "":
+		return "open the URL above yourself, or check the --browser name"
+	case goos == "linux" && errors.Is(err, exec.ErrNotFound):
+		return "open the URL above yourself, or install xdg-utils, which provides xdg-open"
+	}
+	return "open the URL above yourself"
 }
 
 const lastPortFile = "lastport"
