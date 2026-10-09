@@ -30,6 +30,10 @@ RUN git config --global --add safe.directory /src
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /out/fsb ./cmd/fsb
 
 FROM ${BASE} AS smoke
+# The test user's uid. The browser suites and browse.sh give it the uid of the
+# user on the Mac: Colima forwards ports as that uid inside its VM, and fsb on
+# Linux accepts its launch URL only from a connection of its own user.
+ARG TESTER_UID=1000
 COPY e2e/linux/setup.sh e2e/linux/smoke.sh /usr/local/lib/fsb-e2e/
 RUN sh /usr/local/lib/fsb-e2e/setup.sh
 COPY --from=build /out/fsb /usr/local/bin/fsb

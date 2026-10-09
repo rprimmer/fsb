@@ -48,8 +48,10 @@ for row in $(echo "$DISTROS" | awk 'NF==3 {print $1 "|" $2 "|" $3}'); do
 	selected "$name" "$@" || continue
 	echo
 	echo "#### $name ($image, $platform)"
+	# The same test user's uid as the browser suites (see the Dockerfile), so
+	# the image is shared.
 	if ! docker build -q -f e2e/linux/Dockerfile --target smoke --platform "$platform" \
-		--build-arg BASE="$image" -t "fsb-smoke:$name" . >/dev/null; then
+		--build-arg BASE="$image" --build-arg TESTER_UID="$(id -u)" -t "fsb-smoke:$name" . >/dev/null; then
 		record "$name" "FAILED (build)"
 		continue
 	fi

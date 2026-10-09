@@ -41,8 +41,10 @@ export async function startContainerServer(name, fx) {
     console.log(`# warning: ${name} is amd64 and runs emulated here; Go programs crash under QEMU's emulation, so failures say nothing about fsb`);
   }
   const tag = `fsb-smoke:${name}`;
+  // The test user gets this Mac user's uid: Colima forwards the port to fsb as
+  // that uid, and fsb on Linux accepts its launch URL only from its own user.
   docker(['build', '-q', '-f', 'e2e/linux/Dockerfile', '--target', 'smoke', '--platform', platform,
-    '--build-arg', `BASE=${image}`, '-t', tag, '.'], { cwd: repoRoot, stdio: ['ignore', 'ignore', 'inherit'] });
+    '--build-arg', `BASE=${image}`, '--build-arg', `TESTER_UID=${process.getuid()}`, '-t', tag, '.'], { cwd: repoRoot, stdio: ['ignore', 'ignore', 'inherit'] });
 
   const container = `fsb-e2e-${name}`;
   try { docker(['rm', '-f', container], { stdio: 'ignore' }); } catch {}

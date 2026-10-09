@@ -24,11 +24,11 @@ if [ "${1:-}" != fixture ]; then
 			exit 1
 		fi
 	fi
-	# BusyBox has adduser but not useradd.
+	# BusyBox has adduser but not useradd. TESTER_UID: see the Dockerfile.
 	if command -v useradd >/dev/null; then
-		useradd -m -s /bin/sh tester
+		useradd -m -s /bin/sh -u "${TESTER_UID:-1000}" tester
 	else
-		adduser -D -s /bin/sh tester
+		adduser -D -s /bin/sh -u "${TESTER_UID:-1000}" tester
 	fi
 	exit 0
 fi

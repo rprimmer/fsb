@@ -30,8 +30,10 @@ if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
 	exit 1
 fi
 
+# The test user gets this Mac user's uid: Colima's port forward connects as
+# that uid, and fsb accepts its launch URL only from its own user.
 docker build -q -f e2e/linux/Dockerfile --target smoke --platform "$platform" \
-	--build-arg BASE="$image" -t "fsb-smoke:$name" . >/dev/null
+	--build-arg BASE="$image" --build-arg TESTER_UID="$(id -u)" -t "fsb-smoke:$name" . >/dev/null
 container=fsb-browse-$name
 docker rm -f "$container" >/dev/null 2>&1 || true
 docker run -d --rm --init --network host --platform "$platform" --name "$container" \
