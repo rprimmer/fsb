@@ -167,17 +167,27 @@ and if so whether in the background or the foreground, its address, process
 number, start time and terminal; then exit.
 .TP
 .BI \-\-browser " NAME"
-Open the launch URL in the macOS application
+Open the launch URL in
 .I NAME
-(for example
-.BR """Google Chrome""" )
-instead of your default browser.
+instead of your default browser: on macOS an application (for example
+.BR """Google Chrome""" ),
+on Linux a program, run with the URL as its one argument (for example
+.BR firefox ).
 A name beginning with a hyphen, or containing a NUL, carriage return or
 newline, is
 refused.
-If the application cannot be opened,
+If the browser cannot be opened,
 .B fsb
 says so and keeps running; the printed URL still works.
+.IP
+On Linux the default browser is opened with
+.BR xdg-open (1).
+.B fsb
+starts it in a session of its own, so Control-C in the terminal stops
+.B fsb
+but not the browser, and with no terminal input or output.
+An opener still running after 3 seconds, as a browser it started can be, is
+taken to have succeeded.
 .TP
 .B \-\-debug
 Log verbosely to standard error, and answer a request for a denied path with a
@@ -728,9 +738,12 @@ tries it again next time, and works again once the other program is done
 with it.
 .TP
 .B fsb: could not open the browser
-The application named by
+The application or program named by
 .B \-\-browser
-was not found.
+was not found, or on Linux
+.B xdg-open
+is missing or failed (status 3: no desktop to open a browser in, as over
+.BR ssh ).
 The server is running; open the printed URL yourself.
 .TP
 .B Not found. This path is outside the folders fsb serves
@@ -756,6 +769,7 @@ the interface is tested in Chrome and Safari.
 .SH SEE ALSO
 .BR open (1),
 .BR qlmanage (1),
+.BR xdg-open (1),
 .BR gitignore (5)
 .PP
 The functional and design specifications and the security policy, in the

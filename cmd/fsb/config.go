@@ -74,23 +74,31 @@ func resolveRoots(home, arg string, extra []string, allowSystemRoot bool) ([]str
 	return roots, nil
 }
 
-// checkBrowserName rejects application names that `open` would take for one of
-// its own options, or that could not be a real application name.
+// checkBrowserName rejects names that `open` (or, on Linux, the program run)
+// would take for one of its own options, or that could not be a real name.
 func checkBrowserName(name string) error {
 	if strings.HasPrefix(name, "-") || strings.ContainsAny(name, "\x00\r\n") {
-		return fmt.Errorf("invalid --browser value %q: give an application name such as \"Google Chrome\"", name)
+		return fmt.Errorf("invalid --browser value %q: give an application name such as \"Google Chrome\" (macOS) or a program such as firefox (Linux)", name)
 	}
 	return nil
 }
 
 // openCommand returns the command that opens url in the default browser, or,
-// if browser is set, in that macOS application. The URL is always a single
-// argument; nothing goes through a shell.
-func openCommand(browser, url string) (string, []string) {
-	if browser == "" {
+// if browser is set, in that browser: a macOS application, or on Linux a
+// program run with the URL. It returns no command where fsb opens nothing.
+// The URL is always a single argument; nothing goes through a shell.
+func openCommand(goos, browser, url string) (string, []string) {
+	switch {
+	case goos == "darwin" && browser == "":
 		return "open", []string{url}
+	case goos == "darwin":
+		return "open", []string{"-a", browser, url}
+	case goos == "linux" && browser == "":
+		return "xdg-open", []string{url}
+	case goos == "linux":
+		return browser, []string{url}
 	}
-	return "open", []string{"-a", browser, url}
+	return "", nil
 }
 
 const lastPortFile = "lastport"

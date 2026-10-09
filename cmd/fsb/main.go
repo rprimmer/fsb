@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -75,7 +74,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		background = fs.Bool("background", false, "run in the background: print the URL and return to the shell (stop it with --stop)")
 		stopFlag   = fs.Bool("stop", false, "stop the running fsb (started with --background, or holding the usual port), and exit")
 		status     = fs.Bool("status", false, "say whether fsb is running, with its process, port and start time, and exit")
-		browser    = fs.String("browser", "", `macOS application to open the URL in, e.g. "Google Chrome" (default: your default browser)`)
+		browser    = fs.String("browser", "", `browser to open the URL in: a macOS application such as "Google Chrome", or on Linux a program such as firefox (default: your default browser)`)
 		doInit     = fs.Bool("init", false, "write the default ignore and deny files to ~/.config/fsb and exit")
 		showDeny   = fs.Bool("show-deny", false, "print the deny rules in effect, and where they come from, and exit")
 		showIgnore = fs.Bool("show-ignore", false, "print the ignore (hide) rules in effect, and where they come from, and exit")
@@ -211,12 +210,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 	} else {
 		fmt.Fprintln(stdout, "fsb: runs until stopped (Control-C), or start it with --background to get your prompt back")
 	}
-	if !*noOpen && runtime.GOOS == "darwin" {
-		// The URL is passed as one argument, never through a shell. `open` returns
-		// promptly, so its exit status says whether the application was found.
-		name, args := openCommand(*browser, launchURL)
-		if out, err := exec.Command(name, args...).CombinedOutput(); err != nil {
-			fmt.Fprintf(stderr, "fsb: could not open the browser (%v): %s\n", err, strings.TrimSpace(string(out)))
+	// Serving before the browser opens: on Linux, opening can take up to
+	// openerGrace, while a browser xdg-open started is already asking for the page.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	errc := make(chan error, 1)
+	go func() { errc <- httpSrv.Serve(ln) }()
+	if name, args := openCommand(runtime.GOOS, *browser, launchURL); !*noOpen && name != "" {
+		if err := openBrowser(name, args); err != nil {
+			fmt.Fprintf(stderr, "fsb: could not open the browser (%v)\n", err)
 			fmt.Fprintln(stderr, "fsb: open the URL above yourself, or check the --browser name")
 		}
 	}
@@ -225,10 +227,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 		h.ready()
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	errc := make(chan error, 1)
-	go func() { errc <- httpSrv.Serve(ln) }()
 	select {
 	case err := <-errc:
 		return err

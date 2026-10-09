@@ -74,18 +74,42 @@ func TestInitWritesActiveCoreRulesAndNeverOverwrites(t *testing.T) {
 }
 
 func TestOpenCommand(t *testing.T) {
-	name, args := openCommand("", "http://127.0.0.1:1/?token=x")
+	name, args := openCommand("darwin", "", "http://127.0.0.1:1/?token=x")
 	if name != "open" || strings.Join(args, "|") != "http://127.0.0.1:1/?token=x" {
 		t.Errorf("default browser: %s %q", name, args)
 	}
-	name, args = openCommand("Google Chrome", "http://127.0.0.1:1/?token=x")
+	name, args = openCommand("darwin", "Google Chrome", "http://127.0.0.1:1/?token=x")
 	if name != "open" || strings.Join(args, "|") != "-a|Google Chrome|http://127.0.0.1:1/?token=x" {
 		t.Errorf("named browser: %s %q", name, args)
 	}
 	// The URL and the name are always single arguments, whatever they contain.
-	_, args = openCommand("My Browser; rm -rf ~", "http://x/?a=1&b=2")
+	_, args = openCommand("darwin", "My Browser; rm -rf ~", "http://x/?a=1&b=2")
 	if len(args) != 3 || args[1] != "My Browser; rm -rf ~" || args[2] != "http://x/?a=1&b=2" {
 		t.Errorf("arguments must stay whole: %q", args)
+	}
+}
+
+// On Linux the desktop's default browser is opened with xdg-open, and
+// --browser names a program to run with the URL.
+func TestOpenCommandLinux(t *testing.T) {
+	name, args := openCommand("linux", "", "http://127.0.0.1:1/?token=x")
+	if name != "xdg-open" || strings.Join(args, "|") != "http://127.0.0.1:1/?token=x" {
+		t.Errorf("default browser: %s %q", name, args)
+	}
+	name, args = openCommand("linux", "firefox", "http://127.0.0.1:1/?token=x")
+	if name != "firefox" || strings.Join(args, "|") != "http://127.0.0.1:1/?token=x" {
+		t.Errorf("named browser: %s %q", name, args)
+	}
+	name, args = openCommand("linux", "my browser; rm -rf ~", "http://x/?a=1&b=2")
+	if name != "my browser; rm -rf ~" || len(args) != 1 || args[0] != "http://x/?a=1&b=2" {
+		t.Errorf("arguments must stay whole: %s %q", name, args)
+	}
+}
+
+// Elsewhere fsb opens nothing and only prints the URL.
+func TestOpenCommandElsewhere(t *testing.T) {
+	if name, _ := openCommand("freebsd", "", "http://x/"); name != "" {
+		t.Errorf("freebsd: %q, want no command", name)
 	}
 }
 

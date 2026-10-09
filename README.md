@@ -58,7 +58,7 @@ make uninstall
 
 `PREFIX`, `BINDIR`, `MANDIR` (the folder that holds `man1`) and `DESTDIR` (a staging root for packaging) can each be overridden; `make help` shows the values in effect.
 
-`fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`, also when a root only resolves to `/` (a symbolic link to it).
+`fsb [path]` narrows the root; `--browser "Google Chrome"` opens it in that application instead of your default browser (on Linux, `--browser firefox` runs that program; the default browser is opened with `xdg-open`) (or use `--no-open` and paste the printed URL); `--root PATH` (repeatable) adds roots such as `/Volumes/X`. Serving `/` needs `--allow-system-root`, also when a root only resolves to `/` (a symbolic link to it).
 
 `fsb` is a small web server: like any other program that keeps serving requests, it does not exit on its own, because exiting would stop the browser from being able to reach it. To get your shell prompt back, run `fsb --background`: it prints the URL, returns once it is serving, and keeps running after the terminal closes; `fsb --stop` stops it, and `fsb --status` says whether one is running. (`fsb &` with `fg` and Control-C also works.) If the usual port is taken, `fsb` names the program holding it; `fsb --stop` also stops an `fsb` left running in another terminal. `--no-open` and an unopenable `--browser` name do not change this: `fsb` keeps serving so the printed URL stays usable, so pair either with `--background` if you want your prompt back.
 
