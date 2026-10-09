@@ -36,7 +36,7 @@ The UI lists directories with 100,000+ entries: the API streams the listing in c
 
 ## Quick start
 
-`fsb` runs on macOS (also tested on Linux) and is installed from source; it needs [Go](https://go.dev/dl/) 1.26 or later. There are no prebuilt binaries and no Homebrew formula. A program you build yourself is not quarantined, so macOS does not ask to verify it.
+`fsb` runs on macOS (also tested on Linux) and is installed from source; it needs [Go](https://go.dev/dl/) 1.27.2 or later (an older Go, from 1.21 on, downloads 1.27.2 by itself when it installs fsb). There are no prebuilt binaries and no Homebrew formula. A program you build yourself is not quarantined, so macOS does not ask to verify it.
 
 ```sh
 go install github.com/rprimmer/fsb/cmd/fsb@latest   # installs fsb into $(go env GOPATH)/bin

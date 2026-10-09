@@ -1,9 +1,9 @@
 module github.com/rprimmer/fsb
 
-go 1.26.0
-
-// Builds use a Go release with the current standard-library security fixes.
-toolchain go1.27.2
+// The minimum is the Go release with the current standard-library security
+// fixes. `go install` ignores a toolchain line, so only this line makes an
+// older Go switch to it.
+go 1.27.2
 
 require (
 	golang.org/x/sys v0.48.0
