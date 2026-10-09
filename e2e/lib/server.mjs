@@ -25,14 +25,13 @@ export function startServer(bin, home) {
     child.stderr.on('data', (d) => (err += d));
     child.stdout.on('data', (d) => {
       out += d;
-      const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)(\/[A-Za-z0-9_-]+)\/\?token=\S+/);
+      // The launch URL is the bare root with a token; it names no prefix.
+      const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)\/\?token=\S+/);
       if (m) {
         clearTimeout(timer);
         resolve({
           url: m[0], // single-use launch URL
           origin: `http://127.0.0.1:${m[1]}`,
-          // Everything is served under a random per-launch prefix (no trailing slash).
-          base: `http://127.0.0.1:${m[1]}${m[2]}`,
           stderr: () => err,
           stop: () => new Promise((r) => { child.once('exit', r); child.kill(); }),
         });

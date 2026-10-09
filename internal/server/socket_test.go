@@ -67,7 +67,7 @@ func TestSocketFileAtHTTPLevelAnswersNotFoundNotInternalError(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("login status = %d", resp.StatusCode)
 	}
-	base := ts.URL + strings.TrimSuffix(srv.LaunchPath(), "/")
+	base := ts.URL + strings.TrimSuffix(srv.AppPath(), "/")
 	e := &env{home: root, base: base, client: client, ts: ts}
 
 	missing, _ := e.get(t, "/api/head", filepath.Join(root, "proj", "nope"))

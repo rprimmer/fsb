@@ -38,7 +38,7 @@ url=
 i=0
 while [ $i -lt 30 ] && [ -z "$url" ]; do
 	sleep 1
-	url=$(grep -o "http://127.0.0.1:$PORT/[A-Za-z0-9_-]*/?token=[A-Za-z0-9_-]*" "$out" || true)
+	url=$(grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" "$out" || true)
 	i=$((i + 1))
 done
 if [ -z "$url" ]; then
@@ -47,7 +47,6 @@ if [ -z "$url" ]; then
 	exit 1
 fi
 pass "fsb starts and prints its launch URL"
-base=${url%%\?token=*}
 jar=$(mktemp)
 body=$(mktemp)
 
@@ -56,7 +55,14 @@ get() {
 	curl -s -b "$jar" -o "$body" -w '%{http_code}' -G --data-urlencode "path=$1" "${base}api/$2"
 }
 
-check "launch URL sets the session (303)" 303 "$(curl -s -c "$jar" -o /dev/null -w '%{http_code}' "$url")"
+# The launch URL names no prefix; the redirect does (base ends with "/").
+launch=$(curl -s -c "$jar" -o /dev/null -w '%{http_code} %{redirect_url}' "$url")
+check "launch URL sets the session (303)" 303 "${launch%% *}"
+base=${launch#* }
+case $base in
+"http://127.0.0.1:$PORT/"?*/) pass "the redirect names the prefix" ;;
+*) fail "the redirect names the prefix (got '$base')" ;;
+esac
 check "launch URL works only once (403)" 403 "$(curl -s -o /dev/null -w '%{http_code}' "$url")"
 check "wrong Host header is refused (403)" 403 \
 	"$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' -H "Host: evil.example:$PORT" "${base}api/status")"

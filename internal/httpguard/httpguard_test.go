@@ -34,7 +34,7 @@ func newHarness(t *testing.T) *harness {
 // login performs the launch-token exchange and stores the session cookie.
 func (hn *harness) login(t *testing.T) {
 	t.Helper()
-	rec := hn.do("GET", "/?token="+hn.auth.LaunchToken(), nil)
+	rec := hn.doRaw("GET", "/?token="+hn.auth.LaunchToken(), nil)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("exchange status = %d", rec.Code)
 	}
@@ -89,7 +89,7 @@ func TestTokenEntropyAndUniqueness(t *testing.T) {
 
 func TestExchangeSetsHardenedCookieAndRedirects(t *testing.T) {
 	hn := newHarness(t)
-	rec := hn.do("GET", "/?token="+hn.auth.LaunchToken(), nil)
+	rec := hn.doRaw("GET", "/?token="+hn.auth.LaunchToken(), nil)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/"+hn.auth.Prefix()+"/" {
 		t.Fatalf("status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
@@ -106,7 +106,7 @@ func TestLaunchTokenIsSingleUse(t *testing.T) {
 	hn := newHarness(t)
 	hn.login(t)
 	hn.cookie = nil
-	if rec := hn.do("GET", "/?token="+hn.auth.LaunchToken(), nil); rec.Code != http.StatusForbidden {
+	if rec := hn.doRaw("GET", "/?token="+hn.auth.LaunchToken(), nil); rec.Code != http.StatusForbidden {
 		t.Fatalf("reused launch token: status = %d, want 403", rec.Code)
 	}
 }
@@ -114,7 +114,7 @@ func TestLaunchTokenIsSingleUse(t *testing.T) {
 func TestWrongLaunchTokenRejected(t *testing.T) {
 	hn := newHarness(t)
 	for _, tok := range []string{"", "wrong", hn.auth.LaunchToken() + "x", strings.ToUpper(hn.auth.LaunchToken())} {
-		if rec := hn.do("GET", "/?token="+tok, nil); rec.Code != http.StatusForbidden {
+		if rec := hn.doRaw("GET", "/?token="+tok, nil); rec.Code != http.StatusForbidden {
 			t.Errorf("token %q: status = %d, want 403", tok, rec.Code)
 		}
 	}
@@ -122,10 +122,20 @@ func TestWrongLaunchTokenRejected(t *testing.T) {
 	hn.login(t)
 }
 
-func TestLaunchTokenOnlyWorksAtRoot(t *testing.T) {
+// The launch URL is the bare root, "/?token=...": it names no prefix, so the
+// command line of the program that opens the browser, which other users can
+// read, does not reveal the path the session cookie is sent for. The token
+// works nowhere else, and trying it elsewhere does not use it up.
+func TestLaunchTokenOnlyWorksAtTheBareRoot(t *testing.T) {
 	hn := newHarness(t)
-	if rec := hn.do("GET", "/api/list?token="+hn.auth.LaunchToken(), nil); rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", rec.Code)
+	for _, target := range []string{"/api/list?token=", "/" + hn.auth.Prefix() + "/?token=", "/x/?token="} {
+		if rec := hn.doRaw("GET", target+hn.auth.LaunchToken(), nil); rec.Code != http.StatusForbidden {
+			t.Errorf("%q: status = %d, want 403", target, rec.Code)
+		}
+	}
+	rec := hn.doRaw("GET", "/?token="+hn.auth.LaunchToken(), nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/"+hn.auth.Prefix()+"/" {
+		t.Fatalf("the bare root: status %d, Location %q; want 303 to the prefix", rec.Code, rec.Header().Get("Location"))
 	}
 }
 
@@ -310,7 +320,7 @@ func TestSessionCookieIsScopedToThePrefix(t *testing.T) {
 	if a, _ := NewAuth(); a.Prefix() == hn.auth.Prefix() || len(a.Prefix()) < 21 {
 		t.Errorf("the prefix must be random and at least 128 bits: %q", a.Prefix())
 	}
-	if rec := hn.do("GET", "/?token="+hn.auth.LaunchToken(), nil); rec.Header().Get("Location") != "" && rec.Header().Get("Location") != "/"+hn.auth.Prefix()+"/" {
+	if rec := hn.doRaw("GET", "/?token="+hn.auth.LaunchToken(), nil); rec.Header().Get("Location") != "" && rec.Header().Get("Location") != "/"+hn.auth.Prefix()+"/" {
 		t.Errorf("redirect goes to %q", rec.Header().Get("Location"))
 	}
 }

@@ -251,7 +251,7 @@ URL:
 .RS
 .nf
 fsb: serving /Users/you read-only on http://127.0.0.1:53349
-fsb: open this single-use URL: http://127.0.0.1:53349/AaGF.../?token=...
+fsb: open this single-use URL: http://127.0.0.1:53349/?token=...
 fsb: runs until stopped (Control-C), or start it with --background to get your prompt back
 .fi
 .RE
@@ -268,9 +268,9 @@ The URL works once: the first request that uses it sets a session cookie in your
 browser and the token is then useless, so a copy left in your shell history or
 browser
 history cannot be used.
-It also contains a random path prefix under which everything is served; a
-bookmark of
-the URL does not survive a restart.
+It then takes the browser to a random path prefix under which everything is
+served (the launch URL itself does not name it); a bookmark does not survive a
+restart.
 .PP
 .B fsb
 runs in the foreground, like any other program that keeps serving requests
@@ -647,7 +647,13 @@ and
 .BR SameSite=Strict ,
 and is scoped to a random path prefix, so that the browser never sends it to
 another web
-server on 127.0.0.1.
+server on 127.0.0.1 that does not know the prefix.
+Only the browser that used the launch URL learns the prefix: the URL handed to
+the program that opens the browser does not contain it.
+On Linux, a request with the session cookie is also answered only on a
+connection of
+.BR fsb 's
+own user, so a cookie captured by another user is useless; see LIMITATIONS.
 Only
 .B GET
 and

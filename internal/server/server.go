@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -76,9 +77,19 @@ func New(cfg Config) (*Server, error) {
 // LaunchToken is the single-use token for the launch URL.
 func (s *Server) LaunchToken() string { return s.auth.LaunchToken() }
 
-// LaunchPath is the URL path of the application, "/<random prefix>/". The
-// launch URL is this path with "?token=" and LaunchToken.
-func (s *Server) LaunchPath() string { return "/" + s.auth.Prefix() + "/" }
+// LaunchPath is the path of the launch URL, which is this path with "?token="
+// and LaunchToken. It is the bare root: the launch URL names no prefix (see
+// httpguard), and the browser learns the application's path from the redirect.
+func (s *Server) LaunchPath() string { return "/" }
+
+// AppPath is the URL path of the application, "/<random prefix>/".
+func (s *Server) AppPath() string { return "/" + s.auth.Prefix() + "/" }
+
+// ConnContext is for http.Server.ConnContext: it lets the owner of each
+// connection be looked up once per connection (httpguard.ConnContext).
+func (s *Server) ConnContext(ctx context.Context, c net.Conn) context.Context {
+	return httpguard.ConnContext(ctx, c)
+}
 
 // Handler returns the full handler stack for a server listening on port.
 func (s *Server) Handler(port int) http.Handler {

@@ -2,6 +2,7 @@ package httpguard
 
 import (
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,7 @@ func launchServer(t *testing.T) (*Auth, *httptest.Server) {
 		t.Fatal(err)
 	}
 	srv := httptest.NewUnstartedServer(Middleware(a, ln.Addr().(*net.TCPAddr).Port)(okHandler))
+	srv.Config.ConnContext = ConnContext
 	srv.Listener.Close()
 	srv.Listener = ln
 	srv.Start()
@@ -34,8 +36,10 @@ func launchServer(t *testing.T) (*Auth, *httptest.Server) {
 
 func launch(t *testing.T, a *Auth, srv *httptest.Server) int {
 	t.Helper()
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := client.Get(srv.URL + "/" + a.Prefix() + "/?token=" + a.LaunchToken())
+	// A new connection each time: the owner is looked up once per connection.
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Get(srv.URL + "/?token=" + a.LaunchToken())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +101,7 @@ func TestAWrongTokenIsRefusedWithoutALookup(t *testing.T) {
 	a, srv := launchServer(t)
 	var looked atomic.Bool
 	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { looked.Store(true); return 1000, nil })
-	resp, err := http.Get(srv.URL + "/" + a.Prefix() + "/?token=wrong")
+	resp, err := (&http.Client{Transport: &http.Transport{DisableKeepAlives: true}}).Get(srv.URL + "/?token=wrong")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,5 +196,91 @@ func TestRootFsbSaysSoInsteadOfBlamingAnotherUser(t *testing.T) {
 	}
 	if got := w.all(); len(got) != 1 || !strings.Contains(got[0], "runs as root") || strings.Contains(got[0], "another user") {
 		t.Errorf("warning = %q", got)
+	}
+}
+
+// session sends a request under the prefix with the session cookie, as a
+// server that captured the cookie from the user's browser would replay it.
+func session(t *testing.T, a *Auth, srv *httptest.Server, cookie string) int {
+	t.Helper()
+	req, _ := http.NewRequest("GET", srv.URL+"/"+a.Prefix()+"/api/status", nil)
+	req.AddCookie(&http.Cookie{Name: CookieName, Value: cookie})
+	resp, err := (&http.Client{Transport: &http.Transport{DisableKeepAlives: true}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+// The session cookie is sent by the user's browser to any server on
+// 127.0.0.1 whose path starts with the prefix, so another user who learns the
+// prefix can capture it with a page of their own and replay it. A request
+// with the session therefore also has to come from fsb's own user; fsb warns,
+// once per cause, that the cookie may have been taken.
+func TestASessionFromAnotherUsersConnectionIsRefused(t *testing.T) {
+	a, srv := launchServer(t)
+	w := &warnings{}
+	a.SetWarn(w.add)
+	var connUID atomic.Int64
+	connUID.Store(1000)
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { return int(connUID.Load()), nil })
+	if code := launch(t, a, srv); code != http.StatusSeeOther {
+		t.Fatalf("launch = %d", code)
+	}
+	if code := session(t, a, srv, a.session); code != http.StatusOK {
+		t.Fatalf("the user's own session = %d, want 200", code)
+	}
+	connUID.Store(1001)
+	if code := session(t, a, srv, a.session); code != http.StatusForbidden {
+		t.Fatalf("the session from another user's connection = %d, want 403", code)
+	}
+	if got := w.all(); len(got) != 1 || !strings.Contains(got[0], "another user") || strings.Contains(got[0], a.session) {
+		t.Errorf("warning = %q; want one naming another user, without the cookie", got)
+	}
+	connUID.Store(1000)
+	if code := session(t, a, srv, a.session); code != http.StatusOK {
+		t.Fatalf("the user's own session afterwards = %d, want 200", code)
+	}
+}
+
+// A request without the session is refused without a lookup: only the
+// holder of the cookie can make fsb read the connection table.
+func TestNoLookupWithoutTheSession(t *testing.T) {
+	a, srv := launchServer(t)
+	var lookups atomic.Int32
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { lookups.Add(1); return 1001, nil })
+	for _, c := range []string{"", "wrong"} {
+		if code := session(t, a, srv, c); code != http.StatusForbidden {
+			t.Errorf("cookie %q: %d, want 403", c, code)
+		}
+	}
+	if n := lookups.Load(); n != 0 {
+		t.Errorf("%d lookups for requests without the session, want none", n)
+	}
+}
+
+// The owner is looked up once per connection, not once per request: a page
+// makes many requests over a few kept-alive connections.
+func TestTheOwnerIsLookedUpOncePerConnection(t *testing.T) {
+	a, srv := launchServer(t)
+	var lookups atomic.Int32
+	a.RequireOwner(1000, func(netip.AddrPort, netip.AddrPort) (int, error) { lookups.Add(1); return 1000, nil })
+	client := &http.Client{Transport: &http.Transport{MaxConnsPerHost: 1}}
+	for range 5 {
+		req, _ := http.NewRequest("GET", srv.URL+"/"+a.Prefix()+"/api/status", nil)
+		req.AddCookie(&http.Cookie{Name: CookieName, Value: a.session})
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status %d", resp.StatusCode)
+		}
+	}
+	if n := lookups.Load(); n != 1 {
+		t.Errorf("%d lookups for five requests on one connection, want 1", n)
 	}
 }

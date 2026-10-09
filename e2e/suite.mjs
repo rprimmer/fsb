@@ -118,11 +118,14 @@ export function defineSuite({ label, launch }) {
       server = process.env.FSB_E2E_LINUX
         ? await startContainerServer(process.env.FSB_E2E_LINUX, fx)
         : await startServer(buildFsb(buildDir), fx.home);
-      base = server.base;
       attacker = await startAttacker();
       // The launch URL is single-use: this exchanges it for the session cookie.
       await d.goto(server.url);
       await waitFor(() => d.eval(`return !!document.querySelector('.crumbs')`), { message: 'the first page load' });
+      // Everything is served under a random per-launch prefix, which only the
+      // redirect from the launch URL names (no trailing slash).
+      base = await d.eval(`return location.origin + location.pathname.replace(/\\/$/, '')`);
+      assert.match(base, /^http:\/\/127\.0\.0\.1:\d+\/[A-Za-z0-9_-]{21,}$/, 'the application lives under the prefix');
       console.log(`# ${label}: ${await d.version()}; fsb on ${server.release ?? process.platform}`);
     });
 

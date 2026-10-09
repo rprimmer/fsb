@@ -195,6 +195,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	httpSrv := &http.Server{
 		Handler:           srv.Handler(port),
+		ConnContext:       srv.ConnContext,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

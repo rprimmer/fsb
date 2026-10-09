@@ -5,9 +5,11 @@
 package httpguard
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -15,6 +17,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -77,7 +80,7 @@ func NewAuth() (*Auth, error) {
 }
 
 // Prefix returns the random path prefix, without slashes. The application is
-// served at "/<prefix>/", and the launch URL is "/<prefix>/?token=...".
+// served at "/<prefix>/"; the launch URL is "/?token=...", which names no prefix.
 func (a *Auth) Prefix() string { return a.prefix }
 
 // LaunchToken returns the single-use token for the launch URL.
@@ -117,6 +120,14 @@ func Middleware(a *Auth, port int) func(http.Handler) http.Handler {
 				return
 			}
 
+			// The launch URL is the bare root: it names no prefix, so the command
+			// line of the program that opens the browser, which other users can
+			// read, does not reveal the path the session cookie is sent for.
+			if r.URL.Path == "/" && r.URL.Query().Has("token") {
+				exchange(w, r, a)
+				return
+			}
+
 			// Only URLs under the prefix exist; anything else is refused exactly
 			// like an unauthenticated request.
 			rest, ok := strings.CutPrefix(r.URL.Path, "/"+a.prefix+"/")
@@ -128,15 +139,22 @@ func Middleware(a *Auth, port int) func(http.Handler) http.Handler {
 			r2.URL.Path = "/" + rest
 			r2.URL.RawPath = ""
 
-			if r2.URL.Path == "/" && r2.URL.Query().Has("token") {
-				exchange(w, r2, a)
-				return
-			}
-
 			c, err := r.Cookie(CookieName)
 			if err != nil || subtle.ConstantTimeCompare([]byte(c.Value), []byte(a.session)) != 1 {
 				forbid(w)
 				return
+			}
+			// The browser sends the cookie to any server on 127.0.0.1 whose path
+			// starts with the prefix, so a server of another user that learned
+			// the prefix could capture it. With the session, the connection must
+			// still be fsb's own user's (looked up only now, for the holder of
+			// the cookie, and once per connection).
+			if a.owner != nil {
+				if why := a.notOwn(r, false); why != "" {
+					a.warnRefused("refused a request: " + why)
+					forbid(w)
+					return
+				}
 			}
 			next.ServeHTTP(w, r2)
 		})
@@ -158,8 +176,8 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 	// Checked before the token is used, so that a refused connection leaves it
 	// for the person's own browser.
 	if a.owner != nil {
-		if why := a.notOwn(r); why != "" {
-			a.warnRefused(why)
+		if why := a.notOwn(r, true); why != "" {
+			a.warnRefused("refused the launch URL: " + why)
 			forbid(w)
 			return
 		}
@@ -180,44 +198,80 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 }
 
 // notOwn says why r's connection cannot be shown to belong to fsb's own user,
-// or returns "" when it does.
-func (a *Auth) notOwn(r *http.Request) string {
-	local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	if local == nil {
-		return "its connection is unknown"
-	}
-	server, err1 := netip.ParseAddrPort(local.String())
-	client, err2 := netip.ParseAddrPort(r.RemoteAddr)
-	if err1 != nil || err2 != nil {
-		return "its connection is unknown"
-	}
-	server = netip.AddrPortFrom(server.Addr().Unmap(), server.Port())
-	client = netip.AddrPortFrom(client.Addr().Unmap(), client.Port())
-	uid, err := a.owner(server, client)
+// or returns "" when it does. launch says whether r presents the launch token
+// (otherwise it carries the session).
+func (a *Auth) notOwn(r *http.Request, launch bool) string {
+	uid, err := a.connectionOwner(r)
 	switch {
-	case err != nil:
+	case err != nil && launch:
 		return "could not tell which user opened it (" + err.Error() + "); on this system the launch URL cannot be used"
+	case err != nil:
+		return "could not tell which user sent a request with your session (" + err.Error() + ")"
 	case uid == a.uid:
 		return ""
 	case a.uid == 0:
 		return fmt.Sprintf("fsb runs as root, and the connection belongs to uid %d; start fsb as your own user", uid)
+	case launch:
+		return fmt.Sprintf("it was opened by another user (uid %d), who may have read it from a command line; your own browser can still use it", uid)
 	}
-	return fmt.Sprintf("it was opened by another user (uid %d), who may have read it from a command line; your own browser can still use it", uid)
+	return fmt.Sprintf("a request with your session came from another user (uid %d): your session cookie may have been captured; restart fsb to start a new session", uid)
+}
+
+// connOwner remembers, for one connection, who owns its client end.
+type connOwner struct {
+	once sync.Once
+	uid  int
+	err  error
+}
+
+type connKey struct{}
+
+// ConnContext gives each connection a place to remember its owner, so that it
+// is looked up once per connection rather than once per request. Set it as
+// the http.Server's ConnContext.
+func ConnContext(ctx context.Context, _ net.Conn) context.Context {
+	return context.WithValue(ctx, connKey{}, &connOwner{})
+}
+
+// connectionOwner returns the owner of r's connection, from the connection's
+// memory when the server set ConnContext. It is the owner, not a verdict,
+// that is remembered.
+func (a *Auth) connectionOwner(r *http.Request) (int, error) {
+	if c, ok := r.Context().Value(connKey{}).(*connOwner); ok {
+		c.once.Do(func() { c.uid, c.err = a.lookupOwner(r) })
+		return c.uid, c.err
+	}
+	return a.lookupOwner(r)
+}
+
+func (a *Auth) lookupOwner(r *http.Request) (int, error) {
+	local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if local == nil {
+		return 0, errors.New("its connection is unknown")
+	}
+	server, err1 := netip.ParseAddrPort(local.String())
+	client, err2 := netip.ParseAddrPort(r.RemoteAddr)
+	if err1 != nil || err2 != nil {
+		return 0, errors.New("its connection is unknown")
+	}
+	server = netip.AddrPortFrom(server.Addr().Unmap(), server.Port())
+	client = netip.AddrPortFrom(client.Addr().Unmap(), client.Port())
+	return a.owner(server, client)
 }
 
 // maxRefusalWarnings is how many refused launches are reported; another
 // user could otherwise fill the terminal or background.log with them.
 const maxRefusalWarnings = 3
 
-func (a *Auth) warnRefused(why string) {
+func (a *Auth) warnRefused(msg string) {
 	if a.warn == nil {
 		return
 	}
 	switch n := a.refusals.Add(1); {
 	case n <= maxRefusalWarnings:
-		a.warn("refused the launch URL: " + why)
+		a.warn(msg)
 	case n == maxRefusalWarnings+1:
-		a.warn("refused the launch URL again; further refusals are not reported")
+		a.warn("refused another connection of another user; further refusals are not reported")
 	}
 }
 

@@ -87,7 +87,7 @@ export async function startContainerServer(name, fx) {
     let m;
     for (let i = 0; i < 60 && !m; i++) {
       await sleep(500);
-      m = log().match(/http:\/\/127\.0\.0\.1:(\d+)(\/[A-Za-z0-9_-]+)\/\?token=\S+/);
+      m = log().match(/http:\/\/127\.0\.0\.1:(\d+)\/\?token=\S+/); // names no prefix
     }
     if (!m) throw new Error(`fsb did not start in ${container}:\n${log()}`);
     const origin = `http://127.0.0.1:${m[1]}`;
@@ -97,7 +97,7 @@ export async function startContainerServer(name, fx) {
       await sleep(250);
     }
     const release = docker(['exec', container, 'sh', '-c', '. /etc/os-release; echo "$PRETTY_NAME"']).trim();
-    return { url: m[0], origin, base: origin + m[2], stderr: log, stop, platform: 'linux', release };
+    return { url: m[0], origin, stderr: log, stop, platform: 'linux', release };
   } catch (e) {
     await stop();
     throw e;

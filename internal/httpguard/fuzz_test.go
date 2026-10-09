@@ -110,6 +110,7 @@ func FuzzLaunchTokenCannotBeReplayedOrMisplaced(f *testing.F) {
 	f.Add("//", "TOKEN")
 	f.Add("/?", "TOKEN")
 	f.Add("/", "")
+	f.Add("/PREFIX/", "TOKEN")
 	f.Fuzz(func(t *testing.T, path, token string) {
 		a, err := NewAuth()
 		if err != nil {
@@ -121,7 +122,9 @@ func FuzzLaunchTokenCannotBeReplayedOrMisplaced(f *testing.F) {
 		h := Middleware(a, 4242)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 		try := func() *httptest.ResponseRecorder {
 			q := url.Values{"token": {token}}
-			full := "/" + a.Prefix() + path
+			// The launch URL is the bare root; "PREFIX" stands for this start's
+			// prefix, under which the token must not work.
+			full := strings.ReplaceAll(path, "PREFIX", a.Prefix())
 			req := &http.Request{Method: "GET", Host: "127.0.0.1:4242", Header: http.Header{}, URL: &url.URL{Path: full, RawQuery: q.Encode()}, RequestURI: full}
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)

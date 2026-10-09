@@ -65,6 +65,28 @@ else
 	echo "FAIL no warning; fsb said: $(inhome 'cat fsb.err')"
 	fail=1
 fi
-got=$(code tester)
+case $url in
+http://127.0.0.1:8124/\?token=*) echo "PASS the launch URL names no prefix" ;;
+*) echo "FAIL the launch URL names more than the token: $url"; fail=1 ;;
+esac
+# fsb's own user launches; the redirect names the prefix, and the session
+# cookie comes back with it.
+r=$(as tester curl -s -D - -o /dev/null "$url")
+got=$(printf '%s\n' "$r" | sed -n '1s/^HTTP[^ ]* \([0-9]*\).*/\1/p')
 if [ "$got" = 303 ]; then echo "PASS the launch URL still works for fsb's own user (303)"; else echo "FAIL own user's launch got $got, want 303"; fail=1; fi
+base=http://127.0.0.1:8124$(printf '%s\n' "$r" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
+cookie=$(printf '%s\n' "$r" | tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: \(fsb_session=[^;]*\).*/\1/p')
+# The cookie, captured by a server of the other user (the browser sends it to
+# any 127.0.0.1 server whose path starts with the prefix), and replayed.
+status() { as "$1" curl -s -o /dev/null -w '%{http_code}' -H "Cookie: $cookie" "${base}api/status"; }
+got=$(status intruder)
+if [ "$got" = 403 ]; then echo "PASS another user replaying the session cookie is refused (403)"; else echo "FAIL another user's replayed cookie got $got, want 403"; fail=1; fi
+got=$(status tester)
+if [ "$got" = 200 ]; then echo "PASS the session works for fsb's own user (200)"; else echo "FAIL own user's session got $got, want 200"; fail=1; fi
+if inhome 'grep -q "refused a request: a request with your session came from another user" fsb.err'; then
+	echo "PASS fsb warned that the cookie may have been captured"
+else
+	echo "FAIL no warning about the cookie; fsb said: $(inhome 'cat fsb.err')"
+	fail=1
+fi
 exit $fail

@@ -44,6 +44,11 @@ func TestBackgroundStartsDetachedAndStopStopsIt(t *testing.T) {
 	if !strings.Contains(out, "open this single-use URL: http://127.0.0.1:") {
 		t.Errorf("no URL printed:\n%s", out)
 	}
+	// The launch URL names no prefix: it goes into the command line of the
+	// program that opens the browser, which other users can read.
+	if !regexp.MustCompile(`single-use URL: http://127\.0\.0\.1:\d+/\?token=[A-Za-z0-9_-]+\n`).MatchString(out) {
+		t.Errorf("the launch URL is not the bare root with a token:\n%s", out)
+	}
 	m := regexp.MustCompile(`background \(process (\d+)\)`).FindStringSubmatch(out)
 	if m == nil {
 		t.Fatalf("no process number printed:\n%s", out)

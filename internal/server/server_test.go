@@ -96,7 +96,7 @@ func newEnvWith(t testing.TB, debug bool, coreMissing []string, tweak func(*Conf
 	if resp.StatusCode != 200 {
 		t.Fatalf("login status = %d", resp.StatusCode)
 	}
-	return &env{home: home, base: ts.URL + strings.TrimSuffix(srv.LaunchPath(), "/"), client: client, ts: ts}
+	return &env{home: home, base: ts.URL + strings.TrimSuffix(srv.AppPath(), "/"), client: client, ts: ts}
 }
 
 func (e *env) get(t *testing.T, endpoint, path string) (int, string) {
