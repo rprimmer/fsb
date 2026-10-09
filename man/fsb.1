@@ -611,7 +611,8 @@ folder
 .B fsb
 cannot read, is therefore refused, as is one whose names changed (a link
 added or removed, or a file or folder renamed or moved) until the index is
-refreshed; refreshes are at least 15 seconds apart.
+refreshed; refreshes start at least 15 seconds apart, and at least twice as
+long as the last one took.
 .SH ENVIRONMENT
 .TP
 .B HOME

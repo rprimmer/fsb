@@ -29,6 +29,9 @@ jobs:
         run: go vet ./...
       - name: test (race)
         run: go test -race ./...
+      - name: every test the specs cite exists
+        if: runner.os == 'Linux'
+        run: python3 specs/tools/check-traceability.py
 
   web:
     runs-on: ubuntu-latest
