@@ -122,6 +122,9 @@ func TestDifferentialEverySpellingOfASecretIsRefused(t *testing.T) {
 		{"Library/Safari/History.db", false}, {"Library/Cookies/Cookies.binarycookies", false},
 		{"work/.env", false}, {"work/.env.local", false}, {"work/server.pem", false}, {"work/id.key", false},
 		{"Café/cert.pem", false}, {"Straße/token.key", false},
+		// Protected only by rules anchored to one place (a user's own deny
+		// lines), which a name anywhere cannot stand in for.
+		{"private/notes.txt", false}, {"private", true}, {"abs-private/notes.txt", false},
 	}
 	for _, s := range secrets {
 		if s.isDir {
@@ -135,7 +138,8 @@ func TestDifferentialEverySpellingOfASecretIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(home, "public", "readme.txt"), "public")
-	deny, err := rules.Parse(strings.NewReader(strings.Join(rules.CoreDeny, "\n")), rules.ParseOptions{Home: home})
+	anchored := []string{"~/private/", filepath.Join(home, "abs-private") + "/"}
+	deny, err := rules.Parse(strings.NewReader(strings.Join(append(append([]string{}, rules.CoreDeny...), anchored...), "\n")), rules.ParseOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,6 +162,13 @@ func TestDifferentialEverySpellingOfASecretIsRefused(t *testing.T) {
 			}
 			paths := spellings(t, r, real, target, 45, aliasDirs)
 			paths = append(paths, real)
+			// macOS's special root entries name every path a second time; the OS
+			// decides here whether they reach the secret.
+			for _, magic := range []string{"/.nofollow", "/.NoFollow", "/.resolve", "/.vol"} {
+				if fi, err := os.Stat(magic + real); err == nil && os.SameFile(fi, target) {
+					paths = append(paths, magic+real)
+				}
+			}
 			// Also every path through a symlink alias of the directory, and named forks.
 			if strings.HasPrefix(s.rel, ".ssh") {
 				paths = append(paths, filepath.Join(home, "innocent-link", strings.TrimPrefix(strings.TrimPrefix(s.rel, ".ssh"), "/")))

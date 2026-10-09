@@ -80,6 +80,25 @@ func stripPathPrefix(p, prefix string) (string, bool) {
 	return rest, true
 }
 
+// specialRoots are entries of the root folder through which macOS names every
+// path a second time: /.nofollow/<path> opens <path> without following a final
+// symbolic link, /.resolve and /.vol reach files by identity. Resolving
+// symbolic links keeps the prefix, so a rule anchored to a place (~/private/)
+// would not match the second name; a path through any of them is refused.
+var specialRoots = []string{".nofollow", ".resolve", ".vol"}
+
+// throughSpecialRoot reports whether p begins with one of specialRoots,
+// compared as APFS compares names.
+func throughSpecialRoot(p string) bool {
+	first, _, _ := strings.Cut(strings.TrimLeft(p, "/"), "/")
+	for _, s := range specialRoots {
+		if fold(first) == fold(s) {
+			return true
+		}
+	}
+	return false
+}
+
 // canonPath maps a path under the data volume to the ordinary path it is a
 // firmlink for. Any other path is returned unchanged.
 func canonPath(p string) string {

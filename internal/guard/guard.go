@@ -155,6 +155,9 @@ func (g *Guard) inRoots(real string) bool {
 // violation checks a resolved real path against the roots and deny rules.
 func (g *Guard) violation(real string, isDir bool) *DeniedError {
 	real = canonPath(real)
+	if throughSpecialRoot(real) {
+		return &DeniedError{Path: real, Rule: "a macOS special path alias (/.nofollow, /.resolve, /.vol)"}
+	}
 	if !g.inRoots(real) {
 		return &DeniedError{Path: real, Rule: "outside configured roots"}
 	}

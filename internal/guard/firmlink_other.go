@@ -4,3 +4,6 @@ package guard
 
 // canonPath is the identity where the platform has no firmlinks.
 func canonPath(p string) string { return p }
+
+// throughSpecialRoot is false where the platform has no such aliases.
+func throughSpecialRoot(string) bool { return false }
