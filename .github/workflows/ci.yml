@@ -8,15 +8,16 @@ on:
 permissions:
   contents: read
 
-# Actions are pinned to reviewed commits (the version is in each comment) and
-# Node and govulncheck to exact versions, so a run is reproducible without
-# upkeep. Update them by hand, deliberately.
+# Actions are pinned to reviewed commits (the version is in each comment),
+# Node and govulncheck to exact versions, and runners to named images (not
+# -latest, which moves on its own), so a run is reproducible without upkeep.
+# Update them by hand, deliberately.
 
 jobs:
   test:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-26, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,7 +35,7 @@ jobs:
         run: python3 specs/tools/check-traceability.py
 
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -59,7 +60,7 @@ jobs:
         run: git diff --exit-code -- dist
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -87,7 +88,7 @@ jobs:
           if-no-files-found: ignore
 
   fuzz:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -118,7 +119,7 @@ jobs:
           if-no-files-found: ignore
 
   vuln:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
