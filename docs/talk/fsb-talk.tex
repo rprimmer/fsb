@@ -7,7 +7,7 @@
 
 \title{fsb}
 \subtitle{A read-only file browser in your web browser, and how it is built}
-\date{October 2026}
+\date{October 2026 \textperiodcentered{} describes fsb 1.0.12}
 
 \definecolor{guard}{HTML}{B5432C}
 \definecolor{net}{HTML}{2C6CB5}
@@ -28,7 +28,7 @@
 \begin{frame}{What fsb is}
   \begin{itemize}
     \item One Go binary that serves a browser UI on \code{127.0.0.1}
-    \item Browse, sort, filter, search and preview your own Mac's files
+    \item Browse, sort, filter, search and preview your own files, on macOS or Linux
     \item \textbf{Read-only by construction}: only \code{GET} endpoints, no code
       that writes your files
     \item \textbf{Local-only}: loopback address, Host and Origin checks,
@@ -45,12 +45,12 @@
   \centering
   \begin{tikzpicture}[node distance=6mm and 9mm]
     \node[box, draw=ui, text width=30mm] (ui) {Browser\\\footnotesize Svelte UI (\code{web/})};
-    \node[box, draw=net, right=of ui, text width=30mm] (mw) {\code{httpguard}\\\footnotesize Host, origin, token, cookie};
+    \node[box, draw=net, right=of ui, text width=30mm] (mw) {\code{httpguard}\\\footnotesize Host, origin, token, cookie, owner};
     \node[box, right=of mw, text width=30mm] (srv) {\code{server}\\\footnotesize 11 \code{/api/} routes};
     \node[box, draw=guard, very thick, below=12mm of srv, text width=30mm] (g) {\code{guard}\\\footnotesize the one chokepoint};
     \node[box, left=of g, text width=30mm] (rules) {\code{rules}\\\footnotesize deny and hide lists};
     \node[box, right=of g, text width=22mm] (fs) {Filesystem};
-    \node[box, above=of srv, text width=30mm] (ql) {\code{quicklook}\\\footnotesize thumbnails via \code{qlmanage}};
+    \node[box, above=of srv, text width=30mm] (ql) {\code{quicklook}\\\footnotesize thumbnails via \code{qlmanage} (macOS)};
     \node[box, left=of rules, text width=30mm] (main) {\code{cmd/fsb}\\\footnotesize startup, port, PID};
 
     \draw[flow] (ui) -- node[above, font=\scriptsize]{HTTP} (mw);
@@ -102,18 +102,21 @@
     \node[draw=net, below=of m] (o) {Same origin?};
     \node[draw=net, below=of o] (p) {Under the random prefix?};
     \node[draw=net, below=of p] (c) {Session cookie matches?};
+    \node[draw=net, below=of c] (u) {Linux: the user's own connection?};
     \node[right=16mm of h] (r) {\code{ServeMux} route};
     \node[below=of r] (s) {\code{Server.file}};
     \node[draw=guard, very thick, below=of s] (g) {\code{Guard.Open}};
     \node[below=of g] (w) {stream the bytes};
-    \foreach \x/\y in {h/m, m/o, o/p, p/c, r/s, s/g, g/w} \draw[flow] (\x) -- (\y);
-    \draw[flow] (c.east) -- ++(6mm,0) |- (r.west);
-    \foreach \x in {h,o,p,c} \node[no, anchor=east, draw=none, minimum width=0pt, text width=12mm, align=right] at ($(\x.west)+(-1mm,0)$) {no: 403};
+    \foreach \x/\y in {h/m, m/o, o/p, p/c, c/u, r/s, s/g, g/w} \draw[flow] (\x) -- (\y);
+    \draw[flow] (u.east) -- ++(6mm,0) |- (r.west);
+    \foreach \x in {h,o,p,c,u} \node[no, anchor=east, draw=none, minimum width=0pt, text width=12mm, align=right] at ($(\x.west)+(-1mm,0)$) {no: 403};
     \node[no, anchor=east, draw=none, minimum width=0pt, text width=12mm, align=right] at ($(m.west)+(-1mm,0)$) {no: 405};
     \node[no, anchor=west, draw=none, minimum width=0pt, text width=30mm, align=left] at ($(g.east)+(1mm,0)$) {refused: 404,\\like a missing file};
   \end{tikzpicture}
   \vfill
   \small Left column: \code{httpguard.Middleware}, the same for every route.
+  On Linux the owner of the connection is looked up once per connection;
+  macOS has no such check.
 \end{frame}
 
 \begin{frame}{The chokepoint: \code{guard.open}}
@@ -143,8 +146,8 @@
 \begin{frame}{Logging in without a password}
   \centering
   \begin{tikzpicture}[node distance=5mm and 12mm]
-    \node[box, draw=ui, text width=44mm] (t) {fsb prints a launch URL\\\scriptsize\code{http://127.0.0.1:\emph{port}/\emph{prefix}/?token=\ldots}};
-    \node[box, draw=net, below=of t, text width=44mm] (x) {\code{exchange}: token right\\\emph{and} not used before?};
+    \node[box, draw=ui, text width=44mm] (t) {fsb prints a launch URL\\\scriptsize\code{http://127.0.0.1:\emph{port}/?token=\ldots}};
+    \node[box, draw=net, below=of t, text width=44mm] (x) {\code{exchange}: token right\\and unused; on Linux,\\the user's own connection?};
     \node[box, right=of x, text width=44mm] (k) {set an \code{HttpOnly}, \code{SameSite=Strict}\\cookie; redirect to \code{/\emph{prefix}/}};
     \node[no, left=of x] (n) {otherwise: 403};
     \draw[flow] (t) -- (x); \draw[flow] (x) -- node[above, font=\scriptsize]{yes} (k);
@@ -152,18 +155,19 @@
   \end{tikzpicture}
   \vfill
   \begin{itemize}\small
-    \item The token works once (an atomic compare-and-swap), then disappears
-      from the address bar
-    \item The URL prefix is random too: other paths are refused like
-      unauthenticated requests
-    \item Comparisons are constant-time
+    \item The token works once (an atomic compare-and-swap), then leaves the address bar
+    \item The prefix is random and not in the launch URL: a user who reads the
+      opener's command line learns only a spent token
+    \item Other paths are refused like unauthenticated requests; comparisons are constant-time
+    \item Linux: another user's connection is refused, at launch and on every
+      request, without using up the token
   \end{itemize}
 \end{frame}
 
 \begin{frame}[plain]
   \centering
   \includegraphics[height=0.93\textheight]{callgraph.pdf}\\[-1mm]
-  {\scriptsize Every call between fsb's own functions: 142 functions, 221 calls.
+  {\scriptsize Every call between fsb's own functions: 162 functions, 251 calls.
   Generated from the code, not drawn.}
 \end{frame}
 
@@ -182,11 +186,11 @@
     \toprule
     Package & Functions & Role \\
     \midrule
-    \code{internal/guard}     & 60 & the chokepoint: open, list, search, archives, links \\
-    \code{cmd/fsb}            & 30 & startup, port choice, background mode \\
-    \code{internal/server}    & 19 & HTTP handlers \\
+    \code{internal/guard}     & 61 & the chokepoint: open, list, search, archives, links \\
+    \code{cmd/fsb}            & 34 & startup, port choice, background mode, opener \\
+    \code{internal/server}    & 27 & HTTP handlers \\
     \code{internal/rules}     & 16 & gitignore-style rule matching \\
-    \code{internal/httpguard} & 11 & localhost protections and login \\
+    \code{internal/httpguard} & 18 & localhost protections, login, connection owner \\
     \code{web}                &  5 & embedded UI, Markdown frame \\
     \code{internal/quicklook} &  1 & thumbnails for Office and iWork \\
     \bottomrule
@@ -200,14 +204,15 @@
   \begin{columns}[T]
     \column{0.48\textwidth}
     \begin{itemize}
-      \item About 4,400 lines of Go
-      \item About 7,700 lines of Go tests
-      \item About 3,300 lines of Svelte and TypeScript
-      \item Browser tests in Chrome and Safari
+      \item About 4,000 lines of Go
+      \item About 8,100 lines of Go tests
+      \item About 3,100 lines of Svelte and TypeScript
+      \item Browser tests in Chrome and Safari, against macOS and four
+        Linux distributions
     \end{itemize}
     \column{0.48\textwidth}
     \begin{itemize}
-      \item 95 commits since 20 September 2026
+      \item About 140 commits since 20 September 2026
       \item Functional, design and algebraic specs in \LaTeX
       \item Independent reviews at each new boundary
       \item Source only; provided as-is
