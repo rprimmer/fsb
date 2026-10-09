@@ -10,7 +10,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync/atomic"
@@ -28,12 +30,32 @@ const CookieName = "fsb_session"
 // never by port, so without this the cookie would be sent to every other web
 // server on 127.0.0.1 that the same browser visits; with it, the browser sends
 // the cookie only for URLs under the prefix, which no other server has.
+//
+// Where the platform can tell who owns a connection (Linux), the launch token
+// is accepted only from a connection of fsb's own user: the launch URL is in
+// the command line of the program that opens the browser, which other users
+// can read. Refusing a connection does not use the token up, so another user
+// who reads it and uses it first cannot keep the person's browser out.
 type Auth struct {
 	launch  string
 	session string
 	prefix  string
 	used    atomic.Bool
+
+	uid   int                                              // fsb's own user
+	owner func(server, client netip.AddrPort) (int, error) // nil: no check
+	warn  func(string)
 }
+
+// RequireOwner makes the launch exchange accept only connections whose client
+// end belongs to user uid, as owner reports (connowner.Lookup); a nil owner,
+// where the platform cannot tell, leaves the check off.
+func (a *Auth) RequireOwner(uid int, owner func(server, client netip.AddrPort) (int, error)) {
+	a.uid, a.owner = uid, owner
+}
+
+// SetWarn sets where warnings go (a refused launch); by default, nowhere.
+func (a *Auth) SetWarn(f func(string)) { a.warn = f }
 
 // NewAuth generates fresh 256-bit random secrets.
 func NewAuth() (*Auth, error) {
@@ -121,7 +143,22 @@ func Middleware(a *Auth, port int) func(http.Handler) http.Handler {
 
 func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 	tok := r.URL.Query().Get("token")
-	if subtle.ConstantTimeCompare([]byte(tok), []byte(a.launch)) == 1 && a.used.CompareAndSwap(false, true) {
+	if subtle.ConstantTimeCompare([]byte(tok), []byte(a.launch)) != 1 {
+		forbid(w)
+		return
+	}
+	// Checked before the token is used, so that a refused connection leaves it
+	// for the person's own browser.
+	if a.owner != nil {
+		if why := a.notOwn(r); why != "" {
+			if a.warn != nil {
+				a.warn("refused the launch URL: " + why)
+			}
+			forbid(w)
+			return
+		}
+	}
+	if a.used.CompareAndSwap(false, true) {
 		http.SetCookie(w, &http.Cookie{
 			Name:     CookieName,
 			Value:    a.session,
@@ -134,6 +171,30 @@ func exchange(w http.ResponseWriter, r *http.Request, a *Auth) {
 		return
 	}
 	forbid(w)
+}
+
+// notOwn says why r's connection cannot be shown to belong to fsb's own user,
+// or returns "" when it does.
+func (a *Auth) notOwn(r *http.Request) string {
+	local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if local == nil {
+		return "its connection is unknown"
+	}
+	server, err1 := netip.ParseAddrPort(local.String())
+	client, err2 := netip.ParseAddrPort(r.RemoteAddr)
+	if err1 != nil || err2 != nil {
+		return "its connection is unknown"
+	}
+	server = netip.AddrPortFrom(server.Addr().Unmap(), server.Port())
+	client = netip.AddrPortFrom(client.Addr().Unmap(), client.Port())
+	uid, err := a.owner(server, client)
+	switch {
+	case err != nil:
+		return "could not tell which user opened it (" + err.Error() + ")"
+	case uid != a.uid:
+		return fmt.Sprintf("it was opened by another user (uid %d), who may have read it from a command line; your own browser can still use it", uid)
+	}
+	return ""
 }
 
 // sameOrigin rejects requests that a cross-site page could have triggered.

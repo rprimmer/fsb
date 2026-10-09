@@ -760,6 +760,12 @@ or failed (status 3: a program it needs is missing; status 4: opening
 failed).
 The server is running; open the printed URL yourself.
 .TP
+.B fsb: warning: refused the launch URL: it was opened by another user
+On Linux, a connection of another user tried the launch URL, which it may have
+read from a command line.
+It was refused and the URL still works for you; another user on this machine
+is trying to reach your files.
+.TP
 .B Not found. This path is outside the folders fsb serves
 Shown in the interface for a path outside every root; start
 .B fsb
@@ -784,9 +790,15 @@ the
 .B \-\-browser
 program and the browser it starts on Linux;
 .B open
-on macOS, briefly), where another user of the same machine can read it and
-use it before your browser does.
-On a shared machine use
+on macOS, briefly), where another user of the same machine can read it.
+On Linux that user still cannot use it:
+.B fsb
+accepts the launch URL only from a connection of its own user, warns
+.RB ( "refused the launch URL" ),
+and the URL keeps working for your browser.
+On macOS, which offers no such check, it is visible only while
+.B open
+runs; on a shared Mac use
 .B \-\-no\-open
 and paste the printed URL.
 Rule files are read at startup only.

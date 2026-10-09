@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rprimmer/fsb/internal/connowner"
 	"github.com/rprimmer/fsb/internal/guard"
 	"github.com/rprimmer/fsb/internal/rules"
 	"github.com/rprimmer/fsb/internal/server"
@@ -187,7 +188,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if *debug {
 		logger = log.New(stderr, "fsb: ", log.LstdFlags)
 	}
-	srv, err := server.New(server.Config{Guard: g, Debug: *debug, CoreDenyMissing: coreMissing, Home: home, Logger: logger})
+	srv, err := server.New(server.Config{Guard: g, Debug: *debug, CoreDenyMissing: coreMissing, Home: home, Logger: logger, Warn: stderr,
+		UID: os.Geteuid(), ConnOwner: connowner.Lookup})
 	if err != nil {
 		return err
 	}

@@ -7,9 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"mime"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -35,6 +38,13 @@ type Config struct {
 	// Go to path box.
 	Home   string
 	Logger *log.Logger
+	// Warn receives warnings that are always shown, such as a launch URL
+	// refused because another user opened it.
+	Warn io.Writer
+	// UID and ConnOwner, when ConnOwner is set (connowner.Lookup on Linux),
+	// make the launch URL work only from a connection of user UID.
+	UID       int
+	ConnOwner func(server, client netip.AddrPort) (int, error)
 	// Thumbnail draws a PNG picture of the document that prepare places in the
 	// private folder it is given (quicklook.Thumbnail when nil). Tests
 	// substitute their own.
@@ -55,6 +65,10 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Thumbnail == nil {
 		cfg.Thumbnail = quicklook.Thumbnail
+	}
+	auth.RequireOwner(cfg.UID, cfg.ConnOwner)
+	if cfg.Warn != nil {
+		auth.SetWarn(func(msg string) { fmt.Fprintln(cfg.Warn, "fsb: warning: "+msg) })
 	}
 	return &Server{cfg: cfg, auth: auth}, nil
 }

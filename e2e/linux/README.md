@@ -45,6 +45,7 @@ Safari. See [`../README.md`](../README.md), "fsb on Linux".
 | fedora | `fedora:latest` | |
 | alpine | `alpine:latest` | musl libc and BusyBox instead of GNU tools |
 | arch | `archlinux` | amd64 only, so it runs under emulation on Apple silicon |
+| crossuser-*NAME* | each distribution's image | a second user, `intruder`, tries fsb's launch URL before `tester` does: it must get 403, fsb must warn, and `tester` must still get in (`crossuser.sh`, run with `docker exec -u`) |
 | unit-debian, unit-alpine | `golang` images | `go test ./...` (with `-race` on Debian) as a normal user |
 | unit-fedora | `fedora:latest` with the Go toolchain copied from the `golang` image | `go test -race ./...` as a normal user |
 

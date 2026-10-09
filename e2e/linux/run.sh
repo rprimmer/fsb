@@ -1,5 +1,6 @@
 #!/bin/sh
 # Builds fsb and runs its smoke test (smoke.sh) on several Linux distributions,
+# and the check that another user cannot use the launch URL (crossuser.sh),
 # then the Go unit tests on Debian, Alpine and Fedora. Needs a running Docker engine
 # (on a Mac, e.g. "colima start").
 #
@@ -34,7 +35,7 @@ mkdir -p "$logs"
 summary=
 status=0
 record() { # record NAME RESULT
-	summary="$summary$(printf '%-14s %s' "$1" "$2")
+	summary="$summary$(printf '%-18s %s' "$1" "$2")
 "
 	[ "$2" = ok ] || status=1
 }
@@ -56,6 +57,12 @@ for row in $(echo "$DISTROS" | awk 'NF==3 {print $1 "|" $2 "|" $3}'); do
 	rc=$?
 	cat "$logs/$name.log"
 	if [ $rc -eq 0 ]; then record "$name" ok; else record "$name" FAILED; fi
+
+	echo "## $name: another user tries the launch URL"
+	e2e/linux/crossuser.sh "fsb-smoke:$name" "$platform" >"$logs/crossuser-$name.log" 2>&1
+	rc=$?
+	cat "$logs/crossuser-$name.log"
+	if [ $rc -eq 0 ]; then record "crossuser-$name" ok; else record "crossuser-$name" FAILED; fi
 done
 
 for flavor in debian alpine fedora; do
