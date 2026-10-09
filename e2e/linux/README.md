@@ -17,6 +17,13 @@ brew install colima docker docker-buildx
 colima start --vm-type vz --vz-rosetta
 ```
 
+## A container for anything else
+
+`box.sh` (linked as `~/bin/linuxbox` on the author's Mac, so it runs from any folder)
+starts one of the distributions above: a plain one (`linuxbox fedora`), one with fsb
+and the test files (`linuxbox debian fsb`), or fsb in the Mac's browser
+(`linuxbox alpine browse`). With no arguments it asks; `linuxbox --help` says the rest.
+
 ## Browsing a containerized fsb
 
 ```sh
