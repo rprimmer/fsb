@@ -11,7 +11,8 @@ permissions:
 # Actions are pinned to reviewed commits (the version is in each comment),
 # Node and govulncheck to exact versions, and runners to named images (not
 # -latest, which moves on its own), so a run is reproducible without upkeep.
-# Update them by hand, deliberately.
+# Update them by hand, deliberately. Every job has a time limit: GitHub's
+# default is six hours, and a hung Chrome launch once held the e2e job open.
 
 jobs:
   test:
@@ -19,6 +20,7 @@ jobs:
       matrix:
         os: [macos-26, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -36,6 +38,7 @@ jobs:
 
   web:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
@@ -61,6 +64,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -69,6 +73,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
+      - name: a failed Chrome launch leaves no Chrome behind
+        run: node --test --test-reporter=spec e2e/launch.test.mjs
       - name: Chrome browser tests (including the 100,000-file test)
         env:
           CI: 'true'
@@ -89,6 +95,7 @@ jobs:
 
   fuzz:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -120,6 +127,7 @@ jobs:
 
   vuln:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

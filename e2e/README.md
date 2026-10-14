@@ -33,6 +33,7 @@ failed tests are written to `e2e/artifacts/`.
 - `suite.mjs` holds the tests, written once against a small driver interface.
 - `lib/chrome.mjs` is a driver over the Chrome DevTools protocol.
 - `lib/safari.mjs` is a driver over W3C WebDriver (`safaridriver`).
+- `launch.test.mjs` checks, without a browser, that a Chrome launch that gives up kills the Chrome it started (`node --test e2e/launch.test.mjs`).
 - The tests poll for state (`waitFor`) instead of sleeping, so they hold up on slow machines.
 - Safari under WebDriver reports arrow keys with a modifier held as `key: "\u001c"` (a control character) while `code` stays correct. The app matches navigation keys by `code` (`web/src/lib/keys.ts`) for this reason.
 

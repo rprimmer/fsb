@@ -36,7 +36,7 @@ const KEYS = {
   '/': { key: '/', code: 'Slash', vk: 191, text: '/' },
 };
 
-export async function launchChrome({ width = 1280, height = 800 } = {}) {
+export async function launchChrome({ width = 1280, height = 800, startTimeout = 20000 } = {}) {
   const bin = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'fsb-chrome-'));
   const args = [
@@ -51,10 +51,25 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
     ...(process.env.CI ? ['--no-sandbox'] : []),
     'about:blank',
   ];
-  const child = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  // Its own process group, so that a failed launch can kill Chrome's helpers too.
+  const child = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+  let ws;
+  // Until the driver is returned, nothing else can close this Chrome, and a live
+  // Chrome (or a helper sharing its stderr) keeps the test run from ever exiting.
+  const abandon = (e) => {
+    try {
+      ws?.close();
+    } catch {}
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {}
+    child.stderr.destroy();
+    rmSync(profile, { recursive: true, force: true });
+    throw e;
+  };
   const browserWS = await new Promise((resolve, reject) => {
     let err = '';
-    const timer = setTimeout(() => reject(new Error(`Chrome did not report a DevTools endpoint in 20s.\n${err}`)), 20000);
+    const timer = setTimeout(() => reject(new Error(`Chrome did not report a DevTools endpoint in ${startTimeout / 1000}s.\n${err}`)), startTimeout);
     child.stderr.on('data', (d) => {
       err += d;
       const m = err.match(/DevTools listening on (ws:\/\/\S+)/);
@@ -64,13 +79,13 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
       }
     });
     child.on('exit', (code) => reject(new Error(`Chrome exited early (${code}).\n${err}`)));
-  });
+  }).catch(abandon);
 
-  const ws = new WebSocket(browserWS);
+  ws = new WebSocket(browserWS);
   await new Promise((resolve, reject) => {
     ws.onopen = resolve;
     ws.onerror = () => reject(new Error('could not connect to the DevTools websocket'));
-  });
+  }).catch(abandon);
   let nextId = 0;
   const pending = new Map();
   const events = [];
@@ -89,15 +104,20 @@ export async function launchChrome({ width = 1280, height = 800 } = {}) {
       ws.send(JSON.stringify({ id, method, params, sessionId }));
     });
 
-  const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
-  const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
-  const S = (method, params) => send(method, params, sessionId);
-  await S('Page.enable');
-  await S('Runtime.enable');
-  await S('Log.enable');
-  await S('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-  // A headless page can lose focus across navigations, and real key presses then go nowhere.
-  await S('Emulation.setFocusEmulationEnabled', { enabled: true });
+  let S;
+  try {
+    const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+    const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
+    S = (method, params) => send(method, params, sessionId);
+    await S('Page.enable');
+    await S('Runtime.enable');
+    await S('Log.enable');
+    await S('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    // A headless page can lose focus across navigations, and real key presses then go nowhere.
+    await S('Emulation.setFocusEmulationEnabled', { enabled: true });
+  } catch (e) {
+    abandon(e);
+  }
 
   let grantedOrigin = '';
   const eventsAfter = (mark, method) => events.slice(mark).find((m) => m.method === method);
