@@ -17,6 +17,12 @@ brew install colima docker docker-buildx
 colima start --vm-type vz --vz-rosetta
 ```
 
+After that first start, `make linux` and `make linux-e2e` start Colima themselves
+when Docker is not running, and stop it again 20 minutes after the run ends if
+nothing else is using it then (no test run, no container). A Colima you started
+yourself is never stopped. `FSB_COLIMA_IDLE` sets the wait in seconds
+(`docker.sh`).
+
 ## A container for anything else
 
 `box.sh` (linked as `~/bin/linuxbox` on the author's Mac, so it runs from any folder)

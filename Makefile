@@ -36,17 +36,20 @@ test:
 man-lint:
 	mandoc -Tlint $(MANPAGE)
 
-# linux runs the smoke test on several Linux distributions in Docker (needs a
-# running Docker engine; see e2e/linux/README.md).
+# linux runs the smoke test on several Linux distributions in Docker (see
+# e2e/linux/README.md). Both Linux targets start Colima if Docker is not
+# running, and stop it after 20 idle minutes if they started it (docker.sh).
 linux:
-	e2e/linux/run.sh
+	e2e/linux/docker.sh up
+	e2e/linux/run.sh; s=$$?; e2e/linux/docker.sh release; exit $$s
 
 # linux-e2e runs the Chrome browser suite on the Mac against fsb in each native
 # Linux distribution (Safari: see e2e/README.md, "fsb on Linux").
 linux-e2e:
-	for d in debian ubuntu fedora alpine; do \
-		FSB_E2E_LINUX=$$d FSB_E2E_SKIP_SAFARI=1 node --test --test-reporter=spec e2e/chrome.test.mjs || exit 1; \
-	done
+	e2e/linux/docker.sh up
+	s=0; for d in debian ubuntu fedora alpine; do \
+		FSB_E2E_LINUX=$$d FSB_E2E_SKIP_SAFARI=1 node --test --test-reporter=spec e2e/chrome.test.mjs || { s=1; break; }; \
+	done; e2e/linux/docker.sh release; exit $$s
 
 # install puts the program in BINDIR and the manual page in MAN1DIR.
 install: install-bin install-man
