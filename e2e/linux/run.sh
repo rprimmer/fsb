@@ -10,6 +10,12 @@
 set -u
 cd "$(dirname "$0")/../.."
 
+# One clear message instead of the same connection error from every stage.
+if ! docker info >/dev/null 2>&1; then
+	echo 'run.sh: Docker is not running (on a Mac: colima start)' >&2
+	exit 1
+fi
+
 # name image platform
 DISTROS='
 debian  debian:trixie   linux/arm64
