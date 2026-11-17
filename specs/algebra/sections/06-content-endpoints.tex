@@ -29,7 +29,7 @@ accepted.
 \label{law:dataless}
 For a file whose contents are stored only in the cloud, no endpoint reads it
 implicitly: the guard reports it as not downloaded before any read.
-\Tests{guard/dataless tests; e2e (hover peek)}
+\Tests{guard/dataless\_darwin\_test.go::TestIsDataless, TestRefuseDataless; guard/dataless\_walk\_test.go::TestLinkIndexDoesNotEnterDatalessFolders, TestQuickLookRefusesAPackageWithADatalessFolder; e2e (hover peek)}
 \end{law}
 
 \begin{law}[Archive listing discloses names only]
