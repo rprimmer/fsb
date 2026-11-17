@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks that every test and file the specifications cite exists.
+"""Checks that every test and file the specifications, README.md and SECURITY.md cite exists.
 
 Reads every section of the three specifications and looks each citation up:
 
@@ -16,12 +16,18 @@ and, in the algebra's \\Tests{...}, each item separated by ";":
   web/src/lib/x.test.ts: title (or ::title)         the file, and the title in it
   e2e/linux/crossuser.sh, format.test.ts            the file
 
-A path in \\code{} is checked when its first part is a top-level entry of the
-repository: it must be a tracked file or folder, or one Git ignores (an output
-folder such as e2e/artifacts/linux). A bare name with a source extension must
-be the name of some tracked file. Other paths (/proc, ~/.ssh, net/http,
-api/list) name no file of this repository and are skipped. Files are judged by
-`git ls-files`, so the answer is the same in a fresh checkout.
+A path in \\code{} is checked when its first part is a folder of the
+repository, at the root or under internal/ (guard/x_test.go): it must be a
+tracked file or folder, or one Git ignores (an output folder such as
+e2e/artifacts/linux). A bare name with a source extension must be the name of
+some tracked file. Other paths (/proc, ~/.ssh, net/http, api/list) name no
+file of this repository and are skipped. Files are judged by `git ls-files`,
+so the answer is the same in a fresh checkout.
+
+README.md and specs/SECURITY.md are read too: each word of a code span is
+checked like a \\code{} path (also relative to the document's own folder), a
+`TestX` must exist, and every relative link must lead to a file or folder of
+the repository. Fenced code blocks, whole commands to type, are skipped.
 
 A title may be cut short with \\ldots; the part before it must appear, and in a
 path \\ldots stands for any part.  Prints each citation that is not found and
@@ -42,6 +48,7 @@ SOURCES = sorted(
     for d in ('functional', 'design', 'algebra')
     for p in glob.glob(os.path.join(ROOT, 'specs', d, 'sections', '*.tex'))
 )
+MARKDOWN = ['README.md', 'specs/SECURITY.md']
 SOURCE_EXT = ('.go', '.mjs', '.ts', '.sh', '.yml', '.py', '.tex', '.md', '.svelte', '.html', '.json', '.mod', '.sum')
 
 
@@ -84,6 +91,26 @@ def repo_path_exists(path):
     return git('check-ignore', '-q', '--no-index', path).returncode == 0
 
 
+def cited_path_missing(p, bases):
+    """True when p names a folder of the repository under one of bases (''
+    is the root) but nothing there; False when it resolves, or names no
+    repository folder at all (/proc, ~/.ssh, net/http, api/list)."""
+    p = p.removeprefix('./')
+    if p.startswith(('/', '~', '#')) or '://' in p:
+        return False
+    seg = p.split('/')[0]
+    cands = []
+    for base in bases:
+        c = os.path.normpath(os.path.join(base, p))
+        if c.startswith('..') or c.split('/')[0] not in top_level:
+            continue
+        under = os.path.normpath(os.path.join(base, seg))
+        if base and seg != '..' and under not in tracked_dirs and under not in tracked_set:
+            continue
+        cands.append(c)
+    return bool(cands) and not any(repo_path_exists(c) for c in cands)
+
+
 go_funcs = {}  # test function -> the files that define it
 for path in tracked:
     if path.endswith('_test.go'):
@@ -91,6 +118,14 @@ for path in tracked:
             go_funcs.setdefault(name, set()).add(path)
 suite = read('e2e/suite.mjs').replace("\\'", "'")  # titles are JS strings: fsb\'s
 smoke = read('e2e/linux/smoke.sh')
+
+
+def check_cited_file(rel, p, bases, missing):
+    if '/' in p:
+        if cited_path_missing(p, bases):
+            missing.append(f'{rel}: file {p}')
+    elif p.endswith(SOURCE_EXT) and re.fullmatch(r'[\w-]+(\.[\w-]+)*', p) and p not in tracked_names:
+        missing.append(f'{rel}: file named {p}')
 
 
 def tests_items(text):
@@ -126,7 +161,7 @@ def check_tests_item(rel, item, missing):
         return
     # Any other repository path, such as e2e/linux/crossuser.sh.
     m = re.match(r'([\w.-]+(?:/[\w.-]+)+)', item)
-    if m and m.group(1).split('/')[0] in top_level and not repo_path_exists(m.group(1)):
+    if m and cited_path_missing(m.group(1), ['', 'internal']):
         missing.append(f'{rel}: file {m.group(1)}')
     # A Go test named alone must exist somewhere.
     if not m:
@@ -168,12 +203,27 @@ for rel in SOURCES:
         check_tests_item(rel, item, missing)
     # Files named in \code{}.
     for raw in sorted(set(re.findall(r'\\code\{([^{}]*)\}', text))):
-        p = raw.replace(r'\_', '_').replace(r'\ldots', '*')
-        if '/' in p:
-            if p.split('/')[0] in top_level and not repo_path_exists(p):
-                missing.append(f'{rel}: file {p}')
-        elif p.endswith(SOURCE_EXT) and re.match(r'[\w-]+(\.[\w-]+)*$', p) and p not in tracked_names:
-            missing.append(f'{rel}: file named {p}')
+        check_cited_file(rel, raw.replace(r'\_', '_').replace(r'\ldots', '*'), ['', 'internal'], missing)
+
+# The Markdown documents: code spans (each word of a command too) and links.
+# Fenced blocks are whole commands to type, not citations.
+for rel in MARKDOWN:
+    here = os.path.dirname(rel)
+    text = re.sub(r'^```.*?^```', '', read(rel), flags=re.M | re.S)
+    for span in sorted(set(re.findall(r'`([^`\n]+)`', text))):
+        for word in span.split():
+            if re.fullmatch(r'(?:Test|Fuzz|Benchmark)\w+', word):
+                if word not in go_funcs:
+                    missing.append(f'{rel}: Go test {word}')
+            else:
+                check_cited_file(rel, word, ['', here, 'internal'], missing)
+    for target in sorted(set(re.findall(r'\]\(([^)\s]+)\)', text))):
+        target = target.split('#')[0]
+        if not target or re.match(r'[a-z]+:', target):
+            continue
+        resolved = os.path.normpath(os.path.join(here, target))
+        if resolved.startswith('..') or not repo_path_exists(resolved):
+            missing.append(f'{rel}: link to {target}')
 
 for m in missing:
     print(m)

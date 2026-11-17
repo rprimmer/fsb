@@ -32,7 +32,8 @@ On every change: formatting, vetting, the Go tests under the race detector, the 
 tests, type checking, a build whose output must equal the committed one, an audit of the
 packages that ship, the Chrome browser tests (on Linux these include the names that are not
 UTF-8), timed fuzzing of the four fuzz targets, and a check that every test and every repository file the three
-specifications cite exists, a Go test in the file its citation names
+specifications, the README and \code{SECURITY.md} cite or link to exists, a Go test in the
+file its citation names
 (\code{specs/tools/check-traceability.py}; before 2026-11-17 it checked none of the Go tests
 and files the algebra's citations name, and two of those were wrong).
 The runner images are named (\code{ubuntu-24.04}, \code{macos-26}), not the moving
