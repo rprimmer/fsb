@@ -140,5 +140,8 @@ jobs:
         run: GOBIN="$RUNNER_TEMP/bin" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: govulncheck (linux)
         run: GOOS=linux "$RUNNER_TEMP/bin/govulncheck" ./...
+      # Runs even when the linux scan failed, so one run reports both platforms.
+      # !cancelled(), not always(): a cancel or a timeout still stops it.
       - name: govulncheck (darwin)
+        if: ${{ !cancelled() }}
         run: GOOS=darwin "$RUNNER_TEMP/bin/govulncheck" ./...
