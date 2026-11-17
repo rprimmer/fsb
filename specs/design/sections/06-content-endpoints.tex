@@ -143,7 +143,7 @@ It is done in three layers, each assuming the one before failed.
 
 Links are not followed inside the frame.  A click sends the interface the link's number and
 the number of the rendering it belongs to; the interface ignores a message about an earlier
-rendering, looks the link up in its own list, so the frame supplies neither the kind of a
+rendering (and one sent before the first, which carries no number), looks the link up in its own list, so the frame supplies neither the kind of a
 link nor its target, and either changes the location to the target file's folder with the file selected,
 or opens a web address in a new tab without a referrer.  Images inside the roots are fetched by
 the interface, through the guarded image endpoint, and passed in as \code{data:} URLs, because the
