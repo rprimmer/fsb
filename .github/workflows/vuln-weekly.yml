@@ -2,8 +2,9 @@ name: vuln-weekly
 
 # govulncheck and npm audit once a week, so a new advisory against Go, a Go
 # module or a web dependency is reported without waiting for the next push (Go
-# 1.27.2's net/http fixes, and the DOMPurify advisories fixed in 1.0.13, were
-# found only because a push happened). The advisory databases are fetched fresh
+# 1.27.2's net/http fixes were found only because a push happened, and the
+# DOMPurify advisories fixed in 1.0.13 failed one push's audit, then went
+# unnoticed until the next push, 20 days later). The advisory databases are fetched fresh
 # on every run; the tools themselves stay pinned like in ci.yml. Each check is
 # its own job, so a failure in one does not skip the other.
 on:
