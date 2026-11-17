@@ -218,7 +218,7 @@ $\Search$ examines at most $V$ directory entries (excluded ones included) and
 reports at most $M$ results,
 and reports truncation when a bound stopped it; it never follows symbolic links
 to directories, so it terminates on cyclic links.
-\Tests{guard/search_test.go; e2e (100,000-file directory, optional)}
+\Tests{guard/m2\_test.go::TestSearchLimitsAndCancellation, TestSearchDoesNotFollowSymlinkedDirectories; guard/search\_budget\_test.go::TestSearchBudgetCountsExcludedEntries, TestSearchDoesNotDescendIntoAQueuedDirectoryReplacedByASymlink; e2e (100,000-file directory, optional)}
 \end{law}
 
 \subsection{Boundaries}
