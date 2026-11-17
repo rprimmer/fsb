@@ -1,9 +1,11 @@
 name: vuln-weekly
 
-# govulncheck once a week, so a new advisory against Go or a dependency is
-# reported without waiting for the next push (Go 1.27.2's net/http fixes were
-# found only because a push happened). The vulnerability database is fetched
-# fresh on every run; the tool itself stays pinned like in ci.yml.
+# govulncheck and npm audit once a week, so a new advisory against Go, a Go
+# module or a web dependency is reported without waiting for the next push (Go
+# 1.27.2's net/http fixes, and the DOMPurify advisories fixed in 1.0.13, were
+# found only because a push happened). The advisory databases are fetched fresh
+# on every run; the tools themselves stay pinned like in ci.yml. Each check is
+# its own job, so a failure in one does not skip the other.
 on:
   schedule:
     - cron: '17 9 * * 1' # Mondays, 09:17 UTC
@@ -30,3 +32,19 @@ jobs:
         run: GOOS=linux "$RUNNER_TEMP/bin/govulncheck" ./...
       - name: govulncheck (darwin)
         run: GOOS=darwin "$RUNNER_TEMP/bin/govulncheck" ./...
+
+  web-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      # npm audit reads package-lock.json alone, so nothing is installed and no
+      # package's install script runs. Same threshold as ci.yml.
+      - name: dependency audit
+        run: npm audit --audit-level=high
