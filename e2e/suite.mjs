@@ -484,6 +484,24 @@ export function defineSuite({ label, launch }) {
       assert.equal(h.xfo, 'SAMEORIGIN');
     });
 
+    test('a report from the Markdown frame before any render matches no render', async () => {
+      // The frame reports on resize too. Before its first render it must not
+      // carry the number the app counts from (0), or the app takes its empty
+      // text for the first render (seen in CI, 2026-11-17).
+      await open(fx.work);
+      const gen = await d.eval(`const f = document.createElement('iframe');
+        f.setAttribute('sandbox', 'allow-scripts');
+        f.style.width = '200px';
+        await new Promise((ok) => { f.onload = ok; f.src = location.pathname + 'api/mdframe'; document.body.append(f); });
+        const got = new Promise((ok) => window.addEventListener('message', (e) => { if (e.source === f.contentWindow) ok(e.data); }));
+        f.style.width = '300px';
+        const m = await Promise.race([got, new Promise((ok) => setTimeout(() => ok('no report'), 3000))]);
+        f.remove();
+        return typeof m === 'string' ? m : { type: m.type, gen: m.gen === undefined ? 'undefined' : m.gen };`);
+      assert.equal(gen.type, 'fsb-md-ready', 'the frame reports when resized');
+      assert.notEqual(gen.gen, 0, 'a report before any render carries the number of none');
+    });
+
     /** The rendered Markdown's links, once laid out and still, and a way to find their centers. */
     async function settledMdLinks() {
       // Wait for the links to be laid out, not just rendered: the frame can
