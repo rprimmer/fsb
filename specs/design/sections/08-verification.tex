@@ -35,13 +35,17 @@ UTF-8), timed fuzzing of the four fuzz targets, and a check that every test this
 specification and the algebraic one cite exists (\code{specs/tools/check-traceability.py}).
 The runner images are named (\code{ubuntu-24.04}, \code{macos-26}), not the moving
 \code{-latest} labels, like the actions, Node and the scanner.
-A scan for known vulnerabilities in the Go modules runs as well, and also every week on its
-own (\code{vuln-weekly.yml}), so that an advisory published between changes is reported
-without waiting for one.  On Linux, the two-user check of the launch URL
+A scan for known vulnerabilities in the Go modules runs as well, of the macOS and of the
+Linux build (\code{govulncheck} checks only the files built for one system, and some files
+are macOS only); the macOS scan runs even when the Linux one fails, so one run reports
+both.  Both scans and the audit of the front-end packages also run every week on their
+own (\code{vuln-weekly.yml}, the audit in a job of its own), so that an advisory published
+between changes is reported without waiting for one.  Every job has a time limit a few
+times its usual length; GitHub's default is six hours.  On Linux, the two-user check of the launch URL
 (\code{crossuser.sh --host}) runs with a second user created on the runner.  The Go tests
 run on macOS and Linux; the rest on Linux.  The workflow runs on GitHub's hosted runners for every push
 (the repository was private until the 1.0 release and is public since).  Its first run
-(2026-10-02) found finding~28 of Section~\ref{sec:history}.  Of the runs since, four
+(2026-10-02) found finding~28 of Section~\ref{sec:history}.  Of the runs up to 1.0.12, four
 failed.  One was the vulnerability scan, on 2026-10-09: six advisories against the
 standard library's \code{net/http} had been published overnight, fixed by moving to Go
 1.27.2 (finding~39).  Three were in the front-end job: an automated TypeScript major-version upgrade that
@@ -49,7 +53,18 @@ standard library's \code{net/http} had been published overnight, fixed by moving
 run failed the audit of the packages that ship, and which was reverted a minute later, the
 revert's run passing (2026-10-02); and the run that first type-checked the unit tests,
 whose audit caught a newly published advisory in \code{source-map-js}
-(GHSA-68fv-2mgg-jv7q), fixed by the next change (2026-10-06).  The distribution tests of
+(GHSA-68fv-2mgg-jv7q), fixed by the next change (2026-10-06).  Since then, four more
+failed, none from a defect in \texttt{fsb}.  On 2026-10-14 the browser job hung until it
+was cancelled after 16 minutes: Chrome had not reported its DevTools endpoint in time,
+and the failed launch left it running, which kept the suite from exiting.  A failed
+launch now kills Chrome's whole process group (\code{e2e/launch.test.mjs} checks this
+without a browser), and the time limits above were added.  On 2026-10-28 the audit caught
+advisories against DOMPurify, Vite and \code{deepmerge}; the failed run went unnoticed
+until 2026-11-17, when the same audit failed again.  On 2026-11-16 the weekly scan
+reported GO-2026-6859, a crash of an HTTP/1 server that uses \code{MaxBytesReader}, which
+\texttt{fsb} does not.  Both were fixed by updating (Go 1.27.4, DOMPurify 3.4.18, Vite
+8.3.8; 1.0.13); none of the advisories reaches \texttt{fsb} as configured.  The
+distribution tests of
 the table above are not part of it; they run locally, before a release.
 
 \subsection{What testing does not establish}

@@ -134,11 +134,20 @@ document; they are gathered here so a reader does not have to hunt for them.
   \item \label{sec:ci-never-run}\textbf{Continuous integration is new.}  It first ran on
         2026-10-02, when the repository was given a private remote; that run found three
         problems (finding 28 of Section~\ref{sec:history}).  It runs the Go tests on
-        macOS and Linux, the front-end tests, fuzzing, \code{govulncheck}, \code{npm
-        audit}, and the Chrome suite on Linux, on every push.
+        macOS and Linux, the front-end tests, fuzzing, \code{govulncheck} (of the macOS
+        and the Linux build), \code{npm audit}, and the Chrome suite on Linux, on every
+        push.
+  \item \textbf{A failed run is seen only if someone looks.}  Nothing but GitHub's own
+        notice reports a failed run, and nothing stops a release after one.  The audit's
+        failure of 2026-10-28 went unnoticed for 20 days, until the next push
+        (Section~\ref{sec:verification}).
   \item \textbf{The Linux distribution tests do not run in CI.}  \code{make linux}
         needs Docker and runs locally, before a release; it was run on every change of
-        2026-10-08.  An occasional failure of a full run was seen twice and not
+        2026-10-08, and last for 1.0.13 (2026-11-17), with \code{make linux-e2e}: every
+        stage passed, on Fedora 45 for the first time.  Its first runs that day failed one
+        check on all five distributions, ``\code{--version} names a clean commit'', because
+        the tree being built held uncommitted files (spec edits, then a log written into
+        it); the check is deliberate, and a clean tree passed.  An occasional failure of a full run was seen twice and not
         reproduced in 60 repeated runs; one captured instance was a Docker storage error
         before the container started.  Each run's full output is now kept, in
         \code{e2e/artifacts/linux}.
@@ -156,7 +165,9 @@ document; they are gathered here so a reader does not have to hunt for them.
         and 50 against Debian, Ubuntu and Fedora; the first Alpine run failed one click
         test (the click never reached the Markdown frame) and passed 50 on a rerun.  Logs
         of each run are in \code{e2e/artifacts/safari}.  1.0.7 to 1.0.10 were not run
-        separately.
+        separately.  For 1.0.13, which changed only dependencies, Safari was not run;
+        the Chrome suite was, on the Mac and against the four distributions
+        (Section~\ref{sec:environment}).
   \item \textbf{An intermittent browser test, since explained.}  ``A Markdown file link
         opens that file inside fsb; a web link opens a new tab'' failed about one run in
         15 against Linux containers.  Diagnostics added to it showed the cause: the
@@ -172,12 +183,15 @@ document; they are gathered here so a reader does not have to hunt for them.
         independent party was done; the owner decided against one.
   \item \textbf{Installing on another machine.}  The release is source only
         (\fq{DST-2}), so there is no signing, notarization or Gatekeeper behavior to test,
-        but \code{go install} from the public repository was tried only once, on the
-        machine of Section~\ref{sec:environment}, right after release.
-  \item \textbf{Only the Go scan runs on a schedule.}  \code{govulncheck} runs on every
-        push and every week; \code{npm audit} runs on every push only, so an advisory
-        against a front-end package is reported at the next change.  No automated
-        dependency updates are proposed, by decision.
+        but \code{go install} from the public repository has been tried only on the
+        machine of Section~\ref{sec:environment}, right after a release.  For 1.0.13 that
+        included starting from Go 1.27.2 (\code{GOTOOLCHAIN=go1.27.2+auto}), which
+        switched to 1.27.4 as the module asks; an actual older Go installation was not
+        used.
+  \item \textbf{Scans report; they do not update.}  \code{govulncheck} and \code{npm
+        audit} run on every push and every week (the weekly audit since 2026-11-17), so
+        an advisory is reported within a week, but no automated dependency updates are
+        proposed, by decision: each fix is a change made by hand.
 \end{itemize}
 
 \subsection{What this does not mean}
